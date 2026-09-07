@@ -79,6 +79,6 @@ void build_dice_screen(void)
     label_dice_hint = lv_label_create(screen_dice);
     lv_label_set_text(label_dice_hint, t(STR_DICE_HOLD_TO_REROLL));
     lv_obj_set_style_text_color(label_dice_hint, lv_color_hex(0x8A8A8A), 0);
-    lv_obj_set_style_text_font(label_dice_hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(label_dice_hint, &lv_font_es_14, 0);
     lv_obj_align(label_dice_hint, LV_ALIGN_CENTER, 0, 42);
 }

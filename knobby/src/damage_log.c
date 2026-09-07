@@ -237,7 +237,7 @@ static void refresh_damage_log_ui(void)
         lv_obj_t *lbl = lv_label_create(damage_log_container);
         lv_label_set_text(lbl, t(STR_LOG_EMPTY));
         lv_obj_set_style_text_color(lbl, lv_color_hex(0x7A7A7A), 0);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
         damage_log_selected = -1;
         damage_log_page = 0;
         if (page_label != NULL) lv_obj_add_flag(page_label, LV_OBJ_FLAG_HIDDEN);
@@ -322,13 +322,13 @@ void build_damage_log_screen(void)
     lv_obj_t *title = lv_label_create(screen_damage_log);
     lv_label_set_text(title, t(STR_LOG_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
 
     page_label = lv_label_create(screen_damage_log);
     lv_label_set_text(page_label, "");
     lv_obj_set_style_text_color(page_label, lv_color_hex(0x7A7A7A), 0);
-    lv_obj_set_style_text_font(page_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(page_label, &lv_font_es_14, 0);
     lv_obj_align(page_label, LV_ALIGN_TOP_MID, 0, 54);
     lv_obj_add_flag(page_label, LV_OBJ_FLAG_HIDDEN);
 
@@ -338,7 +338,7 @@ void build_damage_log_screen(void)
     lv_style_set_pad_top(&log_label_style, 2);
     lv_style_set_pad_bottom(&log_label_style, 2);
     lv_style_set_radius(&log_label_style, 4);
-    lv_style_set_text_font(&log_label_style, &lv_font_montserrat_14);
+    lv_style_set_text_font(&log_label_style, &lv_font_es_14);
 
     damage_log_container = lv_obj_create(screen_damage_log);
     lv_obj_remove_style_all(damage_log_container);
@@ -364,7 +364,7 @@ void build_damage_log_screen(void)
     lv_label_set_text(btn_label, t(STR_LOG_UNDO_HOLD));
     lv_obj_set_style_text_align(btn_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(btn_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(btn_label, &lv_font_es_14, 0);
     lv_obj_center(btn_label);
 
 }

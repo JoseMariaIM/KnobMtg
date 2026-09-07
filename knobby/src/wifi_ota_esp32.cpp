@@ -18,6 +18,8 @@ extern "C" {
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
+#include <esp_heap_caps.h>
+#include <lvgl.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -30,6 +32,14 @@ extern "C" {
 #define OTA_MANIFEST_URL OTA_BASE_URL "/manifest.json"
 #define OTA_BIN_URL OTA_BASE_URL "/knobby.ino.bin"
 
+/* HTTPClient's own default connect timeout is only 5000ms, and that
+ * same value ends up gating every individual read/write step of the
+ * TLS handshake too (not just the initial TCP connect) - see
+ * ssl_client.cpp's socket_timeout usage. 5s is routinely too tight for
+ * a full handshake with an external CDN from this CPU, which surfaced
+ * as a misleading "Manifest HTTP -1" (HTTPC_ERROR_CONNECTION_REFUSED). */
+#define OTA_CONNECT_TIMEOUT_MS 15000
+
 extern "C" {
 extern wifi_state_t g_wifi_state;
 extern char g_wifi_ip[16];
@@ -39,16 +49,45 @@ extern char g_latest_version[32];
 extern char g_ota_error[64];
 }
 
+/* Auto-connect at boot is non-blocking - boot must stay instant even if
+ * the saved network is out of range - so a lightweight LVGL timer polls
+ * WiFi.status() until it resolves one way or the other. (A previous
+ * version fired WiFi.begin() at boot but never polled afterwards, which
+ * left the WiFi settings screen stuck showing "Connecting..." forever;
+ * this timer is what was missing.) */
+#define WIFI_AUTO_CONNECT_TIMEOUT_MS 15000
+static uint32_t s_auto_connect_started_at = 0;
+
+static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
+{
+    if (g_wifi_state != WIFI_STATE_CONNECTING) {
+        lv_timer_del(timer);
+        return;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+        g_wifi_state = WIFI_STATE_CONNECTED;
+        snprintf(g_wifi_ip, sizeof(g_wifi_ip), "%s", WiFi.localIP().toString().c_str());
+        lv_timer_del(timer);
+    } else if (millis() - s_auto_connect_started_at > WIFI_AUTO_CONNECT_TIMEOUT_MS) {
+        g_wifi_state = WIFI_STATE_FAILED;
+        lv_timer_del(timer);
+    }
+}
+
 extern "C" void wifi_ota_init(void)
 {
-    /* Just remembers the saved SSID for display; does NOT start a
-       connection attempt. An earlier version called WiFi.begin() here
-       non-blocking and set state to CONNECTING, but nothing ever polled
-       WiFi.status() afterwards to resolve it - the WiFi settings screen
-       was stuck showing "Connecting..." forever until the user tapped
-       Connect, which ran the real (blocking) wifi_connect() below.
-       Connecting is always an explicit, on-demand user action instead. */
     nvs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
+    if (g_saved_ssid[0] == '\0') return;
+
+    char pass[WIFI_PASS_LEN];
+    nvs_get_wifi_pass(pass, sizeof(pass));
+
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false); /* modem sleep can stall/drop packets mid-handshake */
+    WiFi.begin(g_saved_ssid, pass);
+    g_wifi_state = WIFI_STATE_CONNECTING;
+    s_auto_connect_started_at = millis();
+    lv_timer_create(wifi_auto_connect_poll_cb, 300, NULL);
 }
 
 #define WIFI_SCAN_MAX 12
@@ -111,6 +150,7 @@ extern "C" void wifi_connect(const char *ssid, const char *pass)
     net_sync_leave_game();
 
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false); /* modem sleep can stall/drop packets mid-handshake */
     WiFi.disconnect();
     WiFi.begin(ssid, pass);
     g_wifi_state = WIFI_STATE_CONNECTING;
@@ -176,6 +216,7 @@ extern "C" void ota_check_now(void)
     client.setInsecure();
 
     HTTPClient http;
+    http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
     if (!http.begin(client, OTA_MANIFEST_URL)) {
         g_ota_state = OTA_STATE_ERROR;
         snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest URL");
@@ -184,8 +225,18 @@ extern "C" void ota_check_now(void)
 
     int code = http.GET();
     if (code != HTTP_CODE_OK) {
+        char tls_err[64] = "";
+        client.lastError(tls_err, sizeof(tls_err));
         g_ota_state = OTA_STATE_ERROR;
-        snprintf(g_ota_error, sizeof(g_ota_error), "Manifest HTTP %d", code);
+        /* Free heap is included because "SSL - Memory allocation failed"
+           only means something with a number attached - if it recurs
+           this tells us straight from the error screen whether it's a
+           borderline shortage or something is leaking. */
+        if (tls_err[0] != '\0') {
+            snprintf(g_ota_error, sizeof(g_ota_error), "Manifest: %s (heap %u)", tls_err, (unsigned)ESP.getFreeHeap());
+        } else {
+            snprintf(g_ota_error, sizeof(g_ota_error), "Manifest: %s", HTTPClient::errorToString(code).c_str());
+        }
         http.end();
         return;
     }
@@ -226,8 +277,21 @@ extern "C" void ota_apply_update(void)
     WiFiClientSecure client;
     client.setInsecure();
 
+    /* Build our own HTTPClient (instead of the client+url convenience
+       overload) so we can raise the connect timeout - see
+       OTA_CONNECT_TIMEOUT_MS above. httpUpdate.update(HTTPClient&)
+       takes an already-begin()'d client and skips straight to the
+       download/flash logic. */
+    HTTPClient http;
+    http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
+    if (!http.begin(client, OTA_BIN_URL)) {
+        g_ota_state = OTA_STATE_ERROR;
+        snprintf(g_ota_error, sizeof(g_ota_error), "Bad firmware URL");
+        return;
+    }
+
     httpUpdate.rebootOnUpdate(false);
-    t_httpUpdate_return ret = httpUpdate.update(client, OTA_BIN_URL);
+    t_httpUpdate_return ret = httpUpdate.update(http);
 
     switch (ret) {
         case HTTP_UPDATE_OK:
@@ -239,7 +303,7 @@ extern "C" void ota_apply_update(void)
         case HTTP_UPDATE_FAILED:
         default:
             g_ota_state = OTA_STATE_ERROR;
-            snprintf(g_ota_error, sizeof(g_ota_error), "%s", httpUpdate.getLastErrorString().c_str());
+            snprintf(g_ota_error, sizeof(g_ota_error), "%s (heap %u)", httpUpdate.getLastErrorString().c_str(), (unsigned)ESP.getFreeHeap());
             break;
     }
 }

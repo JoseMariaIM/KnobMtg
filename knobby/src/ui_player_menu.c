@@ -331,13 +331,13 @@ void build_eliminated_player_menu_screen(void) {
   lv_obj_t *title = lv_label_create(screen_eliminated_player_menu);
   lv_label_set_text(title, t(STR_UNDO_ELIMINATION_TITLE));
   lv_obj_set_style_text_color(title, lv_color_white(), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+  lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
 
   lv_obj_t *hint = lv_label_create(screen_eliminated_player_menu);
   lv_label_set_text(hint, t(STR_UNDO_ELIMINATION_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(hint, LV_ALIGN_CENTER, 0, 0);
 
@@ -386,29 +386,29 @@ void build_all_damage_screen(void) {
 
   label_all_damage_title = lv_label_create(screen_player_all_damage);
   lv_obj_set_style_text_color(label_all_damage_title, lv_color_white(), 0);
-  lv_obj_set_style_text_font(label_all_damage_title, &lv_font_montserrat_22, 0);
+  lv_obj_set_style_text_font(label_all_damage_title, &lv_font_es_22, 0);
   lv_obj_align(label_all_damage_title, LV_ALIGN_TOP_MID, 0, 26);
 
   label_all_damage_value = lv_label_create(screen_player_all_damage);
   lv_obj_set_style_text_color(label_all_damage_value, lv_color_white(), 0);
-  lv_obj_set_style_text_font(label_all_damage_value, &lv_font_montserrat_32, 0);
+  lv_obj_set_style_text_font(label_all_damage_value, &lv_font_es_32, 0);
   lv_obj_align(label_all_damage_value, LV_ALIGN_CENTER, 0, -25);
 
   label_all_damage_hint = lv_label_create(screen_player_all_damage);
   lv_label_set_text(label_all_damage_hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(label_all_damage_hint, lv_color_hex(0x7A7A7A), 0);
-  lv_obj_set_style_text_font(label_all_damage_hint, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(label_all_damage_hint, &lv_font_es_14, 0);
   lv_obj_align(label_all_damage_hint, LV_ALIGN_CENTER, 0, 15);
 
   cb_include_myself = lv_checkbox_create(screen_player_all_damage);
   lv_checkbox_set_text(cb_include_myself, t(STR_INCLUDE_MYSELF));
   lv_obj_set_style_text_color(cb_include_myself, lv_color_white(), 0);
-  lv_obj_set_style_text_font(cb_include_myself, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_font(cb_include_myself, &lv_font_es_16, 0);
   
   // Make the checkbox box larger
   lv_obj_set_style_width(cb_include_myself, 28, LV_PART_INDICATOR);
   lv_obj_set_style_height(cb_include_myself, 28, LV_PART_INDICATOR);
-  lv_obj_set_style_text_font(cb_include_myself, &lv_font_montserrat_16, LV_PART_INDICATOR);
+  lv_obj_set_style_text_font(cb_include_myself, &lv_font_es_16, LV_PART_INDICATOR);
   
   // Increase click target area by adding padding
   lv_obj_set_style_pad_all(cb_include_myself, 10, 0);
@@ -441,7 +441,7 @@ void build_counter_edit_screen(void) {
   label_counter_edit_title = lv_label_create(screen_counter_edit);
   lv_label_set_text(label_counter_edit_title, "P1\nCommander Tax");
   lv_obj_set_style_text_color(label_counter_edit_title, lv_color_white(), 0);
-  lv_obj_set_style_text_font(label_counter_edit_title, &lv_font_montserrat_22,
+  lv_obj_set_style_text_font(label_counter_edit_title, &lv_font_es_22,
                              0);
   lv_obj_set_style_text_align(label_counter_edit_title, LV_TEXT_ALIGN_CENTER,
                               0);
@@ -450,7 +450,7 @@ void build_counter_edit_screen(void) {
   label_counter_edit_value = lv_label_create(screen_counter_edit);
   lv_label_set_text(label_counter_edit_value, "0");
   lv_obj_set_style_text_color(label_counter_edit_value, lv_color_white(), 0);
-  lv_obj_set_style_text_font(label_counter_edit_value, &lv_font_montserrat_32,
+  lv_obj_set_style_text_font(label_counter_edit_value, &lv_font_es_32,
                              0);
   lv_obj_align(label_counter_edit_value, LV_ALIGN_CENTER, 0, -4);
 
@@ -458,7 +458,7 @@ void build_counter_edit_screen(void) {
   lv_label_set_text(label_counter_edit_hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(label_counter_edit_hint, lv_color_hex(0x7A7A7A),
                               0);
-  lv_obj_set_style_text_font(label_counter_edit_hint, &lv_font_montserrat_14,
+  lv_obj_set_style_text_font(label_counter_edit_hint, &lv_font_es_14,
                              0);
   lv_obj_align(label_counter_edit_hint, LV_ALIGN_CENTER, 0, 34);
 
@@ -466,7 +466,7 @@ void build_counter_edit_screen(void) {
   label_counter_edit_delta = lv_label_create(screen_counter_edit);
   lv_label_set_text(label_counter_edit_delta, "");
   lv_obj_set_style_text_color(label_counter_edit_delta, lv_color_white(), 0);
-  lv_obj_set_style_text_font(label_counter_edit_delta, &lv_font_montserrat_32,
+  lv_obj_set_style_text_font(label_counter_edit_delta, &lv_font_es_32,
                              0);
   lv_obj_align(label_counter_edit_delta, LV_ALIGN_CENTER, 0, -44);
   lv_obj_add_flag(label_counter_edit_delta, LV_OBJ_FLAG_HIDDEN);
@@ -503,7 +503,7 @@ void build_player_color_picker_screen(void) {
   color_picker_title_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_title_label, "Color");
   lv_obj_set_style_text_color(color_picker_title_label, lv_color_white(), 0);
-  lv_obj_set_style_text_font(color_picker_title_label, &lv_font_montserrat_22,
+  lv_obj_set_style_text_font(color_picker_title_label, &lv_font_es_22,
                              0);
   lv_obj_set_style_text_align(color_picker_title_label, LV_TEXT_ALIGN_CENTER,
                               0);
@@ -523,14 +523,14 @@ void build_player_color_picker_screen(void) {
   color_picker_name_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_name_label, get_custom_color_name(0));
   lv_obj_set_style_text_color(color_picker_name_label, lv_color_white(), 0);
-  lv_obj_set_style_text_font(color_picker_name_label, &lv_font_montserrat_16,
+  lv_obj_set_style_text_font(color_picker_name_label, &lv_font_es_16,
                              0);
   lv_obj_align(color_picker_name_label, LV_ALIGN_CENTER, 0, 54);
 
   hint = lv_label_create(screen_player_color_picker);
   lv_label_set_text(hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
-  lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
   lv_obj_align(hint, LV_ALIGN_CENTER, 0, 73);
 
   lv_obj_t *btn = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,

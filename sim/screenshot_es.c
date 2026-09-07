@@ -90,6 +90,9 @@ int main(void)
     int page = settings_item_page("language");
     if (page >= 0) render_and_save(settings_pages[page], "screenshots/es_settings_language.png");
 
+    open_language_picker_screen();
+    render_and_save(screen_language_picker, "screenshots/es_language_picker.png");
+
     prepare_cmd_damage_for_player(1);
     open_select_screen();
     render_and_save(screen_select, "screenshots/es_select.png");

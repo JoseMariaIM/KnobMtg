@@ -83,7 +83,7 @@ void build_quad_screen(lv_obj_t **screen, quad_item_t items[4])
         lv_obj_t *lbl = lv_label_create(btn);
         lv_label_set_text(lbl, items[i].label);
         lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
         lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(lbl, LV_ALIGN_CENTER, lx[i],
             (items[i].icon != NULL) ? ly[i] + 10 : ly[i]);
@@ -248,16 +248,6 @@ static const char *auto_eliminate_label(int val)
     return val ? t(STR_SETTING_AUTO_ELIM_ON) : t(STR_SETTING_AUTO_ELIM_OFF);
 }
 
-static const char *language_label(int val)
-{
-    static char buf[24];
-    snprintf(buf, sizeof(buf), t(STR_SETTING_LANGUAGE), t(val == LANG_ES ? STR_LANGUAGE_ES : STR_LANGUAGE_EN));
-    return buf;
-}
-
-static int language_get(void) { return lang_get(); }
-static void language_set(int v) { lang_set((lang_t)v); }
-
 // ---------- declarative settings ----------
 /* Every user setting lives in this one table. Pages, "More" chaining,
    back-navigation, and sim navigation are all derived from it: to add,
@@ -369,6 +359,7 @@ static void multi_select_set(int v)
 
 // ---------- table sync screen ----------
 lv_obj_t *screen_table_sync = NULL;
+lv_obj_t *screen_language_picker = NULL;
 static lv_obj_t *table_sync_action_lbl; /* Start <-> Invite quadrant */
 static lv_obj_t *table_sync_status_lbl; /* status tile */
 static lv_timer_t *table_sync_timer;
@@ -484,7 +475,65 @@ void build_table_sync_screen(void)
     lv_timer_pause(table_sync_timer);
 }
 
-static uint32_t language_color(int val) { return val == LANG_ES ? TOGGLE_ON : 0x1A1A2E; }
+// ---------- language picker ----------
+static lv_obj_t *language_list_container = NULL;
+
+static void event_language_row_click(lv_event_t *e)
+{
+    lang_t lang = (lang_t)(intptr_t)lv_event_get_user_data(e);
+    lang_set(lang); /* persists + restarts the device to relabel every screen */
+}
+
+static void add_language_row(lang_t lang)
+{
+    bool is_current = (lang == lang_get());
+
+    lv_obj_t *row = lv_obj_create(language_list_container);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, 280, 40);
+    lv_obj_set_style_radius(row, 4, 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(is_current ? TOGGLE_ON : 0x1E1E2E), 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(row, event_language_row_click, LV_EVENT_CLICKED, (void *)(intptr_t)lang);
+
+    lv_obj_t *lbl = lv_label_create(row);
+    lv_label_set_text(lbl, t(lang == LANG_ES ? STR_LANGUAGE_ES : STR_LANGUAGE_EN));
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
+    lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 12, 0);
+}
+
+void open_language_picker_screen(void)
+{
+    int i;
+    lv_obj_clean(language_list_container);
+    for (i = 0; i < LANG_COUNT; i++) add_language_row((lang_t)i);
+    load_screen_if_needed(screen_language_picker);
+}
+
+void build_language_picker_screen(void)
+{
+    screen_language_picker = lv_obj_create(NULL);
+    lv_obj_set_size(screen_language_picker, 360, 360);
+    lv_obj_set_style_bg_color(screen_language_picker, lv_color_black(), 0);
+    lv_obj_set_style_border_width(screen_language_picker, 0, 0);
+    lv_obj_set_scrollbar_mode(screen_language_picker, LV_SCROLLBAR_MODE_OFF);
+
+    lv_obj_t *title = lv_label_create(screen_language_picker);
+    lv_label_set_text(title, t(STR_SETTING_LANGUAGE));
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_16, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+    language_list_container = lv_obj_create(screen_language_picker);
+    lv_obj_remove_style_all(language_list_container);
+    lv_obj_set_size(language_list_container, 300, 300);
+    lv_obj_align(language_list_container, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_flex_flow(language_list_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(language_list_container, 8, 0);
+    lv_obj_set_scrollbar_mode(language_list_container, LV_SCROLLBAR_MODE_OFF);
+}
 
 static const setting_item_t settings_items[] = {
     { .id = "brightness",     .fixed_label_id = STR_SETTING_BRIGHTNESS, .navigate = open_settings_screen, .nav_screen = &screen_settings },
@@ -499,7 +548,7 @@ static const setting_item_t settings_items[] = {
     { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
     { .id = "rotate",         .fixed_label_id = STR_SETTING_ROTATE_SCREEN, .navigate = open_rotate_screen, .nav_screen = &screen_rotate },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
-    { .id = "language",       .label = language_label,         .color = language_color,    .get = language_get,             .set = language_set,             .count = LANG_COUNT },
+    { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE, .navigate = open_language_picker_screen, .nav_screen = &screen_language_picker },
     { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI, .navigate = open_wifi_settings_screen, .nav_screen = &screen_wifi_settings },
     { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES, .navigate = open_ota_update_screen, .nav_screen = &screen_ota_update },
 };
@@ -704,13 +753,13 @@ void build_settings_screen(void)
     label_settings_value = lv_label_create(screen_settings);
     lv_label_set_text(label_settings_value, "Brightness: 80%"); /* placeholder, overwritten by refresh_settings_ui() */
     lv_obj_set_style_text_color(label_settings_value, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_settings_value, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(label_settings_value, &lv_font_es_32, 0);
     lv_obj_align(label_settings_value, LV_ALIGN_CENTER, 0, -14);
 
     label_settings_hint = lv_label_create(screen_settings);
     lv_label_set_text(label_settings_hint, t(STR_BRIGHTNESS_HINT));
     lv_obj_set_style_text_color(label_settings_hint, lv_color_hex(0x6A6A6A), 0);
-    lv_obj_set_style_text_font(label_settings_hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(label_settings_hint, &lv_font_es_14, 0);
     lv_obj_align(label_settings_hint, LV_ALIGN_CENTER, 0, 24);
 }
 
@@ -725,19 +774,19 @@ void build_battery_screen(void)
     lv_obj_t *title = lv_label_create(screen_battery);
     lv_label_set_text(title, t(STR_BATTERY_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
 
     label_settings_battery = lv_label_create(screen_battery);
     lv_label_set_text(label_settings_battery, "Battery: --%");
     lv_obj_set_style_text_color(label_settings_battery, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_settings_battery, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(label_settings_battery, &lv_font_es_32, 0);
     lv_obj_align(label_settings_battery, LV_ALIGN_CENTER, 0, -10);
 
     label_settings_battery_detail = lv_label_create(screen_battery);
     lv_label_set_text(label_settings_battery_detail, "No calibrated reading");
     lv_obj_set_style_text_color(label_settings_battery_detail, lv_color_hex(0x7A7A7A), 0);
-    lv_obj_set_style_text_font(label_settings_battery_detail, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(label_settings_battery_detail, &lv_font_es_16, 0);
     lv_obj_align(label_settings_battery_detail, LV_ALIGN_CENTER, 0, 30);
 }
 
@@ -752,18 +801,18 @@ void build_rotate_screen(void)
     lv_obj_t *title = lv_label_create(screen_rotate);
     lv_label_set_text(title, t(STR_ROTATE_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
 
     label_rotate_value = lv_label_create(screen_rotate);
     lv_label_set_text(label_rotate_value, "0°");
     lv_obj_set_style_text_color(label_rotate_value, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_rotate_value, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(label_rotate_value, &lv_font_es_32, 0);
     lv_obj_align(label_rotate_value, LV_ALIGN_CENTER, 0, -10);
 
     lv_obj_t *hint = lv_label_create(screen_rotate);
     lv_label_set_text(hint, t(STR_ROTATE_HINT));
     lv_obj_set_style_text_color(hint, lv_color_hex(0x6A6A6A), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
     lv_obj_align(hint, LV_ALIGN_CENTER, 0, 40);
 }

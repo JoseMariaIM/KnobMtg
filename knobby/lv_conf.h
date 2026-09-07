@@ -60,8 +60,18 @@
     #define LV_MEM_ADR 0     /*0: unused*/
     /*Instead of an address give a memory allocator that will be called to get a memory pool for LVGL. E.g. my_malloc*/
     #if LV_MEM_ADR == 0
-        //#define LV_MEM_POOL_INCLUDE your_alloc_library  /* Uncomment if using an external allocator*/
-        //#define LV_MEM_POOL_ALLOC   your_alloc          /* Uncomment if using an external allocator*/
+        #ifndef SIMULATOR
+            /* This board has 8MB of PSRAM; put LVGL's whole widget/object
+             * pool there instead of scarce internal DRAM. Frees up the
+             * ~128KB this pool would otherwise permanently hold in
+             * internal RAM, which mbedTLS needs in one contiguous block
+             * for the OTA HTTPS connection - without this, TLS handshakes
+             * failed with "SSL - Memory allocation failed" once WiFi and
+             * every app screen were both resident. The simulator has no
+             * PSRAM/ESP-IDF headers, so it keeps the plain static pool. */
+            #define LV_MEM_POOL_INCLUDE <esp_heap_caps.h>
+            #define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
+        #endif
     #endif
 
 #else       /*LV_MEM_CUSTOM*/
@@ -384,10 +394,18 @@
     LV_FONT_DECLARE(lv_font_montserrat_bold_116) \
     LV_FONT_DECLARE(lv_font_montserrat_regular_48) \
     LV_FONT_DECLARE(lv_font_montserrat_bold_56) \
-    LV_FONT_DECLARE(lv_font_montserrat_bold_44)
+    LV_FONT_DECLARE(lv_font_montserrat_bold_44) \
+    LV_FONT_DECLARE(lv_font_es_14) \
+    LV_FONT_DECLARE(lv_font_es_16) \
+    LV_FONT_DECLARE(lv_font_es_22) \
+    LV_FONT_DECLARE(lv_font_es_32)
 
 /*Always set a default font*/
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
+/* lv_font_es_14 (not the stock lv_font_montserrat_14) so that widgets
+ * which never set an explicit font - e.g. every button label created
+ * via make_button() - still render accented Spanish text instead of
+ * showing a missing-glyph box. */
+#define LV_FONT_DEFAULT &lv_font_es_14
 
 /*Enable handling large font and/or fonts with a lot of characters.
  *The limit depends on the font size, font face and bpp.

@@ -58,7 +58,7 @@ void build_intro_screen(void)
         intro_letters[i] = lv_label_create(screen_intro);
         lv_label_set_text(intro_letters[i], intro_text[i]);
         lv_obj_set_style_text_color(intro_letters[i], lv_color_hex(intro_colors[i]), 0);
-        lv_obj_set_style_text_font(intro_letters[i], &lv_font_montserrat_32, 0);
+        lv_obj_set_style_text_font(intro_letters[i], &lv_font_es_32, 0);
         lv_obj_set_pos(intro_letters[i], intro_x[i], 146);
         lv_obj_add_flag(intro_letters[i], LV_OBJ_FLAG_HIDDEN);
     }

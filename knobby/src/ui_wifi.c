@@ -32,6 +32,7 @@ static lv_obj_t *label_wifi_status_body = NULL;
 static lv_obj_t *label_ota_current = NULL;
 static lv_obj_t *label_ota_status = NULL;
 static lv_obj_t *btn_ota_apply = NULL;
+static lv_obj_t *btn_ota_open_wifi = NULL;
 
 // ---------- wifi settings ----------
 void refresh_wifi_settings_ui(void)
@@ -174,7 +175,7 @@ static void add_scan_row(int idx, const char *text)
     lv_obj_t *lbl = lv_label_create(row);
     lv_label_set_text(lbl, text);
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
     lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 8, 0);
 }
 
@@ -230,13 +231,13 @@ void build_wifi_scan_list_screen(void)
     lv_obj_t *title = lv_label_create(screen_wifi_scan_list);
     lv_label_set_text(title, t(STR_WIFI_SSID));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_16, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
     label_scan_status = lv_label_create(screen_wifi_scan_list);
     lv_label_set_text(label_scan_status, t(STR_WIFI_SCANNING));
     lv_obj_set_style_text_color(label_scan_status, lv_color_hex(0x7A7A7A), 0);
-    lv_obj_set_style_text_font(label_scan_status, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(label_scan_status, &lv_font_es_14, 0);
     lv_obj_align(label_scan_status, LV_ALIGN_TOP_MID, 0, 36);
     lv_obj_add_flag(label_scan_status, LV_OBJ_FLAG_HIDDEN);
 
@@ -361,7 +362,7 @@ void build_wifi_text_entry_screen(void)
     label_entry_title = lv_label_create(screen_wifi_text_entry);
     lv_label_set_text(label_entry_title, t(STR_WIFI_ENTER_SSID));
     lv_obj_set_style_text_color(label_entry_title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_entry_title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(label_entry_title, &lv_font_es_16, 0);
     lv_obj_set_style_text_align(label_entry_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(label_entry_title, 260);
     lv_obj_align(label_entry_title, LV_ALIGN_TOP_MID, 0, 18);
@@ -374,7 +375,7 @@ void build_wifi_text_entry_screen(void)
     lv_obj_align(textarea_entry, LV_ALIGN_TOP_MID, -24, 60);
     lv_textarea_set_max_length(textarea_entry, WIFI_PASS_LEN - 1);
     lv_textarea_set_one_line(textarea_entry, true);
-    lv_obj_set_style_text_font(textarea_entry, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(textarea_entry, &lv_font_es_16, 0);
 
     /* Show/hide toggle for the masked password field - only visible
        when entering a password, see open_text_entry(). */
@@ -416,12 +417,12 @@ void build_wifi_status_screen(void)
     lv_obj_t *title = lv_label_create(screen_wifi_status);
     lv_label_set_text(title, t(STR_WIFI_STATUS_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
 
     label_wifi_status_body = lv_label_create(screen_wifi_status);
     lv_obj_set_style_text_color(label_wifi_status_body, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_wifi_status_body, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(label_wifi_status_body, &lv_font_es_16, 0);
     lv_obj_set_style_text_align(label_wifi_status_body, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(label_wifi_status_body, 320);
     lv_label_set_long_mode(label_wifi_status_body, LV_LABEL_LONG_WRAP);
@@ -432,6 +433,11 @@ void build_wifi_status_screen(void)
 }
 
 // ---------- ota update ----------
+/* Set only when a check was actually attempted without a connection -
+   the "Open WiFi" shortcut is a reaction to that specific tap, not a
+   standing hint shown just because the screen happens to be open. */
+static bool ota_needs_wifi_hint = false;
+
 void refresh_ota_update_ui(void)
 {
     char buf[64];
@@ -448,6 +454,19 @@ void refresh_ota_update_ui(void)
             lv_obj_clear_flag(btn_ota_apply, LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_add_flag(btn_ota_apply, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    /* Quick access to WiFi settings, but only after a check actually
+       failed for lack of a connection - same on-screen slot as Apply
+       since an update can only be OTA_STATE_AVAILABLE once WiFi is
+       connected, so the two are never needed at the same time. */
+    if (wifi_get_state() == WIFI_STATE_CONNECTED) ota_needs_wifi_hint = false;
+    if (btn_ota_open_wifi != NULL) {
+        if (ota_needs_wifi_hint) {
+            lv_obj_clear_flag(btn_ota_open_wifi, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(btn_ota_open_wifi, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
@@ -477,6 +496,7 @@ void refresh_ota_update_ui(void)
 
 void open_ota_update_screen(void)
 {
+    ota_needs_wifi_hint = false;
     refresh_ota_update_ui();
     load_screen_if_needed(screen_ota_update);
 }
@@ -485,6 +505,10 @@ static void event_ota_check(lv_event_t *e)
 {
     (void)e;
     if (wifi_get_state() != WIFI_STATE_CONNECTED) {
+        /* Refresh first (shows the "Open WiFi" shortcut button), then
+           override its default label with this specific message. */
+        ota_needs_wifi_hint = true;
+        refresh_ota_update_ui();
         lv_label_set_text(label_ota_status, t(STR_OTA_NEED_WIFI));
         return;
     }
@@ -504,6 +528,12 @@ static void event_ota_apply(lv_event_t *e)
     refresh_ota_update_ui();
 }
 
+static void event_ota_open_wifi(lv_event_t *e)
+{
+    (void)e;
+    open_wifi_settings_screen();
+}
+
 void build_ota_update_screen(void)
 {
     screen_ota_update = lv_obj_create(NULL);
@@ -515,18 +545,18 @@ void build_ota_update_screen(void)
     lv_obj_t *title = lv_label_create(screen_ota_update);
     lv_label_set_text(title, t(STR_OTA_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
 
     label_ota_current = lv_label_create(screen_ota_update);
     lv_obj_set_style_text_color(label_ota_current, lv_color_hex(0x7A7A7A), 0);
-    lv_obj_set_style_text_font(label_ota_current, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(label_ota_current, &lv_font_es_14, 0);
     lv_obj_align(label_ota_current, LV_ALIGN_TOP_MID, 0, 76);
 
     label_ota_status = lv_label_create(screen_ota_update);
     lv_label_set_text(label_ota_status, t(STR_OTA_TAP_TO_CHECK));
     lv_obj_set_style_text_color(label_ota_status, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_ota_status, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(label_ota_status, &lv_font_es_16, 0);
     lv_obj_set_style_text_align(label_ota_status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(label_ota_status, LV_ALIGN_CENTER, 0, 0);
 
@@ -537,4 +567,8 @@ void build_ota_update_screen(void)
     lv_obj_add_event_cb(btn_ota_apply, event_ota_apply, LV_EVENT_LONG_PRESSED, NULL);
     lv_obj_align(btn_ota_apply, LV_ALIGN_BOTTOM_MID, 0, -44);
     lv_obj_add_flag(btn_ota_apply, LV_OBJ_FLAG_HIDDEN); /* shown only once an update is found */
+
+    btn_ota_open_wifi = make_button(screen_ota_update, t(STR_OTA_OPEN_WIFI), 140, 46, event_ota_open_wifi);
+    lv_obj_align(btn_ota_open_wifi, LV_ALIGN_BOTTOM_MID, 0, -44);
+    lv_obj_add_flag(btn_ota_open_wifi, LV_OBJ_FLAG_HIDDEN); /* shown only while WiFi isn't connected */
 }

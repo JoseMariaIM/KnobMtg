@@ -10,7 +10,7 @@ static lv_obj_t *add_low_battery_icon(lv_obj_t *parent)
     lv_obj_t *batt = lv_label_create(parent);
     lv_label_set_text(batt, LV_SYMBOL_BATTERY_EMPTY);
     lv_obj_set_style_text_color(batt, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_set_style_text_font(batt, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(batt, &lv_font_es_22, 0);
     lv_obj_align(batt, LV_ALIGN_TOP_MID, 0, 28);
     battery_icon_register(batt);
     return batt;
@@ -122,7 +122,7 @@ static const lv_font_t *get_counter_badge_font(const counter_definition_t *defin
         return &mana_counter_icons_16;
     }
 
-    return &lv_font_montserrat_14;
+    return &lv_font_es_14;
 }
 
 static const char *get_counter_badge_text(const counter_definition_t *definition)
@@ -168,7 +168,7 @@ static void create_counter_row(lv_obj_t *parent, counter_type_t type,
     *value_out = lv_label_create(row);
     lv_label_set_text(*value_out, "0");
     lv_obj_set_style_text_color(*value_out, get_player_text_color(player_index), 0);
-    lv_obj_set_style_text_font(*value_out, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(*value_out, &lv_font_es_14, 0);
     lv_obj_align(*value_out, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_text_align(*value_out, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -817,7 +817,7 @@ void rebuild_multiplayer_layout(int track)
         name_lbl = lv_label_create(panel);
         lv_label_set_text(name_lbl, player_names[p]);
         lv_obj_set_style_text_color(name_lbl, lv_color_white(), 0);
-        lv_obj_set_style_text_font(name_lbl, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(name_lbl, &lv_font_es_22, 0);
         lv_obj_align(name_lbl, LV_ALIGN_CENTER, 0, 30);
         mp_state.name_labels[i] = name_lbl;
 

@@ -11,6 +11,7 @@ extern lv_obj_t *screen_settings;
 extern lv_obj_t *screen_battery;
 extern lv_obj_t *screen_rotate;
 extern lv_obj_t *screen_table_sync;
+extern lv_obj_t *screen_language_picker;
 
 // ---------- declarative settings ----------
 /* One table in settings.c defines every user setting; pages and
@@ -39,6 +40,7 @@ void build_settings_screen(void);
 void build_battery_screen(void);
 void build_rotate_screen(void);
 void build_table_sync_screen(void);
+void build_language_picker_screen(void);
 
 void refresh_settings_ui(void);
 void refresh_settings_pages_ui(void);
@@ -57,5 +59,6 @@ void open_rotate_screen(void);
 void change_display_rotation(int dir);
 void menu_facing_refresh(void);
 void open_table_sync_screen(void);
+void open_language_picker_screen(void);
 
 #endif // _SETTINGS_H

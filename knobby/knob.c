@@ -207,7 +207,7 @@ static void ensure_swipe_hint(void)
 
     swipe_hint_icon = lv_label_create(swipe_hint);
     lv_label_set_text(swipe_hint_icon, LV_SYMBOL_LEFT);
-    lv_obj_set_style_text_font(swipe_hint_icon, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(swipe_hint_icon, &lv_font_es_32, 0);
     lv_obj_set_style_text_color(swipe_hint_icon, lv_color_white(), 0);
     lv_obj_set_style_text_opa(swipe_hint_icon, LV_OPA_TRANSP, 0);
     lv_obj_center(swipe_hint_icon);
@@ -450,6 +450,7 @@ void knob_gui(void)
     build_battery_screen();
     build_rotate_screen();
     build_table_sync_screen();
+    build_language_picker_screen();
     build_wifi_settings_screen();
     build_wifi_scan_list_screen();
     build_wifi_text_entry_screen();

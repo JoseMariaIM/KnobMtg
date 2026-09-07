@@ -23,9 +23,11 @@ typedef enum {
     OTA_STATE_ERROR,
 } ota_state_t;
 
-/* Call once at startup (after storage init): loads the saved SSID for
- * display only. Does not attempt to connect - connecting is always an
- * explicit user action (see wifi_connect() below). */
+/* Call once at startup (after storage init): if a network was saved,
+ * kicks off a non-blocking auto-connect attempt (boot stays instant
+ * either way) so the device is online without the user having to
+ * revisit WiFi settings every time. Also usable for an explicit
+ * (re)connect - see wifi_connect() below, which blocks instead. */
 void wifi_ota_init(void);
 
 /* Blocking (a couple of seconds): scans for nearby access points and
