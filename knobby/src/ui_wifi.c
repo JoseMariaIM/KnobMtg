@@ -35,6 +35,16 @@ static lv_obj_t *btn_ota_apply = NULL;
 static lv_obj_t *btn_ota_open_wifi = NULL;
 
 // ---------- wifi settings ----------
+static bool failed_clear_timer_pending = false;
+
+static void event_clear_wifi_failed_cb(lv_timer_t *timer)
+{
+    lv_timer_del(timer);
+    failed_clear_timer_pending = false;
+    wifi_clear_failed_state();
+    refresh_wifi_settings_ui();
+}
+
 void refresh_wifi_settings_ui(void)
 {
     char buf[40];
@@ -61,6 +71,14 @@ void refresh_wifi_settings_ui(void)
                 break;
             case WIFI_STATE_FAILED:
                 lv_label_set_text(wifi_tile_connect_label, t(STR_WIFI_FAILED));
+                /* Otherwise this tile looks permanently stuck/broken -
+                   it's still tappable to retry immediately, but nothing
+                   on screen suggests that. Revert the label back to the
+                   normal "Connect" after a couple of seconds. */
+                if (!failed_clear_timer_pending) {
+                    failed_clear_timer_pending = true;
+                    lv_timer_create(event_clear_wifi_failed_cb, 2000, NULL);
+                }
                 break;
             default:
                 lv_label_set_text(wifi_tile_connect_label, t(STR_WIFI_CONNECT));
@@ -73,6 +91,12 @@ void open_wifi_settings_screen(void)
 {
     refresh_wifi_settings_ui();
     load_screen_if_needed(screen_wifi_settings);
+}
+
+static void event_wifi_status_auto_exit_cb(lv_timer_t *timer)
+{
+    lv_timer_del(timer);
+    settings_handle_back(screen_wifi_settings);
 }
 
 /* Jumps to the connection-result screen, performs the (blocking)
@@ -94,11 +118,18 @@ static void attempt_connect_and_show_status(const char *ssid, const char *pass)
 
     if (wifi_get_state() == WIFI_STATE_CONNECTED) {
         snprintf(buf, sizeof(buf), t(STR_WIFI_CONNECT_OK_FMT), ssid, wifi_get_ip());
+        if (label_wifi_status_body != NULL) lv_label_set_text(label_wifi_status_body, buf);
+        refresh_wifi_settings_ui();
+        /* Nothing more to do once connected - show the confirmation
+           briefly, then leave WiFi settings on its own rather than
+           making the user tap OK just to get back to what they were
+           doing. */
+        lv_timer_create(event_wifi_status_auto_exit_cb, 1500, NULL);
     } else {
         snprintf(buf, sizeof(buf), t(STR_WIFI_CONNECT_FAIL_FMT), ssid);
+        if (label_wifi_status_body != NULL) lv_label_set_text(label_wifi_status_body, buf);
+        refresh_wifi_settings_ui();
     }
-    if (label_wifi_status_body != NULL) lv_label_set_text(label_wifi_status_body, buf);
-    refresh_wifi_settings_ui();
 }
 
 static lv_obj_t *btn_toggle_pw_visibility = NULL;

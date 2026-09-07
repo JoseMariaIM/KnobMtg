@@ -44,6 +44,11 @@ bool wifi_scan_is_open(int index); /* true = no password needed */
 void wifi_connect(const char *ssid, const char *pass);
 void wifi_disconnect(void);
 wifi_state_t wifi_get_state(void);
+/* Drops a stale WIFI_STATE_FAILED back to WIFI_STATE_DISCONNECTED (a
+ * no-op otherwise) - lets the UI show a failure message briefly and
+ * then revert the "Connect" tile to its normal, obviously-tappable
+ * label instead of looking permanently stuck on "Failed". */
+void wifi_clear_failed_state(void);
 const char *wifi_get_ip(void);       /* "" when not connected */
 const char *wifi_get_saved_ssid(void); /* for pre-filling the settings screen */
 

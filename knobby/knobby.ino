@@ -10,6 +10,7 @@
 #include "hal/lv_hal.h"
 #include "knob.h"
 #include "src/hw.h"
+#include "src/wifi_ota.h"
 #include "knobby_net.h"
 
 static const float BATTERY_DIVIDER_RATIO = 2.0f;
@@ -140,9 +141,14 @@ void loop()
   knobby_net_process();
   time_till_next = lv_timer_handler();
 
-  // Light sleep powers down the modem and would drop ESP-NOW packets, so
-  // Table Sync keeps the CPU on capped vTaskDelay idles instead.
-  if (time_till_next >= ACTIVE_SLEEP_MIN_MS && !usb_host_active() && !knobby_net_active()) {
+  // Light sleep powers down the modem, which drops ESP-NOW packets (Table
+  // Sync) and, worse, corrupts an in-progress WiFi association/handshake -
+  // seen on hardware as a reset a second or two into connecting whenever
+  // the device wasn't tethered to a real USB host (which already forces
+  // the vTaskDelay branch below via usb_host_active()). Both radios keep
+  // the CPU on capped vTaskDelay idles instead while active.
+  bool wifi_radio_busy = (wifi_get_state() == WIFI_STATE_CONNECTING || wifi_get_state() == WIFI_STATE_CONNECTED);
+  if (time_till_next >= ACTIVE_SLEEP_MIN_MS && !usb_host_active() && !knobby_net_active() && !wifi_radio_busy) {
     uint8_t level_a = gpio_get_level((gpio_num_t)ROTARY_ENC_PIN_A);
     uint8_t level_b = gpio_get_level((gpio_num_t)ROTARY_ENC_PIN_B);
     gpio_wakeup_enable((gpio_num_t)ROTARY_ENC_PIN_A, level_a ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);

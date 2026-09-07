@@ -219,25 +219,46 @@ extern "C" void ota_check_now(void)
 
     g_ota_state = OTA_STATE_CHECKING;
 
-    WiFiClientSecure client;
-    /* No certificate pinning: GitHub Pages' TLS chain can rotate at any
-       time, and a stale pinned root would silently brick the update
-       path with no way to fix it except reflashing over USB. Accepted
-       tradeoff for a personal device - see the project chat history. */
-    client.setInsecure();
+    /* One retry: a fresh WiFi connection's very first TLS handshake is
+       the flakiest one (still-settling routing/ARP, GitHub's CDN edge
+       occasionally slow to respond) - a single retry with a fresh
+       client clears most transient failures that a longer timeout
+       alone doesn't fix. */
+    String body;
+    int code = 0;
+    char tls_err[64] = "";
+    bool ok = false;
 
-    HTTPClient http;
-    http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
-    if (!http.begin(client, OTA_MANIFEST_URL)) {
-        g_ota_state = OTA_STATE_ERROR;
-        snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest URL");
-        return;
+    for (int attempt = 0; attempt < 2 && !ok; attempt++) {
+        if (attempt > 0) delay(1000);
+
+        WiFiClientSecure client;
+        /* No certificate pinning: GitHub Pages' TLS chain can rotate at
+           any time, and a stale pinned root would silently brick the
+           update path with no way to fix it except reflashing over USB.
+           Accepted tradeoff for a personal device - see the project
+           chat history. */
+        client.setInsecure();
+
+        HTTPClient http;
+        http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
+        if (!http.begin(client, OTA_MANIFEST_URL)) {
+            snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest URL");
+            continue;
+        }
+
+        code = http.GET();
+        if (code == HTTP_CODE_OK) {
+            body = http.getString();
+            ok = true;
+        } else {
+            tls_err[0] = '\0';
+            client.lastError(tls_err, sizeof(tls_err));
+        }
+        http.end();
     }
 
-    int code = http.GET();
-    if (code != HTTP_CODE_OK) {
-        char tls_err[64] = "";
-        client.lastError(tls_err, sizeof(tls_err));
+    if (!ok) {
         g_ota_state = OTA_STATE_ERROR;
         /* Free heap is included because "SSL - Memory allocation failed"
            only means something with a number attached - if it recurs
@@ -248,12 +269,8 @@ extern "C" void ota_check_now(void)
         } else {
             snprintf(g_ota_error, sizeof(g_ota_error), "Manifest: %s", HTTPClient::errorToString(code).c_str());
         }
-        http.end();
         return;
     }
-
-    String body = http.getString();
-    http.end();
 
     char latest[32];
     if (!extract_json_string_field(body.c_str(), "version", latest, sizeof(latest))) {

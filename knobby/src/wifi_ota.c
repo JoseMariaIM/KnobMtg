@@ -25,6 +25,11 @@ ota_state_t ota_get_state(void) { return g_ota_state; }
 const char *ota_get_latest_version(void) { return g_latest_version; }
 const char *ota_get_error(void) { return g_ota_error; }
 
+void wifi_clear_failed_state(void)
+{
+    if (g_wifi_state == WIFI_STATE_FAILED) g_wifi_state = WIFI_STATE_DISCONNECTED;
+}
+
 #ifdef SIMULATOR
 
 /* The simulator has no real network stack; these stand in so the WiFi
