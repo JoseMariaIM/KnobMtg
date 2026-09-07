@@ -6,6 +6,8 @@
 #include "storage.h"
 #include "net_sync.h"
 #include "lang.h"
+#include "custom_keyboard.h"
+#include "round_safe.h"
 #include <string.h>
 
 // ---------- screens ----------
@@ -20,9 +22,16 @@ static lv_obj_t *label_name_title = NULL;
 static lv_obj_t *mru_list_container = NULL;
 static lv_obj_t *btn_mru_select = NULL;
 static lv_obj_t *textarea_name = NULL;
-static lv_obj_t *keyboard_name = NULL;
-static lv_obj_t *btn_name_save = NULL;
+static custom_keyboard_t name_kb;
 static bool name_keyboard_mode = false;
+
+/* Container is fixed on screen and only its content scrolls, so sizing
+ * it to the round-safe width for its own y-span (see round_safe.h)
+ * keeps every row - however far scrolled - inside the glass. Ends
+ * short of btn_mru_select below it. */
+#define MRU_LIST_Y1 64
+#define MRU_LIST_Y2 260
+static int mru_list_width = 280;
 static int mru_selected = 0;
 
 // ---------- rename-all state ----------
@@ -209,7 +218,7 @@ static void add_list_row(int idx, const char *text, lv_color_t color)
 {
     lv_obj_t *row = lv_obj_create(mru_list_container);
     lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, 280, 28);
+    lv_obj_set_size(row, mru_list_width - 20, 28);
     lv_obj_set_style_radius(row, 4, 0);
     lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(row, event_mru_row_click, LV_EVENT_CLICKED, (void *)(intptr_t)idx);
@@ -283,8 +292,7 @@ static void name_screen_show_list(void)
     if (mru_list_container) lv_obj_clear_flag(mru_list_container, LV_OBJ_FLAG_HIDDEN);
     if (btn_mru_select)     lv_obj_clear_flag(btn_mru_select, LV_OBJ_FLAG_HIDDEN);
     if (textarea_name)      lv_obj_add_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
-    if (keyboard_name)      lv_obj_add_flag(keyboard_name, LV_OBJ_FLAG_HIDDEN);
-    if (btn_name_save)      lv_obj_add_flag(btn_name_save, LV_OBJ_FLAG_HIDDEN);
+    custom_keyboard_set_hidden(&name_kb, true);
 }
 
 static void name_screen_show_keyboard(void)
@@ -293,8 +301,8 @@ static void name_screen_show_keyboard(void)
     if (mru_list_container) lv_obj_add_flag(mru_list_container, LV_OBJ_FLAG_HIDDEN);
     if (btn_mru_select)     lv_obj_add_flag(btn_mru_select, LV_OBJ_FLAG_HIDDEN);
     if (textarea_name)      lv_obj_clear_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
-    if (keyboard_name)      lv_obj_clear_flag(keyboard_name, LV_OBJ_FLAG_HIDDEN);
-    if (btn_name_save)      lv_obj_clear_flag(btn_name_save, LV_OBJ_FLAG_HIDDEN);
+    custom_keyboard_reset(&name_kb);
+    custom_keyboard_set_hidden(&name_kb, false);
 }
 
 // ---------- knob / back ----------
@@ -314,6 +322,23 @@ void mru_select_prev(void)
         mru_selected--;
         update_mru_highlight();
     }
+}
+
+/* The knob does double duty on this screen: cycles the MRU list when
+   it's showing, or moves the text cursor when the keyboard is - the
+   keyboard itself no longer has left/right arrow keys (they were hard
+   to hit and unreliable to tap; see custom_keyboard.c history), so the
+   knob is now the only way to reposition the cursor while typing. */
+void name_screen_knob(int dir)
+{
+    if (name_keyboard_mode) {
+        if (textarea_name == NULL) return;
+        if (dir < 0) lv_textarea_cursor_left(textarea_name);
+        else if (dir > 0) lv_textarea_cursor_right(textarea_name);
+        return;
+    }
+    if (dir < 0) mru_select_prev();
+    else if (dir > 0) mru_select_next();
 }
 
 bool name_screen_handle_back(void)
@@ -386,10 +411,11 @@ void build_rename_screen(void)
     lv_obj_align(label_name_title, LV_ALIGN_TOP_MID, 0, 18);
 
     /* --- List mode widgets --- */
+    mru_list_width = round_safe_width(MRU_LIST_Y1, MRU_LIST_Y2);
     mru_list_container = lv_obj_create(screen_player_name);
     lv_obj_remove_style_all(mru_list_container);
-    lv_obj_set_size(mru_list_container, 280, 210);
-    lv_obj_align(mru_list_container, LV_ALIGN_TOP_MID, 0, 52);
+    lv_obj_set_size(mru_list_container, mru_list_width, MRU_LIST_Y2 - MRU_LIST_Y1);
+    lv_obj_align(mru_list_container, LV_ALIGN_TOP_MID, 0, MRU_LIST_Y1);
     lv_obj_set_flex_flow(mru_list_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(mru_list_container, 2, 0);
     lv_obj_set_scrollbar_mode(mru_list_container, LV_SCROLLBAR_MODE_OFF);
@@ -411,15 +437,13 @@ void build_rename_screen(void)
     lv_textarea_set_one_line(textarea_name, true);
     lv_obj_add_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
 
-    keyboard_name = lv_keyboard_create(screen_player_name);
-    lv_obj_set_size(keyboard_name, 360, 170);
-    lv_obj_align(keyboard_name, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(keyboard_name, textarea_name);
-    lv_obj_add_flag(keyboard_name, LV_OBJ_FLAG_HIDDEN);
-
-    btn_name_save = make_button(screen_player_name, t(STR_RENAME_SAVE), 88, 38, event_name_save);
-    lv_obj_align(btn_name_save, LV_ALIGN_TOP_MID, 0, 116);
-    lv_obj_add_flag(btn_name_save, LV_OBJ_FLAG_HIDDEN);
+    /* Custom round-display-shaped keyboard (see custom_keyboard.h) -
+       its own Enter key fires LV_EVENT_READY, wired to event_name_save
+       below just like the removed "Guardar" button used to be. */
+    custom_keyboard_build(&name_kb, screen_player_name);
+    custom_keyboard_set_textarea(&name_kb, textarea_name);
+    custom_keyboard_set_ready_cb(&name_kb, event_name_save);
+    custom_keyboard_set_hidden(&name_kb, true);
 
     mru_load();
 }

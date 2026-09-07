@@ -9,9 +9,9 @@ static lv_obj_t *intro_letters[INTRO_CHAR_COUNT];
 static uint8_t intro_step = 0;
 static lv_timer_t *intro_timer = NULL;
 
-static const char *intro_text[INTRO_CHAR_COUNT] = {"k", "n", "o", "b", "b", "y", "."};
-static const uint32_t intro_colors[INTRO_CHAR_COUNT] = {0x9C5CFF, 0xF6C945, 0x42A5F5, 0x06D6A0, 0x06D6A0, 0xE53935, 0xFFFFFF};
-static const lv_coord_t intro_x[INTRO_CHAR_COUNT] = {56, 98, 140, 182, 214, 246, 284};
+static const char *intro_text[INTRO_CHAR_COUNT] = {"c", "h", "e", "m", "a", "."};
+static const uint32_t intro_colors[INTRO_CHAR_COUNT] = {0x9C5CFF, 0xF6C945, 0x42A5F5, 0x06D6A0, 0xE53935, 0xFFFFFF};
+static const lv_coord_t intro_x[INTRO_CHAR_COUNT] = {74, 116, 158, 200, 242, 284};
 
 void refresh_intro_ui(void)
 {

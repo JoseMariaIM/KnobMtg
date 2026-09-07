@@ -22,6 +22,8 @@ void open_ota_update_screen(void);
 void refresh_wifi_settings_ui(void);
 void refresh_ota_update_ui(void);
 
+void wifi_text_entry_knob(int dir); /* dir<0 = left, dir>0 = right */
+
 /* Returns true if it handled the back gesture itself (mirrors
    name_screen_handle_back's contract in rename.c). */
 bool wifi_text_entry_handle_back(void);

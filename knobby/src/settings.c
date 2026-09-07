@@ -15,6 +15,7 @@
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "ui_wifi.h"
+#include "round_safe.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -478,6 +479,16 @@ void build_table_sync_screen(void)
 // ---------- language picker ----------
 static lv_obj_t *language_list_container = NULL;
 
+/* Only ever holds LANG_COUNT (currently 2) short rows, so instead of a
+ * top-anchored rectangle we can afford to center this small container
+ * on the display's vertical middle, where the circle is widest - see
+ * round_safe.h. That keeps it essentially full-width with no clipping,
+ * unlike a list long enough to need scrolling (compare scan_list_width
+ * in ui_wifi.c, which can't be centered the same way). */
+#define LANGUAGE_LIST_Y1 125
+#define LANGUAGE_LIST_Y2 235
+static int language_list_width = 280;
+
 static void event_language_row_click(lv_event_t *e)
 {
     lang_t lang = (lang_t)(intptr_t)lv_event_get_user_data(e);
@@ -490,7 +501,7 @@ static void add_language_row(lang_t lang)
 
     lv_obj_t *row = lv_obj_create(language_list_container);
     lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, 280, 40);
+    lv_obj_set_size(row, language_list_width - 20, 40);
     lv_obj_set_style_radius(row, 4, 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(is_current ? TOGGLE_ON : 0x1E1E2E), 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
@@ -526,10 +537,11 @@ void build_language_picker_screen(void)
     lv_obj_set_style_text_font(title, &lv_font_es_16, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
+    language_list_width = round_safe_width(LANGUAGE_LIST_Y1, LANGUAGE_LIST_Y2);
     language_list_container = lv_obj_create(screen_language_picker);
     lv_obj_remove_style_all(language_list_container);
-    lv_obj_set_size(language_list_container, 300, 300);
-    lv_obj_align(language_list_container, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_size(language_list_container, language_list_width, LANGUAGE_LIST_Y2 - LANGUAGE_LIST_Y1);
+    lv_obj_align(language_list_container, LV_ALIGN_TOP_MID, 0, LANGUAGE_LIST_Y1);
     lv_obj_set_flex_flow(language_list_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(language_list_container, 8, 0);
     lv_obj_set_scrollbar_mode(language_list_container, LV_SCROLLBAR_MODE_OFF);

@@ -327,6 +327,8 @@ static void handle_back_navigation(lv_obj_t *screen)
     } else if (settings_handle_back(screen)) {
         /* settings pages and their sub-screens (brightness, battery) */
     } else if (screen == screen_dice) {
+        open_dice_menu_screen();
+    } else if (screen == screen_dice_menu) {
         lv_scr_load(screen_tools_menu);
     } else if (screen == screen_damage_log) {
         lv_scr_load(screen_tools_menu);
@@ -432,6 +434,7 @@ void knob_gui(void)
     lv_refr_now(NULL);
     scr_display_on();
     brightness_apply();
+    build_dice_menu_screen();
     build_dice_screen();
     build_main_screen();
     build_multiplayer_screen();
@@ -541,8 +544,13 @@ static void handle_knob_event(knob_event_t k)
     }
     else if (lv_scr_act() == screen_player_name)
     {
-        if (k == KNOB_LEFT)      mru_select_prev();
-        else if (k == KNOB_RIGHT) mru_select_next();
+        if (k == KNOB_LEFT)      name_screen_knob(-1);
+        else if (k == KNOB_RIGHT) name_screen_knob(+1);
+    }
+    else if (lv_scr_act() == screen_wifi_text_entry)
+    {
+        if (k == KNOB_LEFT)      wifi_text_entry_knob(-1);
+        else if (k == KNOB_RIGHT) wifi_text_entry_knob(+1);
     }
     else if (lv_scr_act() == screen_player_color_picker)
     {

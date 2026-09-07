@@ -185,7 +185,6 @@ typedef enum {
     STR_RENAME_NEW_NAME,
     STR_RENAME_FMT,       /* "Rename %s" */
     STR_RENAME_SELECT,
-    STR_RENAME_SAVE,
 
     /* game_mode.c */
     STR_GAME_MODE_PLAYERS_FMT,  /* "Players\n%d" */
@@ -197,6 +196,13 @@ typedef enum {
 
     /* dice.c */
     STR_DICE_HOLD_TO_REROLL,
+    STR_DICE_MODE_D6,
+    STR_DICE_MODE_D12,
+    STR_DICE_MODE_D20,
+    STR_DICE_MODE_COIN,
+    STR_COIN_HEADS,
+    STR_COIN_TAILS,
+    STR_COIN_HOLD_TO_REFLIP,
 
     /* mana.c */
     STR_MANA_POOL_TITLE,

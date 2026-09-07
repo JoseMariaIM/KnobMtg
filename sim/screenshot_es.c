@@ -17,6 +17,7 @@
 #include "ui_wifi.h"
 #include "wifi_ota.h"
 #include "lang.h"
+#include "dice.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,6 +106,19 @@ int main(void)
 
     render_and_save(screen_quad_menu, "screenshots/es_main_menu.png");
     render_and_save(screen_tools_menu, "screenshots/es_tools_menu.png");
+
+    event_tool_dice(NULL);
+    render_and_save(screen_dice_menu, "screenshots/es_dice_menu.png");
+
+    /* Tiles are d6, d12, d20, Coin in that order. */
+    lv_obj_t *tile_d20 = lv_obj_get_child(screen_dice_menu, 2);
+    lv_event_send(tile_d20, LV_EVENT_CLICKED, NULL);
+    render_and_save(screen_dice, "screenshots/es_dice_d20.png");
+
+    open_dice_menu_screen();
+    lv_obj_t *tile_coin = lv_obj_get_child(screen_dice_menu, 3);
+    lv_event_send(tile_coin, LV_EVENT_CLICKED, NULL);
+    render_and_save(screen_dice, "screenshots/es_dice_coin.png");
 
     wifi_connect("MiRedWifi", "unaContrasena123");
     open_wifi_settings_screen();

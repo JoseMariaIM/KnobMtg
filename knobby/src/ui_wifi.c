@@ -3,6 +3,8 @@
 #include "storage.h"
 #include "lang.h"
 #include "settings.h"
+#include "custom_keyboard.h"
+#include "round_safe.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_wifi_settings = NULL;
@@ -19,10 +21,20 @@ static lv_obj_t *wifi_tile_connect_label = NULL;
 static lv_obj_t *scan_list_container = NULL;
 static int scan_pending_index = -1; /* which scanned network the user just tapped, -1 = manual entry */
 
+/* The container itself never moves - only its (scrollable) content
+ * does - so sizing it to the round-safe width for its own fixed y-span
+ * keeps every row inside the glass no matter how far the list is
+ * scrolled. Centering that span closer to the display's vertical
+ * middle (instead of pinning it to the top) is what buys back most of
+ * the width a naive top-anchored rectangle would otherwise lose. */
+#define SCAN_LIST_Y1 68
+#define SCAN_LIST_Y2 292
+static int scan_list_width = 280;
+
 // ---------- text entry widgets/state ----------
 static lv_obj_t *label_entry_title = NULL;
 static lv_obj_t *textarea_entry = NULL;
-static lv_obj_t *keyboard_entry = NULL;
+static custom_keyboard_t text_entry_kb;
 static bool entry_is_password = false;
 
 // ---------- status widgets ----------
@@ -170,6 +182,7 @@ static void open_text_entry(bool is_password)
         lv_obj_t *lbl = lv_obj_get_child(btn_toggle_pw_visibility, 0);
         if (lbl != NULL) lv_label_set_text(lbl, LV_SYMBOL_EYE_OPEN);
     }
+    custom_keyboard_reset(&text_entry_kb); /* required every open - see custom_keyboard.h */
     load_screen_if_needed(screen_wifi_text_entry);
 }
 
@@ -196,7 +209,7 @@ static void add_scan_row(int idx, const char *text)
 {
     lv_obj_t *row = lv_obj_create(scan_list_container);
     lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, 280, 32);
+    lv_obj_set_size(row, scan_list_width - 20, 32);
     lv_obj_set_style_radius(row, 4, 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x1E1E2E), 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
@@ -272,10 +285,11 @@ void build_wifi_scan_list_screen(void)
     lv_obj_align(label_scan_status, LV_ALIGN_TOP_MID, 0, 36);
     lv_obj_add_flag(label_scan_status, LV_OBJ_FLAG_HIDDEN);
 
+    scan_list_width = round_safe_width(SCAN_LIST_Y1, SCAN_LIST_Y2);
     scan_list_container = lv_obj_create(screen_wifi_scan_list);
     lv_obj_remove_style_all(scan_list_container);
-    lv_obj_set_size(scan_list_container, 300, 290);
-    lv_obj_align(scan_list_container, LV_ALIGN_TOP_MID, 0, 36);
+    lv_obj_set_size(scan_list_container, scan_list_width, SCAN_LIST_Y2 - SCAN_LIST_Y1);
+    lv_obj_align(scan_list_container, LV_ALIGN_TOP_MID, 0, SCAN_LIST_Y1);
     lv_obj_set_flex_flow(scan_list_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(scan_list_container, 4, 0);
     lv_obj_set_scrollbar_mode(scan_list_container, LV_SCROLLBAR_MODE_OFF);
@@ -367,6 +381,16 @@ static void event_toggle_pw_visibility(lv_event_t *e)
     if (lbl != NULL) lv_label_set_text(lbl, pw_visible ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
 }
 
+/* The keyboard no longer has left/right arrow keys (hard to hit and
+   unreliable to tap; see custom_keyboard.c history) - the knob is now
+   the only way to reposition the cursor while typing. */
+void wifi_text_entry_knob(int dir)
+{
+    if (textarea_entry == NULL) return;
+    if (dir < 0) lv_textarea_cursor_left(textarea_entry);
+    else if (dir > 0) lv_textarea_cursor_right(textarea_entry);
+}
+
 bool wifi_text_entry_handle_back(void)
 {
     open_wifi_settings_screen();
@@ -375,35 +399,31 @@ bool wifi_text_entry_handle_back(void)
 
 void build_wifi_text_entry_screen(void)
 {
-    /* This is a round display: the LVGL canvas is a 360x360 square but
-       only the inscribed circle (radius 180 around its center) is
-       actually visible under the glass - anything placed near a corner
-       of the square (like a wide keyboard's outer edges, or a button
-       pinned to TOP_LEFT/TOP_RIGHT) gets cut off by the bezel even
-       though it renders fine in the simulator's flat screenshot. The
-       layout below mirrors rename.c's proven-on-hardware keyboard
-       screen: a centered, narrower content column and a keyboard no
-       taller than 170px so its top corners stay inside the circle. */
     screen_wifi_text_entry = lv_obj_create(NULL);
     lv_obj_set_size(screen_wifi_text_entry, 360, 360);
     lv_obj_set_style_bg_color(screen_wifi_text_entry, lv_color_black(), 0);
     lv_obj_set_style_border_width(screen_wifi_text_entry, 0, 0);
     lv_obj_set_scrollbar_mode(screen_wifi_text_entry, LV_SCROLLBAR_MODE_OFF);
 
+    /* Sitting right at the very top of the round glass leaves almost no
+       safe width (the circle is narrowest there), which is why this
+       title used to get its corners clipped - see round_safe.h. Pulling
+       it down closer to the keyboard (which starts at y=130) buys back
+       enough width for its two lines. */
     label_entry_title = lv_label_create(screen_wifi_text_entry);
     lv_label_set_text(label_entry_title, t(STR_WIFI_ENTER_SSID));
     lv_obj_set_style_text_color(label_entry_title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_entry_title, &lv_font_es_16, 0);
+    lv_obj_set_style_text_font(label_entry_title, &lv_font_es_14, 0);
     lv_obj_set_style_text_align(label_entry_title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(label_entry_title, 260);
-    lv_obj_align(label_entry_title, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_set_width(label_entry_title, 220);
+    lv_obj_align(label_entry_title, LV_ALIGN_TOP_MID, 0, 44);
 
     /* Textarea + show/hide toggle as one centered block instead of
        pinned to the left/right edges, so neither one lands in the
        clipped corner area. */
     textarea_entry = lv_textarea_create(screen_wifi_text_entry);
     lv_obj_set_size(textarea_entry, 200, 40);
-    lv_obj_align(textarea_entry, LV_ALIGN_TOP_MID, -24, 60);
+    lv_obj_align(textarea_entry, LV_ALIGN_TOP_MID, -24, 86);
     lv_textarea_set_max_length(textarea_entry, WIFI_PASS_LEN - 1);
     lv_textarea_set_one_line(textarea_entry, true);
     lv_obj_set_style_text_font(textarea_entry, &lv_font_es_16, 0);
@@ -411,17 +431,15 @@ void build_wifi_text_entry_screen(void)
     /* Show/hide toggle for the masked password field - only visible
        when entering a password, see open_text_entry(). */
     btn_toggle_pw_visibility = make_button(screen_wifi_text_entry, LV_SYMBOL_EYE_OPEN, 44, 40, event_toggle_pw_visibility);
-    lv_obj_align(btn_toggle_pw_visibility, LV_ALIGN_TOP_MID, 104, 60);
+    lv_obj_align(btn_toggle_pw_visibility, LV_ALIGN_TOP_MID, 104, 86);
     lv_obj_add_flag(btn_toggle_pw_visibility, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t *btn_save = make_button(screen_wifi_text_entry, t(STR_OK), 100, 38, event_entry_save);
-    lv_obj_align(btn_save, LV_ALIGN_TOP_MID, 0, 112);
-
-    keyboard_entry = lv_keyboard_create(screen_wifi_text_entry);
-    lv_obj_set_size(keyboard_entry, 360, 170);
-    lv_obj_align(keyboard_entry, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(keyboard_entry, textarea_entry);
-    lv_obj_add_event_cb(keyboard_entry, event_entry_save, LV_EVENT_READY, NULL);
+    /* Custom round-display-shaped keyboard (see custom_keyboard.h) -
+       its own Enter key fires LV_EVENT_READY, so no separate "OK"
+       button is needed here. */
+    custom_keyboard_build(&text_entry_kb, screen_wifi_text_entry);
+    custom_keyboard_set_textarea(&text_entry_kb, textarea_entry);
+    custom_keyboard_set_ready_cb(&text_entry_kb, event_entry_save);
 }
 
 // ---------- connection status ----------

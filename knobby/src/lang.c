@@ -51,7 +51,7 @@ static const char *strings_en[STR_COUNT] = {
     [STR_MENU_GAME_MODE] = "Game\nMode",
     [STR_MENU_TOOLS] = "Tools",
     [STR_MENU_RESET_HOLD] = "Reset\n(Hold)",
-    [STR_TOOL_DICE] = "Dice",
+    [STR_TOOL_DICE] = "Dice/\nCoin",
     [STR_TOOL_TIMER] = "Timer",
     [STR_TOOL_EVENT_LOG] = "Event\nLog",
     [STR_TOOL_MANA_POOL] = "Mana\nPool",
@@ -171,7 +171,6 @@ static const char *strings_en[STR_COUNT] = {
     [STR_RENAME_NEW_NAME] = "New name",
     [STR_RENAME_FMT] = "Rename %s",
     [STR_RENAME_SELECT] = "Select",
-    [STR_RENAME_SAVE] = "save",
 
     [STR_GAME_MODE_PLAYERS_FMT] = "Players\n%d",
     [STR_GAME_MODE_TRACK_FMT] = "Track\n%d",
@@ -181,6 +180,13 @@ static const char *strings_en[STR_COUNT] = {
     [STR_GAME_MODE_TURN_KNOB_ADJUST] = "Turn knob to adjust",
 
     [STR_DICE_HOLD_TO_REROLL] = "Hold to re-roll",
+    [STR_DICE_MODE_D6] = "d6",
+    [STR_DICE_MODE_D12] = "d12",
+    [STR_DICE_MODE_D20] = "d20",
+    [STR_DICE_MODE_COIN] = "Coin",
+    [STR_COIN_HEADS] = "Heads",
+    [STR_COIN_TAILS] = "Tails",
+    [STR_COIN_HOLD_TO_REFLIP] = "Hold to flip again",
 
     [STR_MANA_POOL_TITLE] = "Mana Pool",
     [STR_MANA_CLEAR_ALL_HOLD] = "Clear All\n(Hold)",
@@ -230,7 +236,7 @@ static const char *strings_es[STR_COUNT] = {
     [STR_MENU_GAME_MODE] = "Modo de\nJuego",
     [STR_MENU_TOOLS] = "Herramientas",
     [STR_MENU_RESET_HOLD] = "Reiniciar\n(Mantener)",
-    [STR_TOOL_DICE] = "Dado",
+    [STR_TOOL_DICE] = "Dado/\nMoneda",
     [STR_TOOL_TIMER] = "Temporizador",
     [STR_TOOL_EVENT_LOG] = "Registro\nde Eventos",
     [STR_TOOL_MANA_POOL] = "Reserva\nde Maná",
@@ -350,7 +356,6 @@ static const char *strings_es[STR_COUNT] = {
     [STR_RENAME_NEW_NAME] = "Nuevo nombre",
     [STR_RENAME_FMT] = "Renombrar %s",
     [STR_RENAME_SELECT] = "Elegir",
-    [STR_RENAME_SAVE] = "guardar",
 
     [STR_GAME_MODE_PLAYERS_FMT] = "Jugadores\n%d",
     [STR_GAME_MODE_TRACK_FMT] = "En pantalla\n%d",
@@ -360,6 +365,13 @@ static const char *strings_es[STR_COUNT] = {
     [STR_GAME_MODE_TURN_KNOB_ADJUST] = "Gira la rueda para ajustar",
 
     [STR_DICE_HOLD_TO_REROLL] = "Mantener para volver a tirar",
+    [STR_DICE_MODE_D6] = "d6",
+    [STR_DICE_MODE_D12] = "d12",
+    [STR_DICE_MODE_D20] = "d20",
+    [STR_DICE_MODE_COIN] = "Moneda",
+    [STR_COIN_HEADS] = "Cara",
+    [STR_COIN_TAILS] = "Cruz",
+    [STR_COIN_HOLD_TO_REFLIP] = "Mantener para volver a lanzar",
 
     [STR_MANA_POOL_TITLE] = "Reserva de Maná",
     [STR_MANA_CLEAR_ALL_HOLD] = "Borrar Todo\n(Mantener)",
