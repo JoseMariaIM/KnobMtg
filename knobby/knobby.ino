@@ -1,8 +1,10 @@
 #include "esp_wifi.h"
 #include "esp_bt.h"
 #include "esp_sleep.h"
+#include "esp_system.h"
 #include "driver/gpio.h"
 #include "soc/usb_serial_jtag_struct.h"
+#include <string.h>
 
 #include "board_detect.h"
 #include "scr_st77916.h"
@@ -57,8 +59,83 @@ extern "C" float knob_read_battery_voltage(void)
   return battery_voltage_filtered;
 }
 
+// ---------- crash diagnostics ----------
+// Regular RAM is cleared on every reset, so a crash (panic, task
+// watchdog, brownout...) leaves no trace of itself once it reboots -
+// which is exactly the "resets by itself, no idea why" report this is
+// for. RTC memory survives any reset that doesn't fully cut power, so a
+// small ring of (reset reason, how long the previous run lasted) pairs
+// kept there kept there is still readable after several such resets,
+// even if nobody had a serial monitor open at the exact moment it
+// happened - only a full battery pull/power-on resets it back to
+// "no history yet". Printed at the very top of setup(), before anything
+// that could itself crash, so the read of the PREVIOUS crash always
+// makes it out over serial before any new one.
+#define RESET_HISTORY_LEN   6
+#define RESET_HISTORY_MAGIC 0x4B4E4232UL /* 'KNB2' - bump if this layout changes */
+RTC_NOINIT_ATTR static uint32_t rtc_magic;
+RTC_NOINIT_ATTR static uint32_t rtc_boot_count;
+RTC_NOINIT_ATTR static uint32_t rtc_last_alive_ms;
+RTC_NOINIT_ATTR static uint8_t  rtc_reset_reason[RESET_HISTORY_LEN];
+RTC_NOINIT_ATTR static uint32_t rtc_alive_ms[RESET_HISTORY_LEN];
+
+static const char *reset_reason_name(esp_reset_reason_t reason)
+{
+  switch (reason) {
+    case ESP_RST_POWERON:   return "POWERON";
+    case ESP_RST_EXT:       return "EXT_PIN";
+    case ESP_RST_SW:        return "SW_RESET";
+    case ESP_RST_PANIC:     return "PANIC";
+    case ESP_RST_INT_WDT:   return "INT_WATCHDOG";
+    case ESP_RST_TASK_WDT:  return "TASK_WATCHDOG";
+    case ESP_RST_WDT:       return "OTHER_WATCHDOG";
+    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP_WAKE";
+    case ESP_RST_BROWNOUT:  return "BROWNOUT";
+    case ESP_RST_SDIO:      return "SDIO";
+    default:                return "UNKNOWN";
+  }
+}
+
+static void record_and_print_reset_history(void)
+{
+  esp_reset_reason_t reason = esp_reset_reason();
+  int i;
+
+  if (rtc_magic != RESET_HISTORY_MAGIC) {
+    rtc_magic = RESET_HISTORY_MAGIC;
+    rtc_boot_count = 0;
+    rtc_last_alive_ms = 0;
+    memset(rtc_reset_reason, 0, sizeof(rtc_reset_reason));
+    memset(rtc_alive_ms, 0, sizeof(rtc_alive_ms));
+  } else {
+    for (i = RESET_HISTORY_LEN - 1; i > 0; i--) {
+      rtc_reset_reason[i] = rtc_reset_reason[i - 1];
+      rtc_alive_ms[i] = rtc_alive_ms[i - 1];
+    }
+  }
+  rtc_reset_reason[0] = (uint8_t)reason;
+  rtc_alive_ms[0] = rtc_last_alive_ms; /* how long the run that just ended lasted */
+  rtc_boot_count++;
+  rtc_last_alive_ms = 0;
+
+  Serial.begin(115200);
+  delay(50); /* give a native-USB host a moment to enumerate before we print */
+  Serial.println();
+  Serial.println(F("=== Knobby reset history (most recent first) ==="));
+  Serial.printf("Boot #%lu - this boot's cause: %s\n", (unsigned long)rtc_boot_count, reset_reason_name(reason));
+  for (i = 0; i < RESET_HISTORY_LEN; i++) {
+    if (i == 0 && rtc_boot_count == 1) break; /* fresh history, nothing to show yet */
+    Serial.printf("  [%d] %-14s ran %lu ms before this reset\n", i,
+                  reset_reason_name((esp_reset_reason_t)rtc_reset_reason[i]),
+                  (unsigned long)rtc_alive_ms[i]);
+  }
+  Serial.println(F("=================================================="));
+}
+
 void setup()
 {
+  record_and_print_reset_history();
+
   // Detect which board we're running on before any pin-dependent init
   board_detect();
 
@@ -133,9 +210,25 @@ static bool usb_host_active(void)
   return active;
 }
 
+// If a GPIO wake source fires immediately instead of waiting for the
+// timer - electrical noise on the rotary encoder pins or the touch IRQ
+// line misbehaving are the two candidates on this hardware, both far
+// more plausible outdoors (cold, static, EMI) than on a bench indoors -
+// esp_light_sleep_start() returns in well under a millisecond every
+// iteration. That's a tight loop that never lets the FreeRTOS idle task
+// run, which eventually trips the task watchdog and resets the device -
+// looking exactly like a random crash, with no correlation to what
+// screen is showing or whether the battery is fine, since it's the sleep
+// mechanism itself spinning. If several sleep attempts in a row wake up
+// far earlier than requested, force a real yield to break the loop.
+#define FAST_WAKE_STREAK_LIMIT 5U
+static uint8_t fast_wake_streak = 0;
+
 void loop()
 {
   uint32_t time_till_next;
+
+  rtc_last_alive_ms = millis(); /* see record_and_print_reset_history() */
 
   knob_process_pending();
   knobby_net_process();
@@ -154,10 +247,22 @@ void loop()
     gpio_wakeup_enable((gpio_num_t)ROTARY_ENC_PIN_A, level_a ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
     gpio_wakeup_enable((gpio_num_t)ROTARY_ENC_PIN_B, level_b ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
     esp_sleep_enable_timer_wakeup((uint64_t)time_till_next * 1000ULL);
+    uint32_t sleep_start_ms = millis();
     esp_light_sleep_start();
+    uint32_t slept_ms = millis() - sleep_start_ms;
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_A);
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_B);
+    if (slept_ms + 1 < time_till_next) {
+      /* Woke up early via a GPIO source, not the requested timer. */
+      if (++fast_wake_streak >= FAST_WAKE_STREAK_LIMIT) {
+        fast_wake_streak = 0;
+        vTaskDelay(1);
+      }
+    } else {
+      fast_wake_streak = 0;
+    }
   } else {
+    fast_wake_streak = 0;
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_A);
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_B);
     if (knobby_net_active() && time_till_next > NET_SYNC_IDLE_MAX_MS)
