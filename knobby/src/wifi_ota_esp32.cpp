@@ -40,6 +40,14 @@ extern "C" {
  * as a misleading "Manifest HTTP -1" (HTTPC_ERROR_CONNECTION_REFUSED). */
 #define OTA_CONNECT_TIMEOUT_MS 15000
 
+/* Default TX power draws current spikes (~300-400mA) that a low or
+ * aging battery can't source without the voltage sagging enough to
+ * brownout-reset the board - happening consistently ~1-2s into any
+ * connection attempt (right as the radio powers up) is the signature
+ * of this, not a software bug. Cuts range somewhat, acceptable for a
+ * device normally used within a room of its own WiFi router. */
+#define WIFI_TX_POWER WIFI_POWER_11dBm
+
 extern "C" {
 extern wifi_state_t g_wifi_state;
 extern char g_wifi_ip[16];
@@ -84,6 +92,7 @@ extern "C" void wifi_ota_init(void)
 
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); /* modem sleep can stall/drop packets mid-handshake */
+    WiFi.setTxPower(WIFI_TX_POWER); /* see comment on the macro below */
     WiFi.begin(g_saved_ssid, pass);
     g_wifi_state = WIFI_STATE_CONNECTING;
     s_auto_connect_started_at = millis();
@@ -98,6 +107,7 @@ static int s_scan_count = 0;
 extern "C" int wifi_scan_start(void)
 {
     WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_TX_POWER);
     int found = WiFi.scanNetworks();
     s_scan_count = 0;
     for (int i = 0; i < found && s_scan_count < WIFI_SCAN_MAX; i++) {
@@ -151,6 +161,7 @@ extern "C" void wifi_connect(const char *ssid, const char *pass)
 
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); /* modem sleep can stall/drop packets mid-handshake */
+    WiFi.setTxPower(WIFI_TX_POWER);
     WiFi.disconnect();
     WiFi.begin(ssid, pass);
     g_wifi_state = WIFI_STATE_CONNECTING;
