@@ -13,6 +13,8 @@
 #include "src/damage_log.h"
 #include "src/rename.h"
 #include "src/mana.h"
+#include "src/ui_wifi.h"
+#include "src/wifi_ota.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -343,6 +345,12 @@ static void handle_back_navigation(lv_obj_t *screen)
     } else if (screen == screen_player_name) {
         if (!name_screen_handle_back())
             open_player_menu(menu_player);
+    } else if (screen == screen_wifi_scan_list) {
+        wifi_scan_list_handle_back();
+    } else if (screen == screen_wifi_text_entry) {
+        wifi_text_entry_handle_back();
+    } else if (screen == screen_wifi_status) {
+        wifi_status_handle_back();
     } else if (screen == screen_counter_menu) {
         open_player_menu(menu_player);
     } else if (screen == screen_counter_edit) {
@@ -442,6 +450,11 @@ void knob_gui(void)
     build_battery_screen();
     build_rotate_screen();
     build_table_sync_screen();
+    build_wifi_settings_screen();
+    build_wifi_scan_list_screen();
+    build_wifi_text_entry_screen();
+    build_wifi_status_screen();
+    build_ota_update_screen();
     build_damage_log_screen();
     build_quad_menus();
     build_game_mode_menu_screen();
@@ -457,6 +470,10 @@ void knob_gui(void)
     refresh_all_damage_ui();
     refresh_counter_edit_ui();
     refresh_settings_ui();
+    refresh_wifi_settings_ui();
+    refresh_ota_update_ui();
+
+    wifi_ota_init(); /* non-blocking: begins connecting if credentials are saved */
 
     knob_timer_init();
     knob_life_init();

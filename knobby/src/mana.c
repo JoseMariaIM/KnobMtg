@@ -1,4 +1,5 @@
 #include "mana.h"
+#include "lang.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -205,7 +206,7 @@ void build_mana_screen(void)
 
     /* title */
     label = lv_label_create(screen_mana);
-    lv_label_set_text(label, "Mana Pool");
+    lv_label_set_text(label, t(STR_MANA_POOL_TITLE));
     lv_obj_set_style_text_color(label, lv_color_white(), 0);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_22, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 36);
@@ -261,7 +262,7 @@ void build_mana_screen(void)
         lv_obj_add_event_cb(btn, event_mana_clear, LV_EVENT_LONG_PRESSED, NULL);
 
         label = lv_label_create(btn);
-        lv_label_set_text(label, "Clear All\n(Hold)");
+        lv_label_set_text(label, t(STR_MANA_CLEAR_ALL_HOLD));
         lv_obj_set_style_text_color(label, lv_color_white(), 0);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);

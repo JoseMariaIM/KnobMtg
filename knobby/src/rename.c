@@ -5,6 +5,7 @@
 #include "game.h"
 #include "storage.h"
 #include "net_sync.h"
+#include "lang.h"
 #include <string.h>
 
 // ---------- screens ----------
@@ -233,7 +234,7 @@ static void refresh_mru_list_ui(void)
     add_list_row(0, player_names[menu_player], lv_color_hex(0x80CBC4));
     for (i = 0; i < mru_count; i++)
         add_list_row(1 + i, mru_names[i], lv_color_white());
-    add_list_row(total - 1, "Type new...", lv_color_hex(0x7A7A7A));
+    add_list_row(total - 1, t(STR_RENAME_TYPE_NEW), lv_color_hex(0x7A7A7A));
 
     if (mru_selected >= total) mru_selected = total - 1;
     if (mru_selected < 0) mru_selected = 0;
@@ -337,9 +338,9 @@ void refresh_rename_ui(void)
 
     if (label_name_title != NULL) {
         if (name_keyboard_mode)
-            lv_label_set_text(label_name_title, "New name");
+            lv_label_set_text(label_name_title, t(STR_RENAME_NEW_NAME));
         else {
-            snprintf(buf, sizeof(buf), "Rename %s", player_names[menu_player]);
+            snprintf(buf, sizeof(buf), t(STR_RENAME_FMT), player_names[menu_player]);
             lv_label_set_text(label_name_title, buf);
         }
     }
@@ -398,7 +399,7 @@ void build_rename_screen(void)
     lv_obj_add_event_cb(btn_mru_select, event_mru_select, LV_EVENT_SHORT_CLICKED, NULL);
     lv_obj_add_event_cb(btn_mru_select, event_mru_delete, LV_EVENT_LONG_PRESSED, NULL);
     lv_obj_t *btn_mru_label = lv_label_create(btn_mru_select);
-    lv_label_set_text(btn_mru_label, "Select");
+    lv_label_set_text(btn_mru_label, t(STR_RENAME_SELECT));
     lv_obj_center(btn_mru_label);
     lv_obj_align(btn_mru_select, LV_ALIGN_TOP_MID, 0, 278);
 
@@ -416,7 +417,7 @@ void build_rename_screen(void)
     lv_keyboard_set_textarea(keyboard_name, textarea_name);
     lv_obj_add_flag(keyboard_name, LV_OBJ_FLAG_HIDDEN);
 
-    btn_name_save = make_button(screen_player_name, "save", 88, 38, event_name_save);
+    btn_name_save = make_button(screen_player_name, t(STR_RENAME_SAVE), 88, 38, event_name_save);
     lv_obj_align(btn_name_save, LV_ALIGN_TOP_MID, 0, 116);
     lv_obj_add_flag(btn_name_save, LV_OBJ_FLAG_HIDDEN);
 

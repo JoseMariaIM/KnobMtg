@@ -21,6 +21,8 @@ int nvs_get_display_rotation(void);
 void nvs_set_display_rotation(int value);
 int nvs_get_menu_facing(void);
 void nvs_set_menu_facing(int value);
+int nvs_get_language(void);
+void nvs_set_language(int value);
 
 int nvs_get_num_players(void);
 void nvs_set_num_players(int value);
@@ -42,5 +44,12 @@ void nvs_set_multi_select(int value);
 #define NAME_LIST_LEN   16
 void nvs_get_name_list(char (*out)[NAME_LIST_LEN]);
 void nvs_set_name_list(const char (*list)[NAME_LIST_LEN]);
+
+#define WIFI_SSID_LEN 33 /* 32 chars + NUL, WPA2 max SSID length */
+#define WIFI_PASS_LEN 65 /* 64 chars + NUL, WPA2 max PSK length */
+void nvs_get_wifi_ssid(char *out, size_t out_len);
+void nvs_set_wifi_ssid(const char *ssid);
+void nvs_get_wifi_pass(char *out, size_t out_len);
+void nvs_set_wifi_pass(const char *pass);
 
 #endif // _STORAGE_H

@@ -2,6 +2,7 @@
 #define _SETTINGS_H
 
 #include "types.h"
+#include "lang.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_quad_menu;
@@ -16,7 +17,7 @@ extern lv_obj_t *screen_table_sync;
    navigation are derived from it. */
 typedef struct {
     const char *id;              /* stable id for sim navigation: "autodim" */
-    const char *fixed_label;     /* used when label == NULL (navigation items) */
+    string_id_t fixed_label_id;  /* used when label == NULL (navigation items) */
     const char *(*label)(int v); /* value -> text */
     uint32_t (*color)(int v);    /* value -> bg color; NULL = default */
     int (*get)(void);            /* NULL => navigation item */

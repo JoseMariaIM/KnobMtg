@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "ui_mp.h"
 #include "net_sync.h"
+#include "lang.h"
 
 // Forward declarations
 extern void reset_all_values(void);
@@ -31,15 +32,15 @@ void refresh_game_mode_menu_ui(void)
     char buf[32];
     int max_track;
 
-    snprintf(buf, sizeof(buf), "Players\n%d", temp_num_players);
+    snprintf(buf, sizeof(buf), t(STR_GAME_MODE_PLAYERS_FMT), temp_num_players);
     lv_label_set_text(label_gm_num_players, buf);
 
     max_track = temp_num_players < MAX_DISPLAY_PLAYERS ? temp_num_players : MAX_DISPLAY_PLAYERS;
     if (temp_players_to_track > max_track) temp_players_to_track = max_track;
-    snprintf(buf, sizeof(buf), "Track\n%d", temp_players_to_track);
+    snprintf(buf, sizeof(buf), t(STR_GAME_MODE_TRACK_FMT), temp_players_to_track);
     lv_label_set_text(label_gm_players_to_track, buf);
 
-    snprintf(buf, sizeof(buf), "Life\n%d", temp_life_total);
+    snprintf(buf, sizeof(buf), t(STR_GAME_MODE_LIFE_FMT), temp_life_total);
     lv_label_set_text(label_gm_life_total, buf);
 }
 
@@ -140,12 +141,18 @@ static void event_gm_apply(lv_event_t *e)
 void build_game_mode_menu_screen(void)
 {
     lv_obj_t *btn;
+    /* Placeholder text only: open_game_mode_menu() always calls
+       refresh_game_mode_menu_ui() before this screen is ever shown. */
+    char buf_players[16], buf_track[16], buf_life[16];
+    snprintf(buf_players, sizeof(buf_players), t(STR_GAME_MODE_PLAYERS_FMT), 4);
+    snprintf(buf_track, sizeof(buf_track), t(STR_GAME_MODE_TRACK_FMT), 1);
+    snprintf(buf_life, sizeof(buf_life), t(STR_GAME_MODE_LIFE_FMT), 40);
 
     quad_item_t items[4] = {
-        {"Players\n4",          event_gm_num_players,      true, LV_EVENT_CLICKED},
-        {"Track\n1",            event_gm_players_to_track, true, LV_EVENT_CLICKED},
-        {"Life\n40",            event_gm_life_cycle,       true, LV_EVENT_SHORT_CLICKED},
-        {"Apply\n(Hold)",       event_gm_apply,            true, LV_EVENT_LONG_PRESSED},
+        {buf_players,           event_gm_num_players,      true, LV_EVENT_CLICKED},
+        {buf_track,             event_gm_players_to_track, true, LV_EVENT_CLICKED},
+        {buf_life,              event_gm_life_cycle,       true, LV_EVENT_SHORT_CLICKED},
+        {t(STR_GAME_MODE_APPLY_HOLD), event_gm_apply,      true, LV_EVENT_LONG_PRESSED},
     };
     build_quad_screen(&screen_game_mode_menu, items);
 
@@ -173,7 +180,7 @@ void build_custom_life_screen(void)
     lv_obj_set_scrollbar_mode(screen_custom_life, LV_SCROLLBAR_MODE_OFF);
 
     title = lv_label_create(screen_custom_life);
-    lv_label_set_text(title, "Life Total");
+    lv_label_set_text(title, t(STR_GAME_MODE_LIFE_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
@@ -185,7 +192,7 @@ void build_custom_life_screen(void)
     lv_obj_align(label_custom_life_value, LV_ALIGN_CENTER, 0, -10);
 
     hint = lv_label_create(screen_custom_life);
-    lv_label_set_text(hint, "Turn knob to adjust");
+    lv_label_set_text(hint, t(STR_GAME_MODE_TURN_KNOB_ADJUST));
     lv_obj_set_style_text_color(hint, lv_color_hex(0x6A6A6A), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_align(hint, LV_ALIGN_CENTER, 0, 24);

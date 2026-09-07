@@ -1,6 +1,7 @@
 #include "hw.h"
 #include "storage.h"
 #include "net_sync.h"
+#include "lang.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
 
@@ -255,6 +256,7 @@ static void auto_dim_timer_cb(lv_timer_t *timer)
 void knob_hw_init(void)
 {
     knob_nvs_init();
+    lang_init(); /* must run before any build_*_screen() call below */
     brightness_init();
     brightness_percent = nvs_get_brightness();
     last_activity_tick = lv_tick_get();

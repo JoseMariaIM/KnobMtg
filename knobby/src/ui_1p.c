@@ -30,6 +30,8 @@ static lv_obj_t *label_select_title = NULL;
 static lv_obj_t *select_rows[MAX_ENEMY_COUNT];
 static lv_obj_t *label_enemy_name[MAX_ENEMY_COUNT];
 static lv_obj_t *label_enemy_damage[MAX_ENEMY_COUNT];
+static lv_obj_t *btn_slot_commander = NULL;
+static lv_obj_t *btn_slot_partner = NULL;
 
 // ---------- damage UI ----------
 static lv_obj_t *label_damage_title = NULL;
@@ -62,10 +64,10 @@ void refresh_turn_ui(void)
     uint32_t minutes = (total_seconds % 3600) / 60;
 
     if (turn_number <= 0) {
-        snprintf(buf, sizeof(buf), "turn  %lu:%02lu",
+        snprintf(buf, sizeof(buf), t(STR_TURN_FMT_SOLO),
                  (unsigned long)hours, (unsigned long)minutes);
     } else {
-        snprintf(buf, sizeof(buf), "turn %d  %lu:%02lu",
+        snprintf(buf, sizeof(buf), t(STR_TURN_FMT_NUMBERED),
                  turn_number, (unsigned long)hours, (unsigned long)minutes);
     }
     lv_label_set_text(label_turn, buf);
@@ -228,6 +230,12 @@ static void style_select_entry(int i, int player_index)
     lv_obj_align(label_enemy_damage[i], LV_ALIGN_BOTTOM_MID, 0, -4);
 }
 
+static void style_slot_tab(lv_obj_t *btn, bool active)
+{
+    lv_obj_set_style_bg_color(btn, active ? lv_color_hex(0x2979FF) : lv_color_hex(0x2A2A2A), 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+}
+
 void refresh_select_ui(void)
 {
     int i;
@@ -237,7 +245,10 @@ void refresh_select_ui(void)
     int grid_w = cols * SEL_BOX_W + (cols - 1) * SEL_BOX_GAP_X;
     int grid_h = rows_needed * SEL_BOX_H + (rows_needed - 1) * SEL_BOX_GAP_Y;
     int grid_x = (240 - grid_w) / 2;
-    int grid_y = (260 - grid_h) / 2;
+    int grid_y = (230 - grid_h) / 2;
+
+    if (btn_slot_commander != NULL) style_slot_tab(btn_slot_commander, cmd_damage_slot == 0);
+    if (btn_slot_partner != NULL) style_slot_tab(btn_slot_partner, cmd_damage_slot == 1);
 
     for (i = 0; i < MAX_ENEMY_COUNT; i++) {
         if (select_rows[i] == NULL) continue;
@@ -276,12 +287,17 @@ void refresh_damage_ui(void)
     player_index = get_cmd_target_player_index(selected_enemy);
     bg_color = get_player_active_color(player_index);
     text_color = get_player_text_color(player_index);
-    lv_label_set_text(label_damage_title, player_names[player_index]);
+    if (cmd_damage_slot == 1) {
+        snprintf(buf, sizeof(buf), t(STR_PARTNER_SUFFIX), player_names[player_index]);
+        lv_label_set_text(label_damage_title, buf);
+    } else {
+        lv_label_set_text(label_damage_title, player_names[player_index]);
+    }
     lv_obj_set_style_bg_color(screen_damage, bg_color, 0);
     lv_obj_set_style_text_color(label_damage_title, text_color, 0);
     lv_obj_set_style_text_color(label_damage_hint, text_color, 0);
 
-    snprintf(buf, sizeof(buf), "Damage: %d", enemies[selected_enemy].damage);
+    snprintf(buf, sizeof(buf), t(STR_DAMAGE_PREFIX), enemies[selected_enemy].damage);
     lv_label_set_text(label_damage_value, buf);
     lv_obj_set_style_text_color(label_damage_value, text_color, 0);
 
@@ -336,6 +352,24 @@ static void event_open_1p_menu(lv_event_t *e)
     (void)e;
     open_player_menu(0);
     lv_indev_wait_release(lv_indev_get_act());
+}
+
+static void event_slot_commander(lv_event_t *e)
+{
+    (void)e;
+    if (cmd_damage_slot == 0) return;
+    cmd_damage_slot = 0;
+    refresh_cmd_damage_slot();
+    refresh_select_ui();
+}
+
+static void event_slot_partner(lv_event_t *e)
+{
+    (void)e;
+    if (cmd_damage_slot == 1) return;
+    cmd_damage_slot = 1;
+    refresh_cmd_damage_slot();
+    refresh_select_ui();
 }
 
 static void event_select_enemy(lv_event_t *e)
@@ -461,7 +495,7 @@ void build_main_screen(void)
     lv_obj_add_event_cb(turn_container, event_turn_tap, LV_EVENT_CLICKED, NULL);
 
     label_turn = lv_label_create(turn_container);
-    lv_label_set_text(label_turn, "turn  0:00");
+    lv_label_set_text(label_turn, t(STR_TURN_INITIAL));
     lv_obj_set_style_text_color(label_turn, lv_color_hex(0xB8B8B8), 0);
     lv_obj_set_style_text_font(label_turn, &lv_font_montserrat_22, 0);
     lv_obj_align(label_turn, LV_ALIGN_CENTER, 0, 0);
@@ -510,14 +544,45 @@ void build_select_screen(void)
     lv_obj_set_scrollbar_mode(screen_select, LV_SCROLLBAR_MODE_OFF);
 
     label_select_title = lv_label_create(screen_select);
-    lv_label_set_text(label_select_title, "Choose player");
+    lv_label_set_text(label_select_title, t(STR_CHOOSE_PLAYER));
     lv_obj_set_style_text_color(label_select_title, lv_color_white(), 0);
     lv_obj_set_style_text_font(label_select_title, &lv_font_montserrat_22, 0);
-    lv_obj_align(label_select_title, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(label_select_title, LV_ALIGN_TOP_MID, 0, 22);
+
+    /* Commander/Partner slot toggle: which of the target's two
+       commanders (if they run Partner) subsequent damage edits affect.
+       Only meaningful for players who actually have a partner
+       commander, but always shown, same as the always-visible
+       Commander Tax / Partner Tax counters. */
+    btn_slot_commander = lv_btn_create(screen_select);
+    lv_obj_remove_style_all(btn_slot_commander);
+    lv_obj_set_size(btn_slot_commander, 100, 30);
+    lv_obj_set_style_radius(btn_slot_commander, 15, 0);
+    lv_obj_set_style_bg_opa(btn_slot_commander, LV_OPA_COVER, 0);
+    lv_obj_align(btn_slot_commander, LV_ALIGN_TOP_MID, -51, 56);
+    lv_obj_add_event_cb(btn_slot_commander, event_slot_commander, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_commander = lv_label_create(btn_slot_commander);
+    lv_label_set_text(lbl_commander, t(STR_TAB_COMMANDER));
+    lv_obj_set_style_text_color(lbl_commander, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl_commander, &lv_font_montserrat_14, 0);
+    lv_obj_center(lbl_commander);
+
+    btn_slot_partner = lv_btn_create(screen_select);
+    lv_obj_remove_style_all(btn_slot_partner);
+    lv_obj_set_size(btn_slot_partner, 100, 30);
+    lv_obj_set_style_radius(btn_slot_partner, 15, 0);
+    lv_obj_set_style_bg_opa(btn_slot_partner, LV_OPA_COVER, 0);
+    lv_obj_align(btn_slot_partner, LV_ALIGN_TOP_MID, 51, 56);
+    lv_obj_add_event_cb(btn_slot_partner, event_slot_partner, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_partner = lv_label_create(btn_slot_partner);
+    lv_label_set_text(lbl_partner, t(STR_TAB_PARTNER));
+    lv_obj_set_style_text_color(lbl_partner, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl_partner, &lv_font_montserrat_14, 0);
+    lv_obj_center(lbl_partner);
 
     container = lv_obj_create(screen_select);
-    lv_obj_set_size(container, 240, 260);
-    lv_obj_align(container, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_set_size(container, 240, 230);
+    lv_obj_align(container, LV_ALIGN_CENTER, 0, 35);
     lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(container, 0, 0);
     lv_obj_set_style_pad_all(container, 0, 0);
@@ -558,13 +623,13 @@ void build_damage_screen(void)
     lv_obj_align(label_damage_title, LV_ALIGN_TOP_MID, 0, 28);
 
     label_damage_value = lv_label_create(screen_damage);
-    lv_label_set_text(label_damage_value, "Damage: 0");
+    lv_label_set_text(label_damage_value, "Damage: 0"); /* placeholder, overwritten by refresh_damage_ui before shown */
     lv_obj_set_style_text_color(label_damage_value, lv_color_white(), 0);
     lv_obj_set_style_text_font(label_damage_value, &lv_font_montserrat_32, 0);
     lv_obj_align(label_damage_value, LV_ALIGN_CENTER, 0, -10);
 
     label_damage_hint = lv_label_create(screen_damage);
-    lv_label_set_text(label_damage_hint, "Turn knob, then apply");
+    lv_label_set_text(label_damage_hint, t(STR_TURN_KNOB_THEN_APPLY));
     lv_obj_set_style_text_color(label_damage_hint, lv_color_hex(0x6A6A6A), 0);
     lv_obj_set_style_text_font(label_damage_hint, &lv_font_montserrat_14, 0);
     lv_obj_align(label_damage_hint, LV_ALIGN_CENTER, 0, 24);
@@ -577,6 +642,6 @@ void build_damage_screen(void)
     lv_obj_align(label_damage_delta, LV_ALIGN_CENTER, 0, -48);
     lv_obj_add_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t *btn = make_button(screen_damage, "Apply", 120, 46, event_damage_apply);
+    lv_obj_t *btn = make_button(screen_damage, t(STR_APPLY), 120, 46, event_damage_apply);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
 }

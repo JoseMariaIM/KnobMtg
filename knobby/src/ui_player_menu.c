@@ -3,6 +3,7 @@
 #include "game.h"
 #include "rename.h"
 #include "settings.h"
+#include "lang.h"
 #include "storage.h"
 #include "ui_1p.h"
 
@@ -39,11 +40,11 @@ void refresh_all_damage_ui(void) {
     if (cb_include_myself != NULL) {
       include_myself = lv_obj_has_state(cb_include_myself, LV_STATE_CHECKED);
     }
-    lv_label_set_text(label_all_damage_title, include_myself ? "All players" : "All opponents");
+    lv_label_set_text(label_all_damage_title, include_myself ? t(STR_ALL_PLAYERS) : t(STR_ALL_OPPONENTS));
   }
 
   if (label_all_damage_value != NULL) {
-    snprintf(buf, sizeof(buf), "Damage: %d", all_damage_value);
+    snprintf(buf, sizeof(buf), t(STR_DAMAGE_COLON), all_damage_value);
     lv_label_set_text(label_all_damage_value, buf);
   }
 }
@@ -108,7 +109,7 @@ static void open_all_damage_screen(void) {
   all_damage_value = 0;
   if (cb_include_myself != NULL) {
     char cb_buf[64];
-    snprintf(cb_buf, sizeof(cb_buf), "Include myself (%s)", player_names[menu_player]);
+    snprintf(cb_buf, sizeof(cb_buf), t(STR_INCLUDE_MYSELF_NAMED), player_names[menu_player]);
     lv_checkbox_set_text(cb_include_myself, cb_buf);
     lv_obj_clear_state(cb_include_myself, LV_STATE_CHECKED);
   }
@@ -258,7 +259,7 @@ static void event_color_custom(lv_event_t *e) {
     return;
   color_picker_index = player_color_index[menu_player];
   if (color_picker_title_label != NULL) {
-    snprintf(title_buf, sizeof(title_buf), "%s\nColor",
+    snprintf(title_buf, sizeof(title_buf), t(STR_COLOR_TITLE),
              player_names[menu_player]);
     lv_label_set_text(color_picker_title_label, title_buf);
   }
@@ -306,10 +307,10 @@ static void event_color_apply(lv_event_t *e) {
 // ---------- screen builders ----------
 void build_player_menu_screen(void) {
   quad_item_t items[4] = {
-      {"Name/\nColor", event_menu_color, true, LV_EVENT_CLICKED},
-      {"Commander\nDamage", event_menu_cmd_damage, true, LV_EVENT_CLICKED},
-      {"All\nDamage", event_menu_all_damage, true, LV_EVENT_CLICKED},
-      {"Counters", event_menu_counters, true, LV_EVENT_SHORT_CLICKED},
+      {t(STR_MENU_NAME_COLOR), event_menu_color, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_COMMANDER_DAMAGE), event_menu_cmd_damage, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_ALL_DAMAGE), event_menu_all_damage, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_COUNTERS), event_menu_counters, true, LV_EVENT_SHORT_CLICKED},
   };
   build_quad_screen(&screen_player_menu, items);
 
@@ -328,19 +329,19 @@ void build_eliminated_player_menu_screen(void) {
                             LV_SCROLLBAR_MODE_OFF);
 
   lv_obj_t *title = lv_label_create(screen_eliminated_player_menu);
-  lv_label_set_text(title, "Undo elimination");
+  lv_label_set_text(title, t(STR_UNDO_ELIMINATION_TITLE));
   lv_obj_set_style_text_color(title, lv_color_white(), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
 
   lv_obj_t *hint = lv_label_create(screen_eliminated_player_menu);
-  lv_label_set_text(hint, "Restore the action that eliminated this player");
+  lv_label_set_text(hint, t(STR_UNDO_ELIMINATION_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(hint, LV_ALIGN_CENTER, 0, 0);
 
-  lv_obj_t *btn = make_button(screen_eliminated_player_menu, "Undo", 120, 46,
+  lv_obj_t *btn = make_button(screen_eliminated_player_menu, t(STR_UNDO), 120, 46,
                               event_eliminated_undo);
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
 }
@@ -394,13 +395,13 @@ void build_all_damage_screen(void) {
   lv_obj_align(label_all_damage_value, LV_ALIGN_CENTER, 0, -25);
 
   label_all_damage_hint = lv_label_create(screen_player_all_damage);
-  lv_label_set_text(label_all_damage_hint, "Turn knob, then apply");
+  lv_label_set_text(label_all_damage_hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(label_all_damage_hint, lv_color_hex(0x7A7A7A), 0);
   lv_obj_set_style_text_font(label_all_damage_hint, &lv_font_montserrat_14, 0);
   lv_obj_align(label_all_damage_hint, LV_ALIGN_CENTER, 0, 15);
 
   cb_include_myself = lv_checkbox_create(screen_player_all_damage);
-  lv_checkbox_set_text(cb_include_myself, "Include myself");
+  lv_checkbox_set_text(cb_include_myself, t(STR_INCLUDE_MYSELF));
   lv_obj_set_style_text_color(cb_include_myself, lv_color_white(), 0);
   lv_obj_set_style_text_font(cb_include_myself, &lv_font_montserrat_16, 0);
   
@@ -416,7 +417,7 @@ void build_all_damage_screen(void) {
   lv_obj_align(cb_include_myself, LV_ALIGN_CENTER, 0, 55);
   lv_obj_add_event_cb(cb_include_myself, event_checkbox_toggle, LV_EVENT_VALUE_CHANGED, NULL);
 
-  lv_obj_t *btn = make_button(screen_player_all_damage, "Apply", 120, 46,
+  lv_obj_t *btn = make_button(screen_player_all_damage, t(STR_APPLY), 120, 46,
                               event_all_damage_apply);
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -35);
 }
@@ -454,7 +455,7 @@ void build_counter_edit_screen(void) {
   lv_obj_align(label_counter_edit_value, LV_ALIGN_CENTER, 0, -4);
 
   label_counter_edit_hint = lv_label_create(screen_counter_edit);
-  lv_label_set_text(label_counter_edit_hint, "Turn knob, then apply");
+  lv_label_set_text(label_counter_edit_hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(label_counter_edit_hint, lv_color_hex(0x7A7A7A),
                               0);
   lv_obj_set_style_text_font(label_counter_edit_hint, &lv_font_montserrat_14,
@@ -470,17 +471,17 @@ void build_counter_edit_screen(void) {
   lv_obj_align(label_counter_edit_delta, LV_ALIGN_CENTER, 0, -44);
   lv_obj_add_flag(label_counter_edit_delta, LV_OBJ_FLAG_HIDDEN);
 
-  btn = make_button(screen_counter_edit, "Apply", 120, 46, event_counter_apply);
+  btn = make_button(screen_counter_edit, t(STR_APPLY), 120, 46, event_counter_apply);
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
 }
 
 // ---------- per-player color screens ----------
 void build_player_color_menu_screen(void) {
   quad_item_t items[4] = {
-      {"Rename", event_menu_rename, true, LV_EVENT_SHORT_CLICKED},
-      {"Default\nSetting", event_color_default, true, LV_EVENT_CLICKED},
-      {"Life\nColor", event_color_life, true, LV_EVENT_CLICKED},
-      {"Custom\nColor", event_color_custom, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_RENAME), event_menu_rename, true, LV_EVENT_SHORT_CLICKED},
+      {t(STR_MENU_DEFAULT_SETTING), event_color_default, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_LIFE_COLOR), event_color_life, true, LV_EVENT_CLICKED},
+      {t(STR_MENU_CUSTOM_COLOR), event_color_custom, true, LV_EVENT_CLICKED},
   };
   build_quad_screen(&screen_player_color_menu, items);
 
@@ -527,12 +528,12 @@ void build_player_color_picker_screen(void) {
   lv_obj_align(color_picker_name_label, LV_ALIGN_CENTER, 0, 54);
 
   hint = lv_label_create(screen_player_color_picker);
-  lv_label_set_text(hint, "Turn knob, then apply");
+  lv_label_set_text(hint, t(STR_TURN_KNOB_THEN_APPLY));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
   lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
   lv_obj_align(hint, LV_ALIGN_CENTER, 0, 73);
 
-  lv_obj_t *btn = make_button(screen_player_color_picker, "Apply", 120, 46,
+  lv_obj_t *btn = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
                               event_color_apply);
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
 }

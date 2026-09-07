@@ -3,6 +3,7 @@
 #include "damage_log.h"
 #include "esp_random.h"
 #include "net_sync.h"
+#include "lang.h"
 // Forward declarations for UI refresh (defined in screen modules)
 extern void refresh_player_ui(void);
 extern void refresh_select_ui(void);
@@ -29,8 +30,10 @@ char player_names[MAX_GAME_PLAYERS][16] = {
 };
 int menu_player = 0;
 int cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS] = {{0}};
+int partner_cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS] = {{0}};
 int all_damage_value = 0;
 int cmd_damage_target = -1;
+int cmd_damage_slot = 0;
 static int damage_start_value = 0;
 int pending_life_delta = 0;
 bool life_preview_active = false;
@@ -112,11 +115,23 @@ void net_sync_reset_versions(void)
 #define MANA_ICON_SKULL     "\xEE\x98\x98"
 #define MANA_ICON_LEVEL     "\xEE\xA4\x80"
 
-static const counter_definition_t counter_definitions[COUNTER_TYPE_COUNT] = {
-    {"Commander\nTax", "Commander Tax", "C", MANA_ICON_COMMANDER, 0xA84300, true},
-    {"Partner\nTax", "Partner Tax", "P", MANA_ICON_PARTY, 0x1565C0, true},
-    {"Poison", "Poison", "!", MANA_ICON_SKULL, 0x2E7D32, true},
-    {"Experience", "Experience", "E", MANA_ICON_LEVEL, 0x6A1B9A, true},
+/* menu_label/display_name are resolved through t() at call time (see
+   get_counter_definition), so this table stores string IDs there
+   instead of literals - a static const array can't call a function in
+   its own initializer. badge_text is a compact one-letter glyph, not
+   translated (matches the icon fonts' visual style). */
+static const struct {
+    string_id_t menu_label_id;
+    string_id_t display_name_id;
+    const char *badge_text;
+    const char *icon_text;
+    uint32_t accent_color;
+    bool enabled;
+} counter_definitions[COUNTER_TYPE_COUNT] = {
+    {STR_COUNTER_COMMANDER_TAX_MENU, STR_COUNTER_COMMANDER_TAX, "C", MANA_ICON_COMMANDER, 0xA84300, true},
+    {STR_COUNTER_PARTNER_TAX_MENU, STR_COUNTER_PARTNER_TAX, "P", MANA_ICON_PARTY, 0x1565C0, true},
+    {STR_COUNTER_POISON, STR_COUNTER_POISON, "!", MANA_ICON_SKULL, 0x2E7D32, true},
+    {STR_COUNTER_EXPERIENCE, STR_COUNTER_EXPERIENCE, "E", MANA_ICON_LEVEL, 0x6A1B9A, true},
 };
 
 static void clear_player_elimination_action(int player)
@@ -176,7 +191,8 @@ void check_player_elimination(int player)
             now_eliminated = true;
         } else {
             for (int i = 0; i < MAX_GAME_PLAYERS; i++) {
-                if (i != player && cmd_damage_totals[i][player] >= 21) {
+                if (i != player && (cmd_damage_totals[i][player] >= 21 ||
+                                     partner_cmd_damage_totals[i][player] >= 21)) {
                     now_eliminated = true;
                     break;
                 }
@@ -247,6 +263,8 @@ void manual_uneliminate_player(int player)
         for (i = 0; i < MAX_GAME_PLAYERS; i++) {
             if (cmd_damage_totals[i][player] > 20)
                 cmd_damage_totals[i][player] = 20;
+            if (partner_cmd_damage_totals[i][player] > 20)
+                partner_cmd_damage_totals[i][player] = 20;
         }
     }
     net_sync_commit_player(player);
@@ -289,12 +307,12 @@ static const uint32_t custom_color_table[CUSTOM_COLOR_COUNT][LIFE_VIB_COUNT] = {
     {0x0A0A0A, 0x303030, 0x505050},  /* 17 Black  */
 };
 
-static const char *custom_color_names[CUSTOM_COLOR_COUNT] = {
-    "Green", "Purple", "Blue", "Yellow",
-    "Red", "Orange", "Cyan", "Pink",
-    "Lime", "Indigo", "Rose", "White",
-    "Teal", "Amber", "Brown", "Gray",
-    "Sage", "Black",
+static const string_id_t custom_color_name_ids[CUSTOM_COLOR_COUNT] = {
+    STR_COLOR_GREEN, STR_COLOR_PURPLE, STR_COLOR_BLUE, STR_COLOR_YELLOW,
+    STR_COLOR_RED, STR_COLOR_ORANGE, STR_COLOR_CYAN, STR_COLOR_PINK,
+    STR_COLOR_LIME, STR_COLOR_INDIGO, STR_COLOR_ROSE, STR_COLOR_WHITE,
+    STR_COLOR_TEAL, STR_COLOR_AMBER, STR_COLOR_BROWN, STR_COLOR_GRAY,
+    STR_COLOR_SAGE, STR_COLOR_BLACK,
 };
 
 // ---------- per-player color state (runtime only, lost on reboot) ----------
@@ -348,7 +366,7 @@ lv_color_t get_custom_color_vib(int index, int vibrancy)
 const char *get_custom_color_name(int index)
 {
     if (index < 0 || index >= CUSTOM_COLOR_COUNT) index = 0;
-    return custom_color_names[index];
+    return t(custom_color_name_ids[index]);
 }
 
 lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy)
@@ -406,8 +424,15 @@ int get_cmd_target_player_index(int row)
 
 const counter_definition_t *get_counter_definition(counter_type_t type)
 {
+    static counter_definition_t resolved;
     if (type < 0 || type >= COUNTER_TYPE_COUNT) return NULL;
-    return &counter_definitions[type];
+    resolved.menu_label = t(counter_definitions[type].menu_label_id);
+    resolved.display_name = t(counter_definitions[type].display_name_id);
+    resolved.badge_text = counter_definitions[type].badge_text;
+    resolved.icon_text = counter_definitions[type].icon_text;
+    resolved.accent_color = counter_definitions[type].accent_color;
+    resolved.enabled = counter_definitions[type].enabled;
+    return &resolved;
 }
 
 bool counter_type_is_enabled(counter_type_t type)
@@ -603,6 +628,8 @@ void damage_apply(void)
 {
     int delta;
     int source;
+    int *cell;
+    int encoded_source;
 
     if (selected_enemy < 0 || selected_enemy >= active_enemy_count) return;
     if (cmd_damage_target < 0 || cmd_damage_target >= MAX_DISPLAY_PLAYERS) return;
@@ -616,11 +643,14 @@ void damage_apply(void)
     if (delta == 0) return;
 
     source = get_cmd_target_player_index(selected_enemy);
-    cmd_damage_totals[source][cmd_damage_target] = enemies[selected_enemy].damage;
-    damage_log_add(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, source);
+    cell = (cmd_damage_slot == 1) ? &partner_cmd_damage_totals[source][cmd_damage_target]
+                                  : &cmd_damage_totals[source][cmd_damage_target];
+    *cell = enemies[selected_enemy].damage;
+    encoded_source = encode_cmd_source(source, cmd_damage_slot);
+    damage_log_add(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
     player_life[cmd_damage_target] = clamp_life(player_life[cmd_damage_target] - delta);
-    if (cmd_damage_totals[source][cmd_damage_target] >= 21 || player_life[cmd_damage_target] <= 0) {
-        set_player_elimination_action(cmd_damage_target, LOG_EVT_CMD_DAMAGE, source, -delta);
+    if (*cell >= 21 || player_life[cmd_damage_target] <= 0) {
+        set_player_elimination_action(cmd_damage_target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
     }
     check_player_elimination(cmd_damage_target);
     net_sync_commit_player(cmd_damage_target);
@@ -682,11 +712,33 @@ void prepare_cmd_damage_for_player(int target)
     int num = nvs_get_num_players();
 
     cmd_damage_target = target;
+    cmd_damage_slot = 0; /* always open on the primary commander */
 
     for (i = 0; i < num; i++) {
         if (i == target) continue;
         if (row < MAX_ENEMY_COUNT) {
             enemies[row].damage = cmd_damage_totals[i][target];
+            row++;
+        }
+    }
+}
+
+/* Re-stages enemies[].damage from whichever matrix cmd_damage_slot now
+   points at, without touching cmd_damage_target. Used when the select
+   screen's Commander/Partner toggle flips slots. */
+void refresh_cmd_damage_slot(void)
+{
+    int i, row = 0;
+    int num = nvs_get_num_players();
+
+    if (cmd_damage_target < 0) return;
+
+    for (i = 0; i < num; i++) {
+        if (i == cmd_damage_target) continue;
+        if (row < MAX_ENEMY_COUNT) {
+            enemies[row].damage = (cmd_damage_slot == 1)
+                                       ? partner_cmd_damage_totals[i][cmd_damage_target]
+                                       : cmd_damage_totals[i][cmd_damage_target];
             row++;
         }
     }
@@ -711,13 +763,18 @@ void undo_life_change(int player, int delta)
     refresh_select_ui();
 }
 
-void undo_cmd_damage(int source, int target, int delta)
+void undo_cmd_damage(int encoded_source, int target, int delta)
 {
+    int source, slot;
+    int *cell;
+
+    decode_cmd_source(encoded_source, &source, &slot);
     if (source < 0 || source >= MAX_GAME_PLAYERS) return;
     if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
-    cmd_damage_totals[source][target] += delta;
-    if (cmd_damage_totals[source][target] < 0)
-        cmd_damage_totals[source][target] = 0;
+
+    cell = (slot == 1) ? &partner_cmd_damage_totals[source][target] : &cmd_damage_totals[source][target];
+    *cell += delta;
+    if (*cell < 0) *cell = 0;
     check_player_elimination(target);
     net_sync_commit_player(target);
 }
@@ -765,7 +822,9 @@ void knob_life_reset(void)
     }
     menu_player = 0;
     cmd_damage_target = -1;
+    cmd_damage_slot = 0;
     memset(cmd_damage_totals, 0, sizeof(cmd_damage_totals));
+    memset(partner_cmd_damage_totals, 0, sizeof(partner_cmd_damage_totals));
     memset(player_counters, 0, sizeof(player_counters));
     memset(player_eliminated, 0, sizeof(player_eliminated));
     memset(player_manually_eliminated, 0, sizeof(player_manually_eliminated));

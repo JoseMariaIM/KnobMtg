@@ -3,6 +3,7 @@
 #include "storage.h"
 #include <string.h>
 #include "dice.h"
+#include "lang.h"
 #include "timer.h"
 #include "game_mode.h"
 #include "damage_log.h"
@@ -13,6 +14,7 @@
 #include "ui_1p.h"
 #include "ui_mp.h"
 #include "ui_player_menu.h"
+#include "ui_wifi.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -108,7 +110,7 @@ static void refresh_brightness_ring(void)
 void refresh_settings_ui(void)
 {
     char buf[32];
-    snprintf(buf, sizeof(buf), "Brightness: %d%%", brightness_percent);
+    snprintf(buf, sizeof(buf), t(STR_BRIGHTNESS_FMT), brightness_percent);
     lv_label_set_text(label_settings_value, buf);
     refresh_brightness_ring();
 }
@@ -122,17 +124,17 @@ void refresh_battery_ui(void)
     if (label_settings_battery == NULL) return;
 
     if (battery_percent < 0) {
-        lv_label_set_text(label_settings_battery, "Battery: --%");
+        lv_label_set_text(label_settings_battery, t(STR_BATTERY_UNKNOWN));
         if (label_settings_battery_detail != NULL) {
-            lv_label_set_text(label_settings_battery_detail, "No calibrated reading");
+            lv_label_set_text(label_settings_battery_detail, t(STR_BATTERY_NOT_CALIBRATED));
         }
         return;
     }
 
-    snprintf(buf, sizeof(buf), "Battery: %d%%", battery_percent);
+    snprintf(buf, sizeof(buf), t(STR_BATTERY_FMT), battery_percent);
     lv_label_set_text(label_settings_battery, buf);
     if (label_settings_battery_detail != NULL) {
-        snprintf(detail_buf, sizeof(detail_buf), "%.2fV calibrated", battery_voltage);
+        snprintf(detail_buf, sizeof(detail_buf), t(STR_BATTERY_CALIBRATED_FMT), battery_voltage);
         lv_label_set_text(label_settings_battery_detail, detail_buf);
     }
 }
@@ -207,44 +209,54 @@ static void event_quad_screen_settings(lv_event_t *e)
 static const char *autodim_label(int index)
 {
     switch (index) {
-        case AUTO_DIM_15S: return "Auto-dim\n15s";
-        case AUTO_DIM_30S: return "Auto-dim\n30s";
-        case AUTO_DIM_60S: return "Auto-dim\n60s";
-        default:           return "Auto-dim\nOFF";
+        case AUTO_DIM_15S: return t(STR_SETTING_AUTODIM_15S);
+        case AUTO_DIM_30S: return t(STR_SETTING_AUTODIM_30S);
+        case AUTO_DIM_60S: return t(STR_SETTING_AUTODIM_60S);
+        default:           return t(STR_SETTING_AUTODIM_OFF);
     }
 }
 
 static const char *color_mode_label(int mode)
 {
     switch (mode) {
-        case COLOR_MODE_LIFE:   return "Colors\nLife";
-        default:                return "Colors\nPlayer";
+        case COLOR_MODE_LIFE:   return t(STR_SETTING_COLORS_LIFE);
+        default:                return t(STR_SETTING_COLORS_PLAYER);
     }
 }
 
 static const char *deselect_label(int index)
 {
     switch (index) {
-        case DESELECT_5S:    return "Deselect\n5s";
-        case DESELECT_15S:   return "Deselect\n15s";
-        case DESELECT_30S:   return "Deselect\n30s";
-        default:             return "Deselect\nNever";
+        case DESELECT_5S:    return t(STR_SETTING_DESELECT_5S);
+        case DESELECT_15S:   return t(STR_SETTING_DESELECT_15S);
+        case DESELECT_30S:   return t(STR_SETTING_DESELECT_30S);
+        default:             return t(STR_SETTING_DESELECT_NEVER);
     }
 }
 
 static const char *orientation_mode_label(int mode)
 {
     switch (mode) {
-        case ORIENTATION_MODE_CENTRIC: return "Orientation\nCentric";
-        case ORIENTATION_MODE_TABLETOP:  return "Orientation\nTabletop";
-        default:                   return "Orientation\nAbsolute";
+        case ORIENTATION_MODE_CENTRIC:  return t(STR_SETTING_ORIENTATION_CENTRIC);
+        case ORIENTATION_MODE_TABLETOP: return t(STR_SETTING_ORIENTATION_TABLETOP);
+        default:                        return t(STR_SETTING_ORIENTATION_ABSOLUTE);
     }
 }
 
 static const char *auto_eliminate_label(int val)
 {
-    return val ? "Auto\nElimination\nON" : "Auto\nElimination\nOFF";
+    return val ? t(STR_SETTING_AUTO_ELIM_ON) : t(STR_SETTING_AUTO_ELIM_OFF);
 }
+
+static const char *language_label(int val)
+{
+    static char buf[24];
+    snprintf(buf, sizeof(buf), t(STR_SETTING_LANGUAGE), t(val == LANG_ES ? STR_LANGUAGE_ES : STR_LANGUAGE_EN));
+    return buf;
+}
+
+static int language_get(void) { return lang_get(); }
+static void language_set(int v) { lang_set((lang_t)v); }
 
 // ---------- declarative settings ----------
 /* Every user setting lives in this one table. Pages, "More" chaining,
@@ -332,17 +344,17 @@ void menu_facing_refresh(void)
 
 static const char *random_first_label(int val)
 {
-    return val ? "Random\nFirst\nON" : "Random\nFirst\nOFF";
+    return val ? t(STR_SETTING_RANDOM_FIRST_ON) : t(STR_SETTING_RANDOM_FIRST_OFF);
 }
 
 static const char *menu_facing_label(int val)
 {
-    return val ? "Menus\nFace\nPlayer" : "Menus\nFixed";
+    return val ? t(STR_SETTING_MENU_FACE_PLAYER) : t(STR_SETTING_MENU_FIXED);
 }
 
 static const char *multi_select_label(int val)
 {
-    return val ? "Multi-\nSelect\nON" : "Multi-\nSelect\nOFF";
+    return val ? t(STR_SETTING_MULTI_SELECT_ON) : t(STR_SETTING_MULTI_SELECT_OFF);
 }
 
 static void multi_select_set(int v)
@@ -370,22 +382,22 @@ void refresh_table_sync_ui(void)
 
     switch (status) {
         case NET_SYNC_JOINING:
-            snprintf(status_buf, sizeof(status_buf), "Joining...");
+            snprintf(status_buf, sizeof(status_buf), "%s", t(STR_TABLE_SYNC_JOINING));
             break;
         case NET_SYNC_HOSTING:
-            snprintf(status_buf, sizeof(status_buf), "Inviting\n#%04d", code);
+            snprintf(status_buf, sizeof(status_buf), t(STR_TABLE_SYNC_INVITING), code);
             break;
         case NET_SYNC_IN_GAME:
-            snprintf(status_buf, sizeof(status_buf), "In Game\n#%04d", code);
+            snprintf(status_buf, sizeof(status_buf), t(STR_TABLE_SYNC_IN_GAME), code);
             break;
         default:
             /* Sync is mirror-mode: a 1p view can't represent the shared
                game, so pairing refuses below and the tile says why. */
             if (nvs_get_players_to_track() <= 1)
-                snprintf(status_buf, sizeof(status_buf), "1P View:\nNo Sync");
+                snprintf(status_buf, sizeof(status_buf), "%s", t(STR_TABLE_SYNC_1P_NO_SYNC));
             else
-                snprintf(status_buf, sizeof(status_buf),
-                         table_sync_radio_error ? "Radio\nError" : "Sync Off");
+                snprintf(status_buf, sizeof(status_buf), "%s",
+                         table_sync_radio_error ? t(STR_TABLE_SYNC_RADIO_ERROR) : t(STR_TABLE_SYNC_OFF));
             break;
     }
     lv_label_set_text(table_sync_status_lbl, status_buf);
@@ -393,7 +405,7 @@ void refresh_table_sync_ui(void)
        session (late joiners, rebooted devices) instead of re-keying. */
     lv_label_set_text(table_sync_action_lbl,
         (status == NET_SYNC_HOSTING || status == NET_SYNC_IN_GAME)
-            ? "Hold to\nInvite" : "Hold to\nStart");
+            ? t(STR_TABLE_SYNC_HOLD_INVITE) : t(STR_TABLE_SYNC_HOLD_START));
 }
 
 static void event_table_sync_start(lv_event_t *e)
@@ -447,19 +459,19 @@ void build_table_sync_screen(void)
        re-invites, Join drops the current session, Leave exits), so they
        require a long press. */
     memset(items, 0, sizeof(items));
-    items[0].label = "Hold to\nStart";
+    items[0].label = t(STR_TABLE_SYNC_HOLD_START);
     items[0].cb = event_table_sync_start;
     items[0].enabled = true;
     items[0].event = LV_EVENT_LONG_PRESSED;
-    items[1].label = "Hold to\nJoin";
+    items[1].label = t(STR_TABLE_SYNC_HOLD_JOIN);
     items[1].cb = event_table_sync_join;
     items[1].enabled = true;
     items[1].event = LV_EVENT_LONG_PRESSED;
-    items[2].label = "Hold to\nLeave";
+    items[2].label = t(STR_TABLE_SYNC_HOLD_LEAVE);
     items[2].cb = event_table_sync_leave;
     items[2].enabled = true;
     items[2].event = LV_EVENT_LONG_PRESSED;
-    items[3].label = "Sync Off"; /* status tile, refreshed live */
+    items[3].label = t(STR_TABLE_SYNC_OFF); /* status tile, refreshed live */
     items[3].enabled = false;
     items[3].event = LV_EVENT_CLICKED;
 
@@ -472,19 +484,24 @@ void build_table_sync_screen(void)
     lv_timer_pause(table_sync_timer);
 }
 
+static uint32_t language_color(int val) { return val == LANG_ES ? TOGGLE_ON : 0x1A1A2E; }
+
 static const setting_item_t settings_items[] = {
-    { .id = "brightness",     .fixed_label = "Brightness", .navigate = open_settings_screen, .nav_screen = &screen_settings },
+    { .id = "brightness",     .fixed_label_id = STR_SETTING_BRIGHTNESS, .navigate = open_settings_screen, .nav_screen = &screen_settings },
     { .id = "autodim",        .label = autodim_label,          .color = autodim_color,     .get = autodim_get,              .set = autodim_set,              .count = AUTO_DIM_COUNT },
-    { .id = "battery",        .fixed_label = "Battery",    .navigate = open_battery_screen, .nav_screen = &screen_battery },
+    { .id = "battery",        .fixed_label_id = STR_SETTING_BATTERY, .navigate = open_battery_screen, .nav_screen = &screen_battery },
     { .id = "color-mode",     .label = color_mode_label,       .color = color_mode_color,  .get = nvs_get_color_mode,       .set = nvs_set_color_mode,       .count = COLOR_MODE_COUNT },
     { .id = "deselect",       .label = deselect_label,         .color = deselect_color,    .get = nvs_get_deselect_timeout, .set = nvs_set_deselect_timeout, .count = DESELECT_COUNT },
     { .id = "orientation",    .label = orientation_mode_label, .color = orientation_color, .get = nvs_get_orientation,      .set = nvs_set_orientation,      .count = ORIENTATION_MODE_COUNT },
     { .id = "auto-eliminate", .label = auto_eliminate_label,   .color = toggle_color,      .get = nvs_get_auto_eliminate,   .set = nvs_set_auto_eliminate,   .count = 2 },
     { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
     { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
-    { .id = "table-sync",     .fixed_label = "Table Sync\n(Experimental)", .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
-    { .id = "rotate",         .fixed_label = "Rotate\nScreen", .navigate = open_rotate_screen, .nav_screen = &screen_rotate },
+    { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
+    { .id = "rotate",         .fixed_label_id = STR_SETTING_ROTATE_SCREEN, .navigate = open_rotate_screen, .nav_screen = &screen_rotate },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
+    { .id = "language",       .label = language_label,         .color = language_color,    .get = language_get,             .set = language_set,             .count = LANG_COUNT },
+    { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI, .navigate = open_wifi_settings_screen, .nav_screen = &screen_wifi_settings },
+    { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES, .navigate = open_ota_update_screen, .nav_screen = &screen_ota_update },
 };
 #define SETTINGS_ITEM_COUNT ((int)(sizeof(settings_items) / sizeof(settings_items[0])))
 #define MAX_SETTINGS_PAGES  ((SETTINGS_ITEM_COUNT + 2) / 3)
@@ -547,14 +564,14 @@ static void build_settings_pages(void)
         for (s = 0; s < 4; s++) q[s].label = "";
         for (s = 0; s < on_page; s++, idx++) {
             const setting_item_t *it = &settings_items[idx];
-            q[s].label = (it->label != NULL) ? it->label(it->get()) : it->fixed_label;
+            q[s].label = (it->label != NULL) ? it->label(it->get()) : t(it->fixed_label_id);
             q[s].cb = event_setting_item;
             q[s].enabled = true;
             q[s].event = (it->event != 0) ? it->event : LV_EVENT_CLICKED;
             q[s].user_data = (void *)it;
             setting_page_of[idx] = page;
         }
-        q[3].label = "More";
+        q[3].label = t(STR_SETTINGS_MORE);
         q[3].cb = event_setting_more;
         q[3].enabled = true;
         q[3].event = LV_EVENT_CLICKED;
@@ -648,18 +665,18 @@ static void event_general_reset(lv_event_t *e)
 void build_quad_menus(void)
 {
     quad_item_t main_items[4] = {
-        {"Settings", event_quad_screen_settings, true, LV_EVENT_CLICKED},
-        {"Game\nMode", event_general_game_mode, true, LV_EVENT_CLICKED},
-        {"Tools",             event_quad_tools, true, LV_EVENT_CLICKED},
-        {"Reset\n(Hold)", event_general_reset, true, LV_EVENT_LONG_PRESSED},
+        {t(STR_MENU_SETTINGS), event_quad_screen_settings, true, LV_EVENT_CLICKED},
+        {t(STR_MENU_GAME_MODE), event_general_game_mode, true, LV_EVENT_CLICKED},
+        {t(STR_MENU_TOOLS),             event_quad_tools, true, LV_EVENT_CLICKED},
+        {t(STR_MENU_RESET_HOLD), event_general_reset, true, LV_EVENT_LONG_PRESSED},
     };
     build_quad_screen(&screen_quad_menu, main_items);
 
     quad_item_t tools_items[4] = {
-        {"Dice",        event_tool_dice, true, LV_EVENT_CLICKED},
-        {"Timer",       event_tool_timer, true, LV_EVENT_CLICKED},
-        {"Event\nLog",  event_open_damage_log, true, LV_EVENT_CLICKED},
-        {"Mana\nPool",  event_tool_mana, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_DICE),        event_tool_dice, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_TIMER),       event_tool_timer, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_EVENT_LOG),  event_open_damage_log, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_MANA_POOL),  event_tool_mana, true, LV_EVENT_CLICKED},
     };
     build_quad_screen(&screen_tools_menu, tools_items);
 
@@ -685,13 +702,13 @@ void build_settings_screen(void)
     lv_obj_clear_flag(arc_brightness, LV_OBJ_FLAG_CLICKABLE);
 
     label_settings_value = lv_label_create(screen_settings);
-    lv_label_set_text(label_settings_value, "Brightness: 80%");
+    lv_label_set_text(label_settings_value, "Brightness: 80%"); /* placeholder, overwritten by refresh_settings_ui() */
     lv_obj_set_style_text_color(label_settings_value, lv_color_white(), 0);
     lv_obj_set_style_text_font(label_settings_value, &lv_font_montserrat_32, 0);
     lv_obj_align(label_settings_value, LV_ALIGN_CENTER, 0, -14);
 
     label_settings_hint = lv_label_create(screen_settings);
-    lv_label_set_text(label_settings_hint, "Turn knob for brightness");
+    lv_label_set_text(label_settings_hint, t(STR_BRIGHTNESS_HINT));
     lv_obj_set_style_text_color(label_settings_hint, lv_color_hex(0x6A6A6A), 0);
     lv_obj_set_style_text_font(label_settings_hint, &lv_font_montserrat_14, 0);
     lv_obj_align(label_settings_hint, LV_ALIGN_CENTER, 0, 24);
@@ -706,7 +723,7 @@ void build_battery_screen(void)
     lv_obj_set_scrollbar_mode(screen_battery, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t *title = lv_label_create(screen_battery);
-    lv_label_set_text(title, "Battery");
+    lv_label_set_text(title, t(STR_BATTERY_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
@@ -733,7 +750,7 @@ void build_rotate_screen(void)
     lv_obj_set_scrollbar_mode(screen_rotate, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t *title = lv_label_create(screen_rotate);
-    lv_label_set_text(title, "Rotate Screen");
+    lv_label_set_text(title, t(STR_ROTATE_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
@@ -745,7 +762,7 @@ void build_rotate_screen(void)
     lv_obj_align(label_rotate_value, LV_ALIGN_CENTER, 0, -10);
 
     lv_obj_t *hint = lv_label_create(screen_rotate);
-    lv_label_set_text(hint, "Turn knob to rotate");
+    lv_label_set_text(hint, t(STR_ROTATE_HINT));
     lv_obj_set_style_text_color(hint, lv_color_hex(0x6A6A6A), 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_align(hint, LV_ALIGN_CENTER, 0, 40);

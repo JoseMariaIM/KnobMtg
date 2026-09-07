@@ -1,5 +1,6 @@
 #include "damage_log.h"
 #include "game.h"
+#include "lang.h"
 
 // ---------- data ----------
 typedef struct {
@@ -139,9 +140,9 @@ void damage_log_undo_selected(void)
 static void format_elapsed(uint32_t elapsed_s, char *out, size_t out_sz)
 {
     if (elapsed_s >= 60) {
-        snprintf(out, out_sz, "%2lum ago", (unsigned long)(elapsed_s / 60));
+        snprintf(out, out_sz, t(STR_LOG_AGO_MIN), (unsigned long)(elapsed_s / 60));
     } else {
-        snprintf(out, out_sz, "%2lus ago", (unsigned long)elapsed_s);
+        snprintf(out, out_sz, t(STR_LOG_AGO_SEC), (unsigned long)elapsed_s);
     }
 }
 
@@ -155,28 +156,27 @@ static void format_log_line(damage_log_entry_t *entry, char *buf, size_t buf_sz)
     format_elapsed(elapsed_s, time_str, sizeof(time_str));
 
     if (entry->event_type == LOG_EVT_CMD_DAMAGE && entry->source >= 0 &&
-        entry->source < MAX_GAME_PLAYERS && entry->player >= 0 &&
+        entry->source < MAX_GAME_PLAYERS * 2 && entry->player >= 0 &&
         entry->player < MAX_GAME_PLAYERS) {
-        snprintf(buf, buf_sz, "%s: %s dealt %d cmd to %s",
+        int source, slot;
+        decode_cmd_source(entry->source, &source, &slot);
+        snprintf(buf, buf_sz, t(slot ? STR_LOG_CMD_DEALT_PARTNER : STR_LOG_CMD_DEALT),
                  time_str,
-                 player_names[entry->source],
+                 player_names[source],
                  abs_delta,
                  player_names[entry->player]);
     } else if (entry->event_type == LOG_EVT_COUNTER && entry->source >= 0 &&
                entry->player >= 0 && entry->player < MAX_GAME_PLAYERS) {
         const counter_definition_t *definition = get_counter_definition((counter_type_t)entry->source);
-        const char *action = entry->delta > 0 ? "increased" : "decreased";
-        const char *counter_name = (definition != NULL) ? definition->display_name : "Counter";
-        snprintf(buf, buf_sz, "%s: %s %s %s by %d",
+        const char *counter_name = (definition != NULL) ? definition->display_name : t(STR_LOG_COUNTER_FALLBACK);
+        snprintf(buf, buf_sz, t(entry->delta > 0 ? STR_LOG_COUNTER_INCREASED : STR_LOG_COUNTER_DECREASED),
                  time_str,
                  player_names[entry->player],
-                 action,
                  counter_name,
                  abs_delta);
     } else if (entry->player >= 0 && entry->player < MAX_GAME_PLAYERS) {
-        const char *action = entry->delta > 0 ? "gained" : "lost";
-        snprintf(buf, buf_sz, "%s: %s %s %d life",
-                 time_str, player_names[entry->player], action, abs_delta);
+        snprintf(buf, buf_sz, t(entry->delta > 0 ? STR_LOG_LIFE_GAINED : STR_LOG_LIFE_LOST),
+                 time_str, player_names[entry->player], abs_delta);
     }
 }
 
@@ -235,7 +235,7 @@ static void refresh_damage_log_ui(void)
 
     if (damage_log_count == 0) {
         lv_obj_t *lbl = lv_label_create(damage_log_container);
-        lv_label_set_text(lbl, "No events yet");
+        lv_label_set_text(lbl, t(STR_LOG_EMPTY));
         lv_obj_set_style_text_color(lbl, lv_color_hex(0x7A7A7A), 0);
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
         damage_log_selected = -1;
@@ -276,7 +276,7 @@ static void refresh_damage_log_ui(void)
     if (page_label != NULL) {
         if (damage_log_count > LOG_PAGE_SIZE) {
             char page_buf[24];
-            snprintf(page_buf, sizeof(page_buf), "%d-%d of %d", first + 1, last, damage_log_count);
+            snprintf(page_buf, sizeof(page_buf), t(STR_LOG_PAGE_FMT), first + 1, last, damage_log_count);
             lv_label_set_text(page_label, page_buf);
             lv_obj_clear_flag(page_label, LV_OBJ_FLAG_HIDDEN);
         } else {
@@ -320,7 +320,7 @@ void build_damage_log_screen(void)
     lv_obj_set_scrollbar_mode(screen_damage_log, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t *title = lv_label_create(screen_damage_log);
-    lv_label_set_text(title, "Event Log");
+    lv_label_set_text(title, t(STR_LOG_TITLE));
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
@@ -361,7 +361,7 @@ void build_damage_log_screen(void)
     lv_obj_add_flag(delete_btn, LV_OBJ_FLAG_HIDDEN);
 
     btn_label = lv_label_create(delete_btn);
-    lv_label_set_text(btn_label, "Undo\n(Long Press)");
+    lv_label_set_text(btn_label, t(STR_LOG_UNDO_HOLD));
     lv_obj_set_style_text_align(btn_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(btn_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_14, 0);

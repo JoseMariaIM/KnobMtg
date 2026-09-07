@@ -1,0 +1,216 @@
+#ifndef _LANG_H
+#define _LANG_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+    LANG_EN = 0,
+    LANG_ES,
+    LANG_COUNT,
+} lang_t;
+
+/* Every translatable piece of static UI text gets one entry here.
+   Dynamic/formatted text (names, numbers) stays built with snprintf as
+   before; only the fixed words around it come from t(). Grouped by the
+   file that owns the string, in the order it's first used there. */
+typedef enum {
+    /* settings.c */
+    STR_LANGUAGE_EN = 0,
+    STR_LANGUAGE_ES,
+    STR_SETTING_LANGUAGE,
+    STR_SETTING_AUTODIM_OFF,
+    STR_SETTING_AUTODIM_15S,
+    STR_SETTING_AUTODIM_30S,
+    STR_SETTING_AUTODIM_60S,
+    STR_SETTING_COLORS_PLAYER,
+    STR_SETTING_COLORS_LIFE,
+    STR_SETTING_DESELECT_NEVER,
+    STR_SETTING_DESELECT_5S,
+    STR_SETTING_DESELECT_15S,
+    STR_SETTING_DESELECT_30S,
+    STR_SETTING_ORIENTATION_ABSOLUTE,
+    STR_SETTING_ORIENTATION_CENTRIC,
+    STR_SETTING_ORIENTATION_TABLETOP,
+    STR_SETTING_AUTO_ELIM_ON,
+    STR_SETTING_AUTO_ELIM_OFF,
+    STR_SETTING_RANDOM_FIRST_ON,
+    STR_SETTING_RANDOM_FIRST_OFF,
+    STR_SETTING_MENU_FACE_PLAYER,
+    STR_SETTING_MENU_FIXED,
+    STR_SETTING_MULTI_SELECT_ON,
+    STR_SETTING_MULTI_SELECT_OFF,
+    STR_SETTING_BRIGHTNESS,
+    STR_SETTING_BATTERY,
+    STR_SETTING_TABLE_SYNC,
+    STR_SETTING_ROTATE_SCREEN,
+    STR_SETTINGS_MORE,
+    STR_TABLE_SYNC_JOINING,
+    STR_TABLE_SYNC_INVITING,
+    STR_TABLE_SYNC_IN_GAME,
+    STR_TABLE_SYNC_1P_NO_SYNC,
+    STR_TABLE_SYNC_RADIO_ERROR,
+    STR_TABLE_SYNC_OFF,
+    STR_TABLE_SYNC_HOLD_INVITE,
+    STR_TABLE_SYNC_HOLD_START,
+    STR_TABLE_SYNC_HOLD_JOIN,
+    STR_TABLE_SYNC_HOLD_LEAVE,
+    STR_MENU_SETTINGS,
+    STR_MENU_GAME_MODE,
+    STR_MENU_TOOLS,
+    STR_MENU_RESET_HOLD,
+    STR_TOOL_DICE,
+    STR_TOOL_TIMER,
+    STR_TOOL_EVENT_LOG,
+    STR_TOOL_MANA_POOL,
+    STR_BRIGHTNESS_FMT,      /* "Brightness: %d%%" */
+    STR_BRIGHTNESS_HINT,
+    STR_BATTERY_TITLE,
+    STR_BATTERY_UNKNOWN,
+    STR_BATTERY_FMT,         /* "Battery: %d%%" */
+    STR_BATTERY_NOT_CALIBRATED,
+    STR_BATTERY_CALIBRATED_FMT, /* "%.2fV calibrated" */
+    STR_ROTATE_TITLE,
+    STR_ROTATE_HINT,
+    STR_COLOR_GREEN,
+    STR_COLOR_PURPLE,
+    STR_COLOR_BLUE,
+    STR_COLOR_YELLOW,
+    STR_COLOR_RED,
+    STR_COLOR_ORANGE,
+    STR_COLOR_CYAN,
+    STR_COLOR_PINK,
+    STR_COLOR_LIME,
+    STR_COLOR_INDIGO,
+    STR_COLOR_ROSE,
+    STR_COLOR_WHITE,
+    STR_COLOR_TEAL,
+    STR_COLOR_AMBER,
+    STR_COLOR_BROWN,
+    STR_COLOR_GRAY,
+    STR_COLOR_SAGE,
+    STR_COLOR_BLACK,
+    STR_SETTING_WIFI,
+    STR_SETTING_UPDATES,
+    STR_WIFI_TITLE,
+    STR_WIFI_SSID,
+    STR_WIFI_PASSWORD,
+    STR_WIFI_CONNECT,
+    STR_WIFI_FORGET_HOLD,
+    STR_WIFI_NOT_CONFIGURED,
+    STR_WIFI_CONNECTING,
+    STR_WIFI_DISCONNECT_FMT,  /* "Disconnect\n%s" */
+    STR_WIFI_FAILED,
+    STR_WIFI_ENTER_SSID,
+    STR_WIFI_ENTER_PASSWORD_FMT, /* "Enter password for\n%s" */
+    STR_OTA_TITLE,
+    STR_OTA_CURRENT_FMT,      /* "Current: %s" */
+    STR_OTA_CHECK_NOW,
+    STR_OTA_APPLY_HOLD,
+    STR_OTA_CHECKING,
+    STR_OTA_UP_TO_DATE,
+    STR_OTA_AVAILABLE_FMT,    /* "Update available\n%s" */
+    STR_OTA_UPDATING,
+    STR_OTA_ERROR_FMT,        /* "Error: %s" */
+    STR_OTA_NEED_WIFI,
+    STR_OTA_TAP_TO_CHECK,
+    STR_WIFI_SCANNING,
+    STR_WIFI_TYPE_MANUALLY,
+    STR_WIFI_NO_NETWORKS,
+    STR_WIFI_OPEN_SUFFIX, /* appended to open-network row labels */
+    STR_WIFI_STATUS_TITLE,
+    STR_WIFI_CONNECTING_TO_FMT,   /* "Connecting to\n%s..." */
+    STR_WIFI_CONNECT_OK_FMT,      /* "Connected to %s\nIP: %s" */
+    STR_WIFI_CONNECT_FAIL_FMT,    /* "Could not connect to\n%s" */
+    STR_OK,
+
+    /* ui_1p.c / ui_mp.c (commander damage flow) */
+    STR_CHOOSE_PLAYER,
+    STR_TAB_COMMANDER,
+    STR_TAB_PARTNER,
+    STR_PARTNER_SUFFIX,
+    STR_DAMAGE_PREFIX,
+    STR_TURN_KNOB_THEN_APPLY,
+    STR_APPLY,
+    STR_TURN_FMT_SOLO,      /* "turn  %lu:%02lu" */
+    STR_TURN_FMT_NUMBERED,  /* "turn %d  %lu:%02lu" */
+    STR_TURN_INITIAL,       /* "turn  0:00" */
+
+    /* ui_player_menu.c */
+    STR_MENU_NAME_COLOR,
+    STR_MENU_COMMANDER_DAMAGE,
+    STR_MENU_ALL_DAMAGE,
+    STR_MENU_COUNTERS,
+    STR_UNDO_ELIMINATION_TITLE,
+    STR_UNDO_ELIMINATION_HINT,
+    STR_UNDO,
+    STR_ALL_PLAYERS,
+    STR_ALL_OPPONENTS,
+    STR_DAMAGE_COLON,
+    STR_INCLUDE_MYSELF,
+    STR_INCLUDE_MYSELF_NAMED,
+    STR_MENU_RENAME,
+    STR_MENU_DEFAULT_SETTING,
+    STR_MENU_LIFE_COLOR,
+    STR_MENU_CUSTOM_COLOR,
+    STR_COLOR_TITLE,
+
+    /* game.c: counters and player-facing log sentences */
+    STR_COUNTER_COMMANDER_TAX,
+    STR_COUNTER_COMMANDER_TAX_MENU,
+    STR_COUNTER_PARTNER_TAX,
+    STR_COUNTER_PARTNER_TAX_MENU,
+    STR_COUNTER_POISON,
+    STR_COUNTER_EXPERIENCE,
+
+    /* damage_log.c */
+    STR_LOG_AGO_MIN,
+    STR_LOG_AGO_SEC,
+    STR_LOG_CMD_DEALT,
+    STR_LOG_CMD_DEALT_PARTNER,
+    STR_LOG_COUNTER_INCREASED,
+    STR_LOG_COUNTER_DECREASED,
+    STR_LOG_LIFE_GAINED,
+    STR_LOG_LIFE_LOST,
+    STR_LOG_EMPTY,
+    STR_LOG_COUNTER_FALLBACK,
+    STR_LOG_TITLE,
+    STR_LOG_UNDO_HOLD,
+    STR_LOG_PAGE_FMT, /* "%d-%d of %d" */
+
+    /* rename.c */
+    STR_RENAME_TYPE_NEW,
+    STR_RENAME_NEW_NAME,
+    STR_RENAME_FMT,       /* "Rename %s" */
+    STR_RENAME_SELECT,
+    STR_RENAME_SAVE,
+
+    /* game_mode.c */
+    STR_GAME_MODE_PLAYERS_FMT,  /* "Players\n%d" */
+    STR_GAME_MODE_TRACK_FMT,    /* "Track\n%d" */
+    STR_GAME_MODE_LIFE_FMT,     /* "Life\n%d" */
+    STR_GAME_MODE_APPLY_HOLD,
+    STR_GAME_MODE_LIFE_TITLE,
+    STR_GAME_MODE_TURN_KNOB_ADJUST,
+
+    /* dice.c */
+    STR_DICE_HOLD_TO_REROLL,
+
+    /* mana.c */
+    STR_MANA_POOL_TITLE,
+    STR_MANA_CLEAR_ALL_HOLD,
+
+    STR_COUNT,
+} string_id_t;
+
+void lang_init(void);
+lang_t lang_get(void);
+void lang_set(lang_t lang); /* persists + restarts the device to relabel every screen */
+const char *t(string_id_t id);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // _LANG_H

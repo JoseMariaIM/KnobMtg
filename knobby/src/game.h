@@ -29,7 +29,13 @@ extern bool player_selected[MAX_DISPLAY_PLAYERS];
 extern char player_names[MAX_GAME_PLAYERS][16];
 extern int menu_player;
 extern int cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS];
+/* Damage from each source player's SECOND (partner) commander, tracked
+   independently from cmd_damage_totals because 21 damage from either
+   commander alone is lethal — they don't sum toward one shared total.
+   Not currently mirrored over Table Sync (see net_sync_fill_state). */
+extern int partner_cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS];
 extern int cmd_damage_target;
+extern int cmd_damage_slot; /* 0 = commander, 1 = partner commander */
 extern int all_damage_value;
 extern int pending_life_delta;
 extern bool life_preview_active;
@@ -38,6 +44,21 @@ extern int player_counters[MAX_DISPLAY_PLAYERS][COUNTER_TYPE_COUNT];
 extern counter_type_t counter_edit_type;
 extern int counter_edit_value;
 extern bool player_eliminated[MAX_DISPLAY_PLAYERS];
+
+// ---------- commander-slot encoding ----------
+/* The damage log and elimination-undo bookkeeping both store a single
+   "source" int for LOG_EVT_CMD_DAMAGE entries. Rather than widen those
+   structs, the partner slot rides along in the same field: sources
+   0..MAX_GAME_PLAYERS-1 are the primary commander, +MAX_GAME_PLAYERS
+   is the partner commander from that same source player. */
+static inline int encode_cmd_source(int source, int slot) {
+    return source + (slot ? MAX_GAME_PLAYERS : 0);
+}
+
+static inline void decode_cmd_source(int encoded, int *source, int *slot) {
+    *slot = (encoded >= MAX_GAME_PLAYERS) ? 1 : 0;
+    *source = encoded - (*slot ? MAX_GAME_PLAYERS : 0);
+}
 
 // ---------- functions ----------
 void knob_life_init(void);
@@ -58,9 +79,10 @@ void selection_clear(void);
 void selection_toggle(int player);
 void selection_set_single(int player);
 void undo_life_change(int player, int delta);
-void undo_cmd_damage(int source, int target, int delta);
+void undo_cmd_damage(int encoded_source, int target, int delta); /* see decode_cmd_source */
 void undo_counter_change(int player, int counter_type, int delta);
 void prepare_cmd_damage_for_player(int target);
+void refresh_cmd_damage_slot(void);
 void life_preview_commit_cb(lv_timer_t *timer);
 void begin_counter_edit(int player, counter_type_t type);
 void change_counter_edit(int delta);

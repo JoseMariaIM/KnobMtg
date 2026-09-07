@@ -18,7 +18,10 @@ static int cached_life_total = DEFAULT_LIFE_TOTAL;
 static int cached_auto_eliminate = 1; /* 1=ON (default), 0=OFF */
 static int cached_random_first = 1; /* 1=ON (default): random first-player pick on reset */
 static int cached_multi_select = 0; /* 0=OFF (default), 1=ON */
+static int cached_language = 0; /* 0=English (default), 1=Espanol - see lang_t */
 static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
+static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
+static char cached_wifi_pass[WIFI_PASS_LEN] = "";
 
 // ---------- init ----------
 void knob_nvs_init(void)
@@ -83,10 +86,22 @@ void knob_nvs_init(void)
         nvs_get_i8(handle, "menu_face", &mf_val);
         cached_menu_facing = (mf_val != 0) ? 1 : 0;
 
+        int8_t lang_val = 0;
+        nvs_get_i8(handle, "language", &lang_val);
+        cached_language = (lang_val != 0) ? 1 : 0;
+
         size_t nl_size = sizeof(cached_name_list);
         nvs_get_blob(handle, "name_list", cached_name_list, &nl_size);
         for (int i = 0; i < NAME_LIST_COUNT; i++)
             cached_name_list[i][NAME_LIST_LEN - 1] = '\0';
+
+        size_t ssid_size = sizeof(cached_wifi_ssid);
+        nvs_get_blob(handle, "wifi_ssid", cached_wifi_ssid, &ssid_size);
+        cached_wifi_ssid[WIFI_SSID_LEN - 1] = '\0';
+
+        size_t pass_size = sizeof(cached_wifi_pass);
+        nvs_get_blob(handle, "wifi_pass", cached_wifi_pass, &pass_size);
+        cached_wifi_pass[WIFI_PASS_LEN - 1] = '\0';
 
         nvs_close(handle);
     }
@@ -124,6 +139,17 @@ int nvs_get_color_mode(void)
 void nvs_set_color_mode(int value)
 {
     cached_color_mode = (value < 0) ? COLOR_MODE_PLAYER : (value >= COLOR_MODE_COUNT) ? COLOR_MODE_PLAYER : value;
+    settings_dirty = true;
+}
+
+int nvs_get_language(void)
+{
+    return cached_language;
+}
+
+void nvs_set_language(int value)
+{
+    cached_language = (value != 0) ? 1 : 0;
     settings_dirty = true;
 }
 
@@ -256,6 +282,28 @@ void nvs_set_name_list(const char (*list)[NAME_LIST_LEN])
     settings_dirty = true;
 }
 
+void nvs_get_wifi_ssid(char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%s", cached_wifi_ssid);
+}
+
+void nvs_set_wifi_ssid(const char *ssid)
+{
+    snprintf(cached_wifi_ssid, sizeof(cached_wifi_ssid), "%s", ssid);
+    settings_dirty = true;
+}
+
+void nvs_get_wifi_pass(char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%s", cached_wifi_pass);
+}
+
+void nvs_set_wifi_pass(const char *pass)
+{
+    snprintf(cached_wifi_pass, sizeof(cached_wifi_pass), "%s", pass);
+    settings_dirty = true;
+}
+
 // ---------- persist ----------
 void settings_save(void)
 {
@@ -275,7 +323,10 @@ void settings_save(void)
         nvs_set_i8(handle, "rand_first", (int8_t)cached_random_first);
         nvs_set_i8(handle, "multi_sel", (int8_t)cached_multi_select);
         nvs_set_i8(handle, "menu_face", (int8_t)cached_menu_facing);
+        nvs_set_i8(handle, "language", (int8_t)cached_language);
         nvs_set_blob(handle, "name_list", cached_name_list, sizeof(cached_name_list));
+        nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
+        nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));
         esp_err_t commit_err = nvs_commit(handle);
         nvs_close(handle);
         /* Keep the dirty flag set if the commit failed (e.g. NVS full) so a

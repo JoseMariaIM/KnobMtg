@@ -47,6 +47,10 @@ jobs:
           arduino-cli lib install ESP32_IO_Expander@1.0.1
           arduino-cli lib install esp-lib-utils@0.1.2
 
+      - name: Write release version header
+        run: |
+          echo "#define FIRMWARE_VERSION \"${{ github.ref_name }}\"" > knobby/src/version.h
+
       - name: Compile with arduino-cli
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,PartitionScheme=custom" --export-binaries knobby
