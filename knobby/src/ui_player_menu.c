@@ -236,6 +236,9 @@ static void event_counter_apply(lv_event_t *e) {
 }
 
 // ---------- per-player color ----------
+#define COLOR_RING_SIZE 350
+#define COLOR_RING_WIDTH 20
+
 static lv_obj_t *color_wheel = NULL;
 static lv_obj_t *color_picker_hex_label = NULL;
 static lv_obj_t *color_picker_title_label = NULL;
@@ -278,13 +281,77 @@ static void update_color_picker_hex_label(void) {
   lv_label_set_text(color_picker_hex_label, buf);
 
   /* Apply button mirrors the color it's about to commit, instead of
-     always sitting there in the theme's default blue. */
+     always sitting there in the theme's default blue. Text stays a
+     fixed white rather than flipping to black for light hues - a
+     button whose label color changes on its own reads as broken, and
+     a border makes white legible against even pale/yellow picks. */
   if (btn_color_apply != NULL) {
     lv_obj_t *label = lv_obj_get_child(btn_color_apply, 0);
-    lv_color_t text_c = color_is_light(rgb) ? lv_color_black() : lv_color_white();
     lv_obj_set_style_bg_color(btn_color_apply, rgb, 0);
-    if (label != NULL) lv_obj_set_style_text_color(label, text_c, 0);
+    lv_obj_set_style_border_color(btn_color_apply, lv_color_black(), 0);
+    lv_obj_set_style_border_width(btn_color_apply, 2, 0);
+    lv_obj_set_style_border_opa(btn_color_apply, LV_OPA_40, 0);
+    if (label != NULL) lv_obj_set_style_text_color(label, lv_color_white(), 0);
   }
+}
+
+/* lv_colorwheel's own ring is drawn as ~85 straight radial chords
+   approximating the circle (see LV_CPICKER_DEF_QF in the library
+   source); at this ring's size that shows as thin dark seams between
+   adjacent color bands. Redrawn here as 360 radial lines instead -
+   one per degree, wide enough to overlap its neighbors - which closes
+   the seams. (lv_draw_arc() looked like the more "correct" tool for a
+   ring, but a full circular sweep of it renders incompletely with
+   this display's partial/chunked draw buffer - see STAGE_BOUNCE_ROWS
+   in scr_st77916.h; lv_draw_line doesn't have that problem, and it's
+   the same primitive event_wedge_separators() already relies on
+   elsewhere in this codebase.) Also redraws the knob dot on top,
+   since this overlay (created after color_wheel, so it paints over
+   it) would otherwise hide it. */
+static void event_color_ring_draw(lv_event_t *e) {
+  static const lv_point_t ring_center = {180, 180};
+  const lv_coord_t r_outer = COLOR_RING_SIZE / 2;
+  const lv_coord_t r_inner = r_outer - COLOR_RING_WIDTH;
+  lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+  lv_draw_line_dsc_t line_dsc;
+  lv_draw_rect_dsc_t knob_dsc;
+  lv_color_hsv_t hsv;
+  lv_area_t knob_area;
+  lv_coord_t kx, ky;
+  int h;
+
+  lv_draw_line_dsc_init(&line_dsc);
+  line_dsc.width = 5; /* > the ~3px arc-length gap between 1-degree radial lines at this radius */
+  for (h = 0; h < 360; h++) {
+    lv_point_t p0, p1;
+    line_dsc.color = lv_color_hsv_to_rgb((uint16_t)h, 100, 100);
+    p0.x = (lv_coord_t)(ring_center.x + ((r_outer * lv_trigo_sin(h)) >> LV_TRIGO_SHIFT));
+    p0.y = (lv_coord_t)(ring_center.y + ((r_outer * lv_trigo_cos(h)) >> LV_TRIGO_SHIFT));
+    p1.x = (lv_coord_t)(ring_center.x + ((r_inner * lv_trigo_sin(h)) >> LV_TRIGO_SHIFT));
+    p1.y = (lv_coord_t)(ring_center.y + ((r_inner * lv_trigo_cos(h)) >> LV_TRIGO_SHIFT));
+    lv_draw_line(draw_ctx, &line_dsc, &p0, &p1);
+  }
+
+  if (color_wheel == NULL) return;
+  hsv = lv_colorwheel_get_hsv(color_wheel);
+  {
+    const lv_coord_t knob_r = (r_outer + r_inner) / 2;
+    kx = (lv_coord_t)(((int32_t)knob_r * lv_trigo_sin(hsv.h)) >> LV_TRIGO_SHIFT) + ring_center.x;
+    ky = (lv_coord_t)(((int32_t)knob_r * lv_trigo_cos(hsv.h)) >> LV_TRIGO_SHIFT) + ring_center.y;
+  }
+
+  lv_draw_rect_dsc_init(&knob_dsc);
+  knob_dsc.radius = LV_RADIUS_CIRCLE;
+  knob_dsc.bg_color = lv_colorwheel_get_rgb(color_wheel);
+  knob_dsc.bg_opa = LV_OPA_COVER;
+  knob_dsc.border_width = 2;
+  knob_dsc.border_color = lv_color_white();
+  knob_dsc.border_opa = LV_OPA_COVER;
+  knob_area.x1 = (lv_coord_t)(kx - COLOR_RING_WIDTH / 2);
+  knob_area.y1 = (lv_coord_t)(ky - COLOR_RING_WIDTH / 2);
+  knob_area.x2 = (lv_coord_t)(kx + COLOR_RING_WIDTH / 2);
+  knob_area.y2 = (lv_coord_t)(ky + COLOR_RING_WIDTH / 2);
+  lv_draw_rect(draw_ctx, &knob_dsc, &knob_area);
 }
 
 static void event_color_custom(lv_event_t *e) {
@@ -546,10 +613,19 @@ void build_player_color_picker_screen(void) {
      so full saturation/value here is enough. Built first so the title/
      hex/Apply stack below sits on top of it, inside its empty hub. */
   color_wheel = lv_colorwheel_create(screen_player_color_picker, true);
-  lv_obj_set_size(color_wheel, 350, 350);
+  lv_obj_set_size(color_wheel, COLOR_RING_SIZE, COLOR_RING_SIZE);
   lv_obj_center(color_wheel);
-  lv_obj_set_style_arc_width(color_wheel, 20, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(color_wheel, COLOR_RING_WIDTH, LV_PART_MAIN);
   lv_obj_add_event_cb(color_wheel, event_colorwheel_changed, LV_EVENT_VALUE_CHANGED, NULL);
+
+  /* Repaints the ring smoothly over color_wheel's own seamy one - see
+     event_color_ring_draw(). Covers the whole screen but only actually
+     draws within the ring band, so it's safe to sit under the title/
+     hex/Apply stack in z-order too; kept non-clickable so drags still
+     reach color_wheel underneath. */
+  lv_obj_t *ring_overlay = make_plain_box(screen_player_color_picker, 360, 360);
+  lv_obj_set_pos(ring_overlay, 0, 0);
+  lv_obj_add_event_cb(ring_overlay, event_color_ring_draw, LV_EVENT_DRAW_MAIN, NULL);
 
   color_picker_title_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_title_label, "Color");
