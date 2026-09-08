@@ -438,6 +438,7 @@ void knob_gui(void)
     build_dice_screen();
     build_main_screen();
     build_multiplayer_screen();
+    build_victory_screen();
     build_player_menu_screen();
     build_eliminated_player_menu_screen();
     build_rename_screen();

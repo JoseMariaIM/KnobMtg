@@ -104,6 +104,7 @@ static const char *strings_en[STR_COUNT] = {
     [STR_OTA_AVAILABLE_FMT] = "Update available\n%s",
     [STR_OTA_UPDATING] = "Updating...\nDo not disconnect",
     [STR_OTA_ERROR_FMT] = "Error: %s",
+    [STR_OTA_LOW_BATTERY_FMT] = "Battery too low, need %d%% or more",
     [STR_OTA_NEED_WIFI] = "Connect to WiFi first",
     [STR_OTA_TAP_TO_CHECK] = "Tap to check",
     [STR_OTA_OPEN_WIFI] = "Open WiFi",
@@ -190,6 +191,8 @@ static const char *strings_en[STR_COUNT] = {
 
     [STR_MANA_POOL_TITLE] = "Mana Pool",
     [STR_MANA_CLEAR_ALL_HOLD] = "Clear All\n(Hold)",
+
+    [STR_VICTORY_WINNER] = "Winner",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -289,6 +292,7 @@ static const char *strings_es[STR_COUNT] = {
     [STR_OTA_AVAILABLE_FMT] = "Actualización\ndisponible %s",
     [STR_OTA_UPDATING] = "Actualizando...\nNo desconectes",
     [STR_OTA_ERROR_FMT] = "Error: %s",
+    [STR_OTA_LOW_BATTERY_FMT] = "Batería baja, necesitas %d%% o más",
     [STR_OTA_NEED_WIFI] = "Conecta al WiFi primero",
     [STR_OTA_TAP_TO_CHECK] = "Toca para buscar",
     [STR_OTA_OPEN_WIFI] = "Abrir WiFi",
@@ -375,6 +379,8 @@ static const char *strings_es[STR_COUNT] = {
 
     [STR_MANA_POOL_TITLE] = "Reserva de Maná",
     [STR_MANA_CLEAR_ALL_HOLD] = "Borrar Todo\n(Mantener)",
+
+    [STR_VICTORY_WINNER] = "Ganador",
 };
 
 void lang_init(void)

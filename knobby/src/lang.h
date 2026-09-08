@@ -113,6 +113,7 @@ typedef enum {
     STR_OTA_AVAILABLE_FMT,    /* "Update available\n%s" */
     STR_OTA_UPDATING,
     STR_OTA_ERROR_FMT,        /* "Error: %s" */
+    STR_OTA_LOW_BATTERY_FMT,  /* "Battery too low to update\nneed %d%% or more" */
     STR_OTA_NEED_WIFI,
     STR_OTA_TAP_TO_CHECK,
     STR_OTA_OPEN_WIFI,
@@ -207,6 +208,9 @@ typedef enum {
     /* mana.c */
     STR_MANA_POOL_TITLE,
     STR_MANA_CLEAR_ALL_HOLD,
+
+    /* ui_mp.c */
+    STR_VICTORY_WINNER,
 
     STR_COUNT,
 } string_id_t;

@@ -5,9 +5,11 @@
 
 // ---------- screens ----------
 extern lv_obj_t *screen_multiplayer;
+extern lv_obj_t *screen_victory;
 
 // ---------- functions ----------
 void build_multiplayer_screen(void);
+void build_victory_screen(void);
 void rebuild_multiplayer_layout(int track);
 
 void refresh_multiplayer_ui(void);

@@ -7,12 +7,14 @@
 #include "stb_image_write.h"
 
 #include "board_detect.h"
+#include "sim_stubs.h"
 #include <lvgl.h>
 #include "knob.h"
 #include "game.h"
 #include "storage.h"
 #include "settings.h"
 #include "ui_1p.h"
+#include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "ui_wifi.h"
 #include "wifi_ota.h"
@@ -21,6 +23,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define SCREEN_W 360
 #define SCREEN_H 360
@@ -119,6 +122,26 @@ int main(void)
     lv_obj_t *tile_coin = lv_obj_get_child(screen_dice_menu, 3);
     lv_event_send(tile_coin, LV_EVENT_CLICKED, NULL);
     render_and_save(screen_dice, "screenshots/es_dice_coin.png");
+
+    /* 4-player game, eliminate 3 of the 4 to trigger the victory screen
+       for whoever's left. */
+    nvs_set_players_to_track(4);
+    rebuild_multiplayer_layout(4);
+    manual_eliminate_player(0);
+    manual_eliminate_player(1);
+    manual_eliminate_player(2);
+    /* open_victory_screen() triggered a 600ms fade transition (real
+       lv_scr_load_anim, not an instant lv_scr_load) - pump real ticks
+       until it finishes before loading any other screen, or a second
+       lv_scr_load while the fade's internal transition layer is still
+       live corrupts LVGL's screen-transition state (crashed here
+       during development; not a bug in the feature itself, just this
+       headless tool never otherwise ticks the animation system). */
+    for (int i = 0; i < 70; i++) {
+        sim_tick_advance(10);
+        lv_timer_handler();
+    }
+    render_and_save(screen_victory, "screenshots/es_victory.png");
 
     wifi_connect("MiRedWifi", "unaContrasena123");
     open_wifi_settings_screen();

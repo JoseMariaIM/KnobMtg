@@ -2,6 +2,7 @@
 #include "storage.h"
 #include "version.h"
 #include "hw.h"
+#include "lang.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -116,7 +117,7 @@ void ota_apply_update(void)
 {
     if (!battery_ok_for_update()) {
         g_ota_state = OTA_STATE_ERROR;
-        snprintf(g_ota_error, sizeof(g_ota_error), "Battery below %d%%", OTA_MIN_BATTERY_PERCENT);
+        snprintf(g_ota_error, sizeof(g_ota_error), t(STR_OTA_LOW_BATTERY_FMT), OTA_MIN_BATTERY_PERCENT);
         return;
     }
     g_ota_state = OTA_STATE_ERROR;
