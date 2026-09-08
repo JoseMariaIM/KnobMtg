@@ -522,40 +522,40 @@ void build_player_color_picker_screen(void) {
   lv_obj_set_style_border_width(screen_player_color_picker, 0, 0);
   lv_obj_set_scrollbar_mode(screen_player_color_picker, LV_SCROLLBAR_MODE_OFF);
 
+  /* Hue ring hugging the bezel instead of a small centered one - same
+     "use the whole round display" idea as the OTA progress ring (see
+     ui_wifi.c). Drag the knob dot anywhere around it (or turn the
+     physical knob, see change_player_color()) to pick any hue. The
+     three vibrancy tiers the rest of the app needs (see
+     get_custom_color_vib()) are derived from this one hue afterward,
+     so full saturation/value here is enough. Built first so the title/
+     hex/Apply stack below sits on top of it, inside its empty hub. */
+  color_wheel = lv_colorwheel_create(screen_player_color_picker, true);
+  lv_obj_set_size(color_wheel, 350, 350);
+  lv_obj_center(color_wheel);
+  lv_obj_set_style_arc_width(color_wheel, 20, LV_PART_MAIN);
+  lv_obj_add_event_cb(color_wheel, event_colorwheel_changed, LV_EVENT_VALUE_CHANGED, NULL);
+
   color_picker_title_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_title_label, "Color");
   lv_obj_set_style_text_color(color_picker_title_label, lv_color_white(), 0);
   lv_obj_set_style_text_font(color_picker_title_label, &lv_font_es_22, 0);
   lv_obj_set_style_text_align(color_picker_title_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_align(color_picker_title_label, LV_ALIGN_TOP_MID, 0, 14);
+  lv_obj_align(color_picker_title_label, LV_ALIGN_CENTER, 0, -64);
 
-  /* Hue ring instead of the old fixed swatches - drag the knob dot
-     anywhere around it (or turn the physical knob, see
-     change_player_color()) to pick any hue, sized to make the most of
-     this being a round display. The three vibrancy tiers the rest of
-     the app needs (see get_custom_color_vib()) are derived from this
-     one hue afterward, so full saturation/value here is enough. */
-  color_wheel = lv_colorwheel_create(screen_player_color_picker, true);
-  lv_obj_set_size(color_wheel, 190, 190);
-  lv_obj_align(color_wheel, LV_ALIGN_CENTER, 0, 2);
-  lv_obj_add_event_cb(color_wheel, event_colorwheel_changed, LV_EVENT_VALUE_CHANGED, NULL);
-
-  /* Sits over the wheel's own empty hub in the center - labels aren't
-     clickable by default, so this doesn't block dragging the wheel
-     underneath it. */
   color_picker_hex_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_hex_label, "#000000");
   lv_obj_set_style_text_color(color_picker_hex_label, lv_color_white(), 0);
   lv_obj_set_style_text_font(color_picker_hex_label, &lv_font_es_16, 0);
-  lv_obj_align_to(color_picker_hex_label, color_wheel, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align(color_picker_hex_label, LV_ALIGN_CENTER, 0, 2);
 
   lv_obj_t *hint = lv_label_create(screen_player_color_picker);
   lv_label_set_text(hint, t(STR_COLOR_WHEEL_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
   lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
-  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -66);
+  lv_obj_align(hint, LV_ALIGN_CENTER, 0, 36);
 
   lv_obj_t *btn = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
                               event_color_apply);
-  lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -22);
+  lv_obj_align(btn, LV_ALIGN_CENTER, 0, 80);
 }
