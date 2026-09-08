@@ -3,8 +3,10 @@
 #include "net_sync.h"
 #include "lang.h"
 #include "wifi_ota.h"
+#include "ui_wifi.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
+#include <stdio.h>
 
 // ---------- private constants ----------
 #include "pincfg.h"
@@ -162,11 +164,21 @@ static void battery_icon_apply(bool visible)
 }
 
 // ---------- update-available indicator ----------
+#define UPDATE_TOAST_MS 5000
+
+static void update_icon_click_cb(lv_event_t *e)
+{
+    (void)e;
+    open_ota_update_screen();
+}
+
 void update_icon_register(lv_obj_t *icon)
 {
     if (icon == NULL || update_icon_count >= BATTERY_ICON_MAX) return;
     update_icons[update_icon_count++] = icon;
     lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(icon, update_icon_click_cb, LV_EVENT_CLICKED, NULL);
 }
 
 void update_icon_unregister(lv_obj_t *icon)
@@ -181,10 +193,54 @@ void update_icon_unregister(lv_obj_t *icon)
     }
 }
 
+static void update_toast_timer_cb(lv_timer_t *timer)
+{
+    lv_obj_t *toast = (lv_obj_t *)timer->user_data;
+    lv_obj_del(toast);
+}
+
+/* A small persistent icon is easy to miss on a screen this size, so the
+   moment an update is first seen this also drops a self-dismissing
+   banner on lv_layer_top() (renders above whatever screen is active,
+   independent of which one that is) spelling the update out in words.
+   The icon then stays behind as a quieter, tappable reminder that
+   jumps straight to the update screen. */
+static void show_update_toast(void)
+{
+    char msg[64];
+    lv_obj_t *toast;
+
+    snprintf(msg, sizeof(msg), t(STR_OTA_AVAILABLE_FMT), ota_get_latest_version());
+
+    toast = lv_label_create(lv_layer_top());
+    lv_label_set_text(toast, msg);
+    lv_obj_set_style_text_font(toast, &lv_font_es_16, 0);
+    lv_obj_set_style_text_align(toast, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(toast, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(toast, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(toast, LV_OPA_80, 0);
+    lv_obj_set_style_radius(toast, 12, 0);
+    lv_obj_set_style_pad_all(toast, 10, 0);
+    lv_obj_set_width(toast, 220);
+    lv_obj_align(toast, LV_ALIGN_TOP_MID, 0, 50);
+
+    lv_timer_t *timer = lv_timer_create(update_toast_timer_cb, UPDATE_TOAST_MS, toast);
+    lv_timer_set_repeat_count(timer, 1);
+}
+
 static void update_icon_refresh(void)
 {
+    static bool s_toast_shown = false;
     bool visible = (ota_get_state() == OTA_STATE_AVAILABLE);
     int i;
+
+    if (visible && !s_toast_shown) {
+        s_toast_shown = true;
+        show_update_toast();
+    } else if (!visible) {
+        s_toast_shown = false;
+    }
+
     for (i = 0; i < update_icon_count; i++) {
         if (visible) lv_obj_clear_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);
         else         lv_obj_add_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);

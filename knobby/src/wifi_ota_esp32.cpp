@@ -94,18 +94,25 @@ static void ota_auto_check_cb(lv_timer_t *timer)
     lv_timer_del(timer);
 
     if (g_wifi_state != WIFI_STATE_CONNECTED) {
+        Serial.println(F("[OTA] auto-check: wifi no longer connected, skipping check"));
         s_auto_check_done = true;
         wifi_radio_off();
         return;
     }
 
+    Serial.println(F("[OTA] auto-check: running ota_check_now()"));
     ota_check_now();
     s_auto_check_done = true;
+    Serial.printf("[OTA] auto-check: state=%d latest=%s error=%s\n",
+                   (int)g_ota_state, g_latest_version, g_ota_error);
 
     /* Only an available update justifies keeping the radio powered;
        "up to date" and a failed check both mean nobody needs it. */
     if (g_ota_state != OTA_STATE_AVAILABLE) {
+        Serial.println(F("[OTA] auto-check: no update to offer, powering radio off"));
         wifi_radio_off();
+    } else {
+        Serial.println(F("[OTA] auto-check: update available, keeping wifi on"));
     }
 }
 
@@ -118,11 +125,13 @@ static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
     if (WiFi.status() == WL_CONNECTED) {
         g_wifi_state = WIFI_STATE_CONNECTED;
         snprintf(g_wifi_ip, sizeof(g_wifi_ip), "%s", WiFi.localIP().toString().c_str());
+        Serial.printf("[OTA] auto-connect: connected, ip=%s\n", g_wifi_ip);
         lv_timer_del(timer);
         lv_timer_create(ota_auto_check_cb, 1500, NULL);
     } else if (millis() - s_auto_connect_started_at > WIFI_AUTO_CONNECT_TIMEOUT_MS) {
         g_wifi_state = WIFI_STATE_FAILED;
         s_auto_check_done = true;
+        Serial.printf("[OTA] auto-connect: timed out, WiFi.status()=%d\n", (int)WiFi.status());
         lv_timer_del(timer);
         wifi_radio_off(); /* out of range or wrong password - don't leave the radio hunting */
     }
@@ -131,11 +140,15 @@ static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
 extern "C" void wifi_ota_init(void)
 {
     nvs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
-    if (g_saved_ssid[0] == '\0') return;
+    if (g_saved_ssid[0] == '\0') {
+        Serial.println(F("[OTA] wifi_ota_init: no saved SSID, staying off"));
+        return;
+    }
 
     char pass[WIFI_PASS_LEN];
     nvs_get_wifi_pass(pass, sizeof(pass));
 
+    Serial.printf("[OTA] wifi_ota_init: connecting to \"%s\"\n", g_saved_ssid);
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); /* modem sleep can stall/drop packets mid-handshake */
     WiFi.setTxPower(WIFI_TX_POWER); /* see comment on the macro below */
@@ -325,6 +338,7 @@ extern "C" void ota_check_now(void)
         return;
     }
 
+    Serial.printf("[OTA] manifest: latest=%s running=%s\n", latest, FIRMWARE_VERSION);
     if (strcmp(latest, FIRMWARE_VERSION) == 0) {
         g_ota_state = OTA_STATE_UP_TO_DATE;
     } else {
