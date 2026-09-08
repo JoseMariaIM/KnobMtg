@@ -239,6 +239,7 @@ static void event_counter_apply(lv_event_t *e) {
 static lv_obj_t *color_wheel = NULL;
 static lv_obj_t *color_picker_hex_label = NULL;
 static lv_obj_t *color_picker_title_label = NULL;
+static lv_obj_t *btn_color_apply = NULL;
 
 static void event_menu_color(lv_event_t *e) {
   (void)e;
@@ -268,11 +269,22 @@ static void event_color_life(lv_event_t *e) {
 static void update_color_picker_hex_label(void) {
   lv_color32_t c32;
   char buf[8];
+  lv_color_t rgb;
 
   if (color_picker_hex_label == NULL || color_wheel == NULL) return;
-  c32.full = lv_color_to32(lv_colorwheel_get_rgb(color_wheel));
+  rgb = lv_colorwheel_get_rgb(color_wheel);
+  c32.full = lv_color_to32(rgb);
   snprintf(buf, sizeof(buf), "#%02X%02X%02X", c32.ch.red, c32.ch.green, c32.ch.blue);
   lv_label_set_text(color_picker_hex_label, buf);
+
+  /* Apply button mirrors the color it's about to commit, instead of
+     always sitting there in the theme's default blue. */
+  if (btn_color_apply != NULL) {
+    lv_obj_t *label = lv_obj_get_child(btn_color_apply, 0);
+    lv_color_t text_c = color_is_light(rgb) ? lv_color_black() : lv_color_white();
+    lv_obj_set_style_bg_color(btn_color_apply, rgb, 0);
+    if (label != NULL) lv_obj_set_style_text_color(label, text_c, 0);
+  }
 }
 
 static void event_color_custom(lv_event_t *e) {
@@ -301,7 +313,10 @@ void change_player_color(int delta) {
 
   if (color_wheel == NULL) return;
   hsv = lv_colorwheel_get_hsv(color_wheel);
-  hsv.h = (uint16_t)(((int)hsv.h + delta * 5 + 360) % 360);
+  /* Negated: the wheel's hue angle increases counter-clockwise, so a
+     clockwise (KNOB_RIGHT, delta>0) turn has to subtract to track the
+     knob's own direction of rotation. */
+  hsv.h = (uint16_t)(((int)hsv.h - delta * 5 + 360) % 360);
   lv_colorwheel_set_hsv(color_wheel, hsv);
   update_color_picker_hex_label();
 }
@@ -555,7 +570,7 @@ void build_player_color_picker_screen(void) {
   lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
   lv_obj_align(hint, LV_ALIGN_CENTER, 0, 36);
 
-  lv_obj_t *btn = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
-                              event_color_apply);
-  lv_obj_align(btn, LV_ALIGN_CENTER, 0, 80);
+  btn_color_apply = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
+                                event_color_apply);
+  lv_obj_align(btn_color_apply, LV_ALIGN_CENTER, 0, 80);
 }
