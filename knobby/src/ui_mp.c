@@ -571,6 +571,11 @@ static void check_for_winner(void)
     }
 }
 
+bool mp_victory_active(void)
+{
+    return victory_shown;
+}
+
 /* ---------- unified refresh ---------- */
 void refresh_multiplayer_ui(void)
 {
