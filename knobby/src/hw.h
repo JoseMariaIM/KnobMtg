@@ -21,8 +21,14 @@ extern int battery_percent;
 #define UNDIM_GRACE_MS          225     /* ms */
 #define CPU_FREQ_ACTIVE         80      /* MHz – APB bus stays 80 MHz at 80/160/240, so
                                             SPI/QSPI display timing is unaffected; only
-                                            CPU-bound work (LVGL rendering) takes longer.
-                                            Revert to 160 if typing/animations feel laggy. */
+                                            CPU-bound work (LVGL rendering) takes longer. */
+// Turning the knob or dragging a widget (color wheel, etc.) at 80MHz visibly
+// lags behind the input - see activity_kick(). Boosted only for the
+// duration of actual interaction, then dropped back to CPU_FREQ_ACTIVE
+// CPU_BOOST_IDLE_MS after the last activity, so the cost is paid only
+// while the backlight/touch/knob are already active anyway.
+#define CPU_FREQ_BOOST          160     /* MHz while actively turning/dragging */
+#define CPU_BOOST_IDLE_MS       400     /* ms of no input before dropping back down */
 // Battery sample throttle: how often a fresh ADC measurement is allowed.
 #define BATTERY_SAMPLE_INTERVAL_MS  60000   /* ms between passive battery measurements */
 // Auto-dim check period: how often the inactivity timer fires.

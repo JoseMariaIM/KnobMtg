@@ -8,6 +8,9 @@
 #include "driver/ledc.h"
 #include "esp_sleep.h"
 #include <stdio.h>
+#ifndef SIMULATOR
+#include "esp32-hal-cpu.h"
+#endif
 
 // ---------- private constants ----------
 #include "pincfg.h"
@@ -34,6 +37,10 @@ static int low_battery_consecutive = 0;
 static uint32_t last_activity_tick = 0;
 static uint32_t undim_tick = 0;
 static lv_timer_t *auto_dim_timer = NULL;
+#ifndef SIMULATOR
+static bool cpu_boosted = false;
+static lv_timer_t *cpu_boost_timer = NULL;
+#endif
 
 #define BATTERY_ICON_MAX 8
 static lv_obj_t *battery_icons[BATTERY_ICON_MAX];
@@ -305,11 +312,35 @@ void change_brightness(int delta)
     brightness_apply();
 }
 
+// ---------- CPU boost ----------
+#ifndef SIMULATOR
+static void cpu_boost_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    if (cpu_boosted && lv_tick_elaps(last_activity_tick) >= CPU_BOOST_IDLE_MS) {
+        setCpuFrequencyMhz(CPU_FREQ_ACTIVE);
+        cpu_boosted = false;
+        if (cpu_boost_timer != NULL) {
+            lv_timer_pause(cpu_boost_timer);
+        }
+    }
+}
+#endif
+
 // ---------- auto-dim ----------
 bool activity_kick(void)
 {
     bool was_dimmed = dimmed;
     last_activity_tick = lv_tick_get();
+#ifndef SIMULATOR
+    if (!cpu_boosted) {
+        setCpuFrequencyMhz(CPU_FREQ_BOOST);
+        cpu_boosted = true;
+    }
+    if (cpu_boost_timer != NULL) {
+        lv_timer_resume(cpu_boost_timer);
+    }
+#endif
     if (dimmed) {
         if (auto_dim_timer != NULL) {
             lv_timer_resume(auto_dim_timer);
@@ -358,4 +389,8 @@ void knob_hw_init(void)
     last_activity_tick = lv_tick_get();
     auto_dim_timer = lv_timer_create(auto_dim_timer_cb, AUTO_DIM_CHECK_PERIOD_MS, NULL);
     battery_icon_timer = lv_timer_create(battery_icon_timer_cb, BATTERY_BLINK_PERIOD_MS, NULL);
+#ifndef SIMULATOR
+    cpu_boost_timer = lv_timer_create(cpu_boost_timer_cb, 100, NULL);
+    lv_timer_pause(cpu_boost_timer);
+#endif
 }
