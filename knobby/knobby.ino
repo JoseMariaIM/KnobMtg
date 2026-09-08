@@ -224,6 +224,42 @@ static bool usb_host_active(void)
 #define FAST_WAKE_STREAK_LIMIT 5U
 static uint8_t fast_wake_streak = 0;
 
+/* With a static screen and no input, LVGL's display-refresh and
+ * input-read timers are the only thing waking the CPU - measured on
+ * hardware at ~24 wakeups/second doing ~80us of real work each, i.e. a
+ * 0.15% duty cycle. The work itself is already negligible; what costs
+ * energy is performing 24 light-sleep entry/exit transitions per second
+ * to do essentially nothing. Both input paths are already GPIO wake
+ * sources (the touch controller's IRQ line and the encoder pins), so
+ * letting those two periodic timers run late during a longer sleep
+ * loses no responsiveness - a touch or knob turn wakes the CPU straight
+ * away and they run on the very next iteration. Pausing them for the
+ * duration of the sleep is what lets lv_timer_handler() report the
+ * app's own next deadline (auto-dim, previews) instead of clamping
+ * every sleep to one 40ms refresh period. */
+#define IDLE_SLEEP_MAX_MS 1000U
+
+static bool ui_is_idle(void)
+{
+  lv_disp_t *disp = lv_disp_get_default();
+
+  if (disp == NULL || disp->inv_p != 0) return false;      /* something still to draw */
+  if (lv_anim_count_running() != 0) return false;          /* animation in flight */
+  if (indev_touchpad != NULL &&
+      indev_touchpad->proc.state == LV_INDEV_STATE_PRESSED) return false; /* finger down */
+  return true;
+}
+
+static void idle_timers_set_paused(bool paused)
+{
+  lv_disp_t *disp = lv_disp_get_default();
+  lv_timer_t *refr = (disp != NULL) ? disp->refr_timer : NULL;
+  lv_timer_t *read = (indev_touchpad != NULL) ? indev_touchpad->driver->read_timer : NULL;
+
+  if (refr != NULL) paused ? lv_timer_pause(refr) : lv_timer_resume(refr);
+  if (read != NULL) paused ? lv_timer_pause(read) : lv_timer_resume(read);
+}
+
 void loop()
 {
   uint32_t time_till_next;
@@ -242,14 +278,25 @@ void loop()
   // the CPU on capped vTaskDelay idles instead while active.
   bool wifi_radio_busy = (wifi_get_state() == WIFI_STATE_CONNECTING || wifi_get_state() == WIFI_STATE_CONNECTED);
   if (time_till_next >= ACTIVE_SLEEP_MIN_MS && !usb_host_active() && !knobby_net_active() && !wifi_radio_busy) {
+    bool idle_extended = ui_is_idle();
     uint8_t level_a = gpio_get_level((gpio_num_t)ROTARY_ENC_PIN_A);
     uint8_t level_b = gpio_get_level((gpio_num_t)ROTARY_ENC_PIN_B);
     gpio_wakeup_enable((gpio_num_t)ROTARY_ENC_PIN_A, level_a ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
     gpio_wakeup_enable((gpio_num_t)ROTARY_ENC_PIN_B, level_b ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
+    if (idle_extended) {
+      idle_timers_set_paused(true);
+      /* Re-query with the two periodic LVGL timers out of the way, so
+         this reflects the app's own next deadline rather than the next
+         refresh tick. Clamped: lv_timer_handler() reports "no timer
+         ready" as a huge value when everything is paused. */
+      time_till_next = lv_timer_handler();
+      if (time_till_next > IDLE_SLEEP_MAX_MS) time_till_next = IDLE_SLEEP_MAX_MS;
+    }
     esp_sleep_enable_timer_wakeup((uint64_t)time_till_next * 1000ULL);
     uint32_t sleep_start_ms = millis();
     esp_light_sleep_start();
     uint32_t slept_ms = millis() - sleep_start_ms;
+    if (idle_extended) idle_timers_set_paused(false);
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_A);
     gpio_wakeup_disable((gpio_num_t)ROTARY_ENC_PIN_B);
     if (slept_ms + 1 < time_till_next) {
