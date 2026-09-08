@@ -18,14 +18,23 @@ typedef enum {
 } knob_swipe_direction_t;
 
 #define KNOB_TOUCH_JITTER_PX 14
-#define KNOB_SWIPE_THRESHOLD 84
-#define KNOB_SWIPE_HINT_REVEAL_START 28
+/* On a round display the usable drag "runway" near an edge is much
+   shorter than the same distance would be on a rectangular screen -
+   dragging outward from an edge-zone start quickly runs the finger off
+   the touch surface as the circle curves away. A wide edge zone plus a
+   long required travel (the original 56/84) meant many valid starting
+   points didn't leave enough room to ever reach the threshold, so the
+   gesture read as tedious/unreliable rather than just "needs practice".
+   Both were loosened together: shorter travel to actually complete the
+   swipe, wider edge zone so more of the border counts as a valid start. */
+#define KNOB_SWIPE_THRESHOLD 56
+#define KNOB_SWIPE_HINT_REVEAL_START 20
 #define KNOB_SWIPE_MAX_LATERAL 72
 #define KNOB_SWIPE_MIN_DURATION_MS 100
-#define KNOB_SWIPE_LEFT_EDGE_ZONE 56
-#define KNOB_SWIPE_RIGHT_EDGE_ZONE 56
-#define KNOB_SWIPE_TOP_EDGE_ZONE 56
-#define KNOB_SWIPE_BOTTOM_EDGE_ZONE 56
+#define KNOB_SWIPE_LEFT_EDGE_ZONE 80
+#define KNOB_SWIPE_RIGHT_EDGE_ZONE 80
+#define KNOB_SWIPE_TOP_EDGE_ZONE 80
+#define KNOB_SWIPE_BOTTOM_EDGE_ZONE 80
 #define KNOB_SWIPE_AXIS_BIAS_NUM 3
 #define KNOB_SWIPE_AXIS_BIAS_DEN 2
 

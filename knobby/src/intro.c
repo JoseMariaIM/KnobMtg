@@ -1,7 +1,8 @@
 #include "intro.h"
 
-// Forward declaration
+// Forward declarations
 extern void back_to_main(void);
+extern void start_player_selection_animation(void);
 
 lv_obj_t *screen_intro = NULL;
 
@@ -42,6 +43,12 @@ static void intro_timer_cb(lv_timer_t *timer)
         lv_timer_pause(intro_timer);
     }
     back_to_main();
+    /* Boot is the one time nobody has picked a starting player yet -
+       every other call to back_to_main() is just returning to a game
+       already in progress, so this can't live there without re-rolling
+       on every ordinary back navigation. Runs only when "random first
+       player" is on and there's more than one player; a no-op otherwise. */
+    start_player_selection_animation();
 }
 
 void build_intro_screen(void)
