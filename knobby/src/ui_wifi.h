@@ -8,16 +8,19 @@ extern lv_obj_t *screen_wifi_scan_list;
 extern lv_obj_t *screen_wifi_text_entry;
 extern lv_obj_t *screen_wifi_status;
 extern lv_obj_t *screen_ota_update;
+extern lv_obj_t *screen_ota_qr;
 
 void build_wifi_settings_screen(void);
 void build_wifi_scan_list_screen(void);
 void build_wifi_text_entry_screen(void);
 void build_wifi_status_screen(void);
 void build_ota_update_screen(void);
+void build_ota_qr_screen(void);
 
 void open_wifi_settings_screen(void);
 void open_wifi_scan_list_screen(void);
 void open_ota_update_screen(void);
+void open_ota_qr_screen(void);
 
 void refresh_wifi_settings_ui(void);
 void refresh_ota_update_ui(void);

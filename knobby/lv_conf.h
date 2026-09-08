@@ -490,13 +490,13 @@
 
 #define LV_USE_BTNMATRIX  1
 
-#define LV_USE_CANVAS     0
+#define LV_USE_CANVAS     1
 
 #define LV_USE_CHECKBOX   1
 
 #define LV_USE_DROPDOWN   0   /*Requires: lv_label*/
 
-#define LV_USE_IMG        0   /*Requires: lv_label*/
+#define LV_USE_IMG        1   /*Requires: lv_label*/
 
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
@@ -662,7 +662,7 @@
 #define LV_USE_GIF 0
 
 /*QR code library*/
-#define LV_USE_QRCODE 0
+#define LV_USE_QRCODE 1
 
 /*FreeType library*/
 #define LV_USE_FREETYPE 0

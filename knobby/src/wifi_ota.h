@@ -54,6 +54,10 @@ const char *wifi_get_saved_ssid(void); /* for pre-filling the settings screen */
 
 const char *get_firmware_version(void);
 
+/* Shown as a QR code on the update screen so a phone can jump straight
+ * to the release notes without typing a URL on the device itself. */
+#define KNOBBY_RELEASES_URL "https://github.com/JoseMariaIM/KnobMtg/releases"
+
 /* Blocking: fetches the manifest hosted alongside the GitHub Pages web
  * installer and compares its version against the running firmware.
  * Requires wifi_get_state() == WIFI_STATE_CONNECTED. */

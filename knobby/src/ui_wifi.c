@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "custom_keyboard.h"
 #include "round_safe.h"
+#include <string.h>
 
 // ---------- screens ----------
 lv_obj_t *screen_wifi_settings = NULL;
@@ -12,6 +13,7 @@ lv_obj_t *screen_wifi_scan_list = NULL;
 lv_obj_t *screen_wifi_text_entry = NULL;
 lv_obj_t *screen_wifi_status = NULL;
 lv_obj_t *screen_ota_update = NULL;
+lv_obj_t *screen_ota_qr = NULL;
 
 // ---------- wifi settings widgets ----------
 static lv_obj_t *wifi_tile_ssid_label = NULL;
@@ -46,6 +48,7 @@ static lv_obj_t *label_ota_status = NULL;
 static lv_obj_t *btn_ota_apply = NULL;
 static lv_obj_t *btn_ota_open_wifi = NULL;
 static lv_obj_t *arc_ota_progress = NULL;
+static lv_obj_t *btn_ota_qr = NULL;
 
 // ---------- wifi settings ----------
 static bool failed_clear_timer_pending = false;
@@ -602,6 +605,43 @@ static void event_ota_open_wifi(lv_event_t *e)
     open_wifi_settings_screen();
 }
 
+static void event_ota_qr(lv_event_t *e)
+{
+    (void)e;
+    open_ota_qr_screen();
+}
+
+void open_ota_qr_screen(void)
+{
+    load_screen_if_needed(screen_ota_qr);
+}
+
+void build_ota_qr_screen(void)
+{
+    lv_obj_t *qr;
+    lv_obj_t *hint;
+
+    screen_ota_qr = lv_obj_create(NULL);
+    lv_obj_set_size(screen_ota_qr, 360, 360);
+    lv_obj_set_style_bg_color(screen_ota_qr, lv_color_black(), 0);
+    lv_obj_set_style_border_width(screen_ota_qr, 0, 0);
+    lv_obj_set_scrollbar_mode(screen_ota_qr, LV_SCROLLBAR_MODE_OFF);
+
+    /* The code's own light_color already gives it a white quiet zone
+       against the app's black background - plenty of contrast for a
+       phone camera without needing to flip the whole screen white. */
+    qr = lv_qrcode_create(screen_ota_qr, 220, lv_color_black(), lv_color_white());
+    lv_qrcode_update(qr, KNOBBY_RELEASES_URL, strlen(KNOBBY_RELEASES_URL));
+    lv_obj_center(qr);
+
+    hint = lv_label_create(screen_ota_qr);
+    lv_label_set_text(hint, t(STR_OTA_QR_HINT));
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
+    lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -34);
+}
+
 void build_ota_update_screen(void)
 {
     screen_ota_update = lv_obj_create(NULL);
@@ -660,4 +700,17 @@ void build_ota_update_screen(void)
     btn_ota_open_wifi = make_button(screen_ota_update, t(STR_OTA_OPEN_WIFI), 140, 46, event_ota_open_wifi);
     lv_obj_align(btn_ota_open_wifi, LV_ALIGN_BOTTOM_MID, 0, -44);
     lv_obj_add_flag(btn_ota_open_wifi, LV_OBJ_FLAG_HIDDEN); /* shown only while WiFi isn't connected */
+
+    /* Small, always-available shortcut to the QR code screen - not
+       tied to check/apply state like the buttons above, so it sits off
+       to the side instead of in that stack. */
+    btn_ota_qr = lv_btn_create(screen_ota_update);
+    lv_obj_set_size(btn_ota_qr, 44, 44);
+    lv_obj_set_style_radius(btn_ota_qr, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(btn_ota_qr, LV_ALIGN_TOP_RIGHT, -24, 36);
+    lv_obj_add_event_cb(btn_ota_qr, event_ota_qr, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *qr_icon = lv_label_create(btn_ota_qr);
+    lv_label_set_text(qr_icon, "QR");
+    lv_obj_set_style_text_font(qr_icon, &lv_font_es_14, 0);
+    lv_obj_center(qr_icon);
 }

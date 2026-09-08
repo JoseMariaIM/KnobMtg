@@ -357,6 +357,8 @@ static void handle_back_navigation(lv_obj_t *screen)
         wifi_text_entry_handle_back();
     } else if (screen == screen_wifi_status) {
         wifi_status_handle_back();
+    } else if (screen == screen_ota_qr) {
+        load_screen_if_needed(screen_ota_update);
     } else if (screen == screen_counter_menu) {
         open_player_menu(menu_player);
     } else if (screen == screen_counter_edit) {
@@ -462,6 +464,7 @@ void knob_gui(void)
     build_wifi_text_entry_screen();
     build_wifi_status_screen();
     build_ota_update_screen();
+    build_ota_qr_screen();
     build_damage_log_screen();
     build_quad_menus();
     build_game_mode_menu_screen();
