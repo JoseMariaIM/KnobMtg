@@ -19,7 +19,10 @@ extern int battery_percent;
 #define AUTO_DIM_BRIGHTNESS     5       /* % brightness while dimmed */
 // UNDIM_GRACE_MS suppresses input for this long after wake to avoid accidental presses.
 #define UNDIM_GRACE_MS          225     /* ms */
-#define CPU_FREQ_ACTIVE         160     /* MHz – APB bus stays 80 MHz at 80/160/240 */
+#define CPU_FREQ_ACTIVE         80      /* MHz – APB bus stays 80 MHz at 80/160/240, so
+                                            SPI/QSPI display timing is unaffected; only
+                                            CPU-bound work (LVGL rendering) takes longer.
+                                            Revert to 160 if typing/animations feel laggy. */
 // Battery sample throttle: how often a fresh ADC measurement is allowed.
 #define BATTERY_SAMPLE_INTERVAL_MS  60000   /* ms between passive battery measurements */
 // Auto-dim check period: how often the inactivity timer fires.
@@ -30,6 +33,11 @@ extern int battery_percent;
 #define LOW_BATTERY_INDICATOR_PCT   10      /* show solid icon below this percent */
 #define LOW_BATTERY_BLINK_PCT       5       /* blink the icon below this percent */
 #define BATTERY_BLINK_PERIOD_MS     500     /* low-battery icon blink cadence */
+// While battery is comfortably above LOW_BATTERY_INDICATOR_PCT (nearly
+// always) the icon timer has nothing to show and nothing to blink - no
+// reason to wake the CPU from light sleep 2x/second for that. It only
+// needs BATTERY_BLINK_PERIOD_MS cadence once it's actually blinking.
+#define BATTERY_CHECK_IDLE_PERIOD_MS 5000   /* ms, while icon is hidden */
 
 // ---------- functions ----------
 void knob_hw_init(void);

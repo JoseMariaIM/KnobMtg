@@ -93,10 +93,16 @@
  *====================*/
 
 /*Default display refresh period. LVG will redraw changed areas with this period time*/
-#define LV_DISP_DEF_REFR_PERIOD 25      /*[ms]*/
+// Both this and the indev read period below are unconditional lv_timers -
+// they cap how long the main loop can light-sleep even with a totally
+// static screen, since lv_timer_handler() always reports "next due" as
+// at most whichever of these is soonest. 40/50ms is still ~25 rendered
+// frames/sec (plenty for this UI's simple animations) and ~3x fewer
+// forced wakeups per second than the previous 25/35ms during idle.
+#define LV_DISP_DEF_REFR_PERIOD 40      /*[ms]*/
 
 /*Input device read period in milliseconds*/
-#define LV_INDEV_DEF_READ_PERIOD 35     /*[ms]*/
+#define LV_INDEV_DEF_READ_PERIOD 50     /*[ms]*/
 
 /*Pointer motion tolerance before LVGL treats the gesture as a drag.*/
 #define LV_INDEV_DEF_DRAG_LIMIT 14      /*[px]*/

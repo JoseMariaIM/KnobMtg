@@ -155,13 +155,18 @@ static void battery_icon_apply(bool visible)
 
 static void battery_icon_timer_cb(lv_timer_t *timer)
 {
-    (void)timer;
     int pct = read_battery_percent();
     if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
+        /* Icon stays hidden essentially the entire time the device is
+           used - falling back to a slow check instead of waking every
+           500ms to redundantly re-hide an already-hidden icon is a big
+           chunk of this device's idle light-sleep wake frequency. */
+        lv_timer_set_period(timer, BATTERY_CHECK_IDLE_PERIOD_MS);
         battery_icon_blink_visible = true;
         battery_icon_apply(false);
         return;
     }
+    lv_timer_set_period(timer, BATTERY_BLINK_PERIOD_MS);
     if (pct >= LOW_BATTERY_BLINK_PCT) {
         battery_icon_blink_visible = true;
         battery_icon_apply(true);

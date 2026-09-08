@@ -39,6 +39,9 @@ void turn_timer_start_fresh(void)
     turn_ui_visible = true;
     turn_blink_steps_remaining = 10;
 
+    if (turn_timer != NULL) {
+        lv_timer_resume(turn_timer);
+    }
     if (turn_blink_timer != NULL) {
         lv_timer_resume(turn_blink_timer);
     }
@@ -56,6 +59,9 @@ void turn_timer_reset(void)
     turn_ui_visible = false;
     turn_blink_steps_remaining = 0;
 
+    if (turn_timer != NULL) {
+        lv_timer_pause(turn_timer);
+    }
     if (turn_blink_timer != NULL) {
         lv_timer_pause(turn_blink_timer);
     }
@@ -110,15 +116,23 @@ void event_turn_tap(lv_event_t *e)
 
     turn_started_ms = lv_tick_get();
     turn_timer_enabled = true;
+    if (turn_timer != NULL) {
+        lv_timer_resume(turn_timer);
+    }
     refresh_turn_ui();
 }
 
 // ---------- init ----------
+// Both timers start paused: nothing to tick or blink until a turn timer
+// is actually started (turn_timer_start_fresh()/event_turn_tap()), and
+// nothing should wake the CPU from light sleep once a second for the
+// rest of the app's life otherwise - see turn_timer_reset() for where
+// they get paused again once the feature is no longer in use.
 void knob_timer_init(void)
 {
     turn_timer = lv_timer_create(turn_timer_tick_cb, 1000, NULL);
     if (turn_timer != NULL) {
-        lv_timer_ready(turn_timer);
+        lv_timer_pause(turn_timer);
     }
 
     turn_blink_timer = lv_timer_create(turn_blink_timer_cb, 500, NULL);
