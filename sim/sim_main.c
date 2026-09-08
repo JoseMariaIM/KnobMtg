@@ -151,7 +151,7 @@ static void nav_counter_edit(void) {
 }
 static void nav_color_menu(void)   { load_screen_if_needed(screen_player_color_menu); }
 static void nav_color_picker(void) {
-    player_color_index[menu_player] = 5;  /* show Orange as example */
+    player_custom_hsv[menu_player] = (lv_color_hsv_t){30, 100, 100};  /* orange, as an example */
     load_screen_if_needed(screen_player_color_picker);
 }
 static void nav_mana(void) { open_mana_screen(); }
@@ -582,8 +582,10 @@ int main(int argc, char *argv[])
             refresh_all_damage_ui(); \
         } \
         if (player_colors_set) { \
-            for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) \
-                player_color_index[i] = player_color_values[i]; \
+            for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) { \
+                lv_color_hsv_t hsv = {(uint16_t)(player_color_values[i] % 360), 100, 100}; \
+                player_custom_hsv[i] = hsv; \
+            } \
         } \
         if (player_override_set) { \
             for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) \

@@ -284,39 +284,19 @@ static const uint32_t player_color_table[MAX_GAME_PLAYERS][LIFE_VIB_COUNT] = {
     {0x3D0A4D, 0xE040FB, 0xEA80FC},  /* P8 pink   */
 };
 
-// ---------- custom color palette (18 colors) ----------
-static const uint32_t custom_color_table[CUSTOM_COLOR_COUNT][LIFE_VIB_COUNT] = {
-    /*  dim        mid        vivid  */
-    {0x024D3A, 0x06D6A0, 0x66FFD9},  /*  0 Green (logo) */
-    {0x2A0A4D, 0x7B1FE0, 0x9C4DFF},  /*  1 Purple */
-    {0x0A3A4D, 0x29B6F6, 0x4FC3F7},  /*  2 Blue   */
-    {0x4D4400, 0xFFD600, 0xFFEA61},  /*  3 Yellow */
-    {0x4D1C1C, 0xF44336, 0xFF5252},  /*  4 Red    */
-    {0x4D3300, 0xFF9800, 0xFFB74D},  /*  5 Orange */
-    {0x004D4D, 0x00BCD4, 0x4DD0E1},  /*  6 Cyan   */
-    {0x3D0A4D, 0xE040FB, 0xEA80FC},  /*  7 Pink   */
-    {0x2D4D00, 0x8BC34A, 0xAED581},  /*  8 Lime   */
-    {0x0A0A4D, 0x3F51B5, 0x7986CB},  /*  9 Indigo */
-    {0x4D0A2A, 0xE91E63, 0xF06292},  /* 10 Rose   */
-    {0x333333, 0xAAAAAA, 0xFFFFFF},  /* 11 White  */
-    {0x00332E, 0x009688, 0x4DB6AC},  /* 12 Teal   */
-    {0x4D3800, 0xFFC107, 0xFFD54F},  /* 13 Amber  */
-    {0x2E1F16, 0x795548, 0xA1887F},  /* 14 Brown  */
-    {0x1E2D33, 0x607D8B, 0x90A4AE},  /* 15 Gray   */
-    {0x1A3D1A, 0xA5D6A7, 0x4CAF50},  /* 16 Sage   */
-    {0x0A0A0A, 0x303030, 0x505050},  /* 17 Black  */
-};
-
-static const string_id_t custom_color_name_ids[CUSTOM_COLOR_COUNT] = {
-    STR_COLOR_GREEN, STR_COLOR_PURPLE, STR_COLOR_BLUE, STR_COLOR_YELLOW,
-    STR_COLOR_RED, STR_COLOR_ORANGE, STR_COLOR_CYAN, STR_COLOR_PINK,
-    STR_COLOR_LIME, STR_COLOR_INDIGO, STR_COLOR_ROSE, STR_COLOR_WHITE,
-    STR_COLOR_TEAL, STR_COLOR_AMBER, STR_COLOR_BROWN, STR_COLOR_GRAY,
-    STR_COLOR_SAGE, STR_COLOR_BLACK,
-};
-
 // ---------- per-player color state (runtime only, lost on reboot) ----------
-int player_color_index[MAX_DISPLAY_PLAYERS] = {0, 1, 2, 3};
+/* One HSV per player instead of an index into a fixed palette - picked
+   freely off the color wheel (see build_player_color_picker_screen()).
+   Stored as HSV rather than the RGB565 lv_color_t the wheel also
+   exposes so re-deriving the three vibrancy tiers below never
+   compounds rounding from the display's 16-bit color depth, and so
+   reopening the picker shows exactly the hue/sat last picked. */
+lv_color_hsv_t player_custom_hsv[MAX_DISPLAY_PLAYERS] = {
+    {160, 97, 84}, /* green,  ~0x06D6A0 */
+    {268, 86, 88}, /* purple, ~0x7B1FE0 */
+    {199, 83, 96}, /* blue,   ~0x29B6F6 */
+    {50, 100, 100}, /* yellow, ~0xFFD600 */
+};
 bool player_life_color[MAX_DISPLAY_PLAYERS] = {false, false, false, false};
 bool player_has_override[MAX_DISPLAY_PLAYERS] = {false, false, false, false};
 
@@ -356,17 +336,27 @@ lv_color_t get_player_preview_color(int index, int delta)
     return (delta < 0) ? lv_palette_main(LV_PALETTE_RED) : lv_palette_main(LV_PALETTE_GREEN);
 }
 
-lv_color_t get_custom_color_vib(int index, int vibrancy)
+/* Derives the same dim/mid/vivid triple the fixed palettes above hand-
+   picked, but from whatever hue/saturation the user dragged the wheel
+   to: dim darkens toward black for backgrounds, vivid lightens toward
+   white for the "selected" highlight, mid is the color as picked. */
+lv_color_t get_custom_color_vib(lv_color_hsv_t hsv, int vibrancy)
 {
-    if (index < 0 || index >= CUSTOM_COLOR_COUNT) index = 0;
     if (vibrancy < 0 || vibrancy >= LIFE_VIB_COUNT) vibrancy = LIFE_VIB_MID;
-    return lv_color_hex(custom_color_table[index][vibrancy]);
-}
 
-const char *get_custom_color_name(int index)
-{
-    if (index < 0 || index >= CUSTOM_COLOR_COUNT) index = 0;
-    return t(custom_color_name_ids[index]);
+    switch (vibrancy) {
+        case LIFE_VIB_DIM:
+            hsv.v = (uint8_t)LV_MAX(8, (hsv.v * 35) / 100);
+            break;
+        case LIFE_VIB_VIV:
+            hsv.s = (uint8_t)LV_MAX(0, (int)hsv.s - 20);
+            hsv.v = (uint8_t)LV_MIN(100, hsv.v + 25);
+            break;
+        case LIFE_VIB_MID:
+        default:
+            break;
+    }
+    return lv_color_hsv_to_rgb(hsv.h, hsv.s, hsv.v);
 }
 
 lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy)
@@ -379,7 +369,7 @@ lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy)
             int tier = get_life_tier(life, max_life);
             return get_life_color_vib(tier, vibrancy);
         }
-        return get_custom_color_vib(player_color_index[player_i], vibrancy);
+        return get_custom_color_vib(player_custom_hsv[player_i], vibrancy);
     }
 
     /* No override: use global mode */

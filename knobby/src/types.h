@@ -25,8 +25,6 @@
 #define COLOR_MODE_LIFE       1
 #define COLOR_MODE_COUNT      2
 
-#define CUSTOM_COLOR_COUNT 18
-
 // ---------- orientation modes ----------
 #define ORIENTATION_MODE_ABSOLUTE 0
 #define ORIENTATION_MODE_CENTRIC  1

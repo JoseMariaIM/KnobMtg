@@ -109,7 +109,7 @@ void manual_uneliminate_player(int player);
 void check_player_elimination(int player);
 
 // ---------- player colors ----------
-extern int player_color_index[MAX_DISPLAY_PLAYERS];
+extern lv_color_hsv_t player_custom_hsv[MAX_DISPLAY_PLAYERS];
 extern bool player_life_color[MAX_DISPLAY_PLAYERS];
 extern bool player_has_override[MAX_DISPLAY_PLAYERS];
 
@@ -118,8 +118,7 @@ lv_color_t get_player_base_color(int index);
 lv_color_t get_player_active_color(int index);
 lv_color_t get_player_text_color(int index);
 lv_color_t get_player_preview_color(int index, int delta);
-lv_color_t get_custom_color_vib(int index, int vibrancy);
-const char *get_custom_color_name(int index);
+lv_color_t get_custom_color_vib(lv_color_hsv_t hsv, int vibrancy);
 lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy);
 int get_cmd_target_player_index(int row);
 

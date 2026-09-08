@@ -236,10 +236,9 @@ static void event_counter_apply(lv_event_t *e) {
 }
 
 // ---------- per-player color ----------
-static lv_obj_t *color_picker_swatch = NULL;
-static lv_obj_t *color_picker_name_label = NULL;
+static lv_obj_t *color_wheel = NULL;
+static lv_obj_t *color_picker_hex_label = NULL;
 static lv_obj_t *color_picker_title_label = NULL;
-static int color_picker_index = 0;
 
 static void event_menu_color(lv_event_t *e) {
   (void)e;
@@ -266,48 +265,59 @@ static void event_color_life(lv_event_t *e) {
   back_to_main();
 }
 
+static void update_color_picker_hex_label(void) {
+  lv_color32_t c32;
+  char buf[8];
+
+  if (color_picker_hex_label == NULL || color_wheel == NULL) return;
+  c32.full = lv_color_to32(lv_colorwheel_get_rgb(color_wheel));
+  snprintf(buf, sizeof(buf), "#%02X%02X%02X", c32.ch.red, c32.ch.green, c32.ch.blue);
+  lv_label_set_text(color_picker_hex_label, buf);
+}
+
 static void event_color_custom(lv_event_t *e) {
   char title_buf[32];
   (void)e;
   if (menu_player < 0 || menu_player >= MAX_DISPLAY_PLAYERS)
     return;
-  color_picker_index = player_color_index[menu_player];
   if (color_picker_title_label != NULL) {
     snprintf(title_buf, sizeof(title_buf), t(STR_COLOR_TITLE),
              player_names[menu_player]);
     lv_label_set_text(color_picker_title_label, title_buf);
   }
-  if (color_picker_swatch != NULL)
-    lv_obj_set_style_bg_color(
-        color_picker_swatch,
-        get_custom_color_vib(color_picker_index, LIFE_VIB_MID), 0);
-  if (color_picker_name_label != NULL)
-    lv_label_set_text(color_picker_name_label,
-                      get_custom_color_name(color_picker_index));
+  if (color_wheel != NULL) {
+    lv_colorwheel_set_hsv(color_wheel, player_custom_hsv[menu_player]);
+  }
+  update_color_picker_hex_label();
   load_screen_if_needed(screen_player_color_picker);
 }
 
+/* Wheel is the primary input (drag anywhere to jump straight to a
+   hue/saturation), but leaving the knob dead on this screen would be
+   the only place in the app where it does nothing - spins the hue
+   around the wheel instead, a fitting match for a physical dial. */
 void change_player_color(int delta) {
-  color_picker_index += delta;
-  if (color_picker_index < 0)
-    color_picker_index = CUSTOM_COLOR_COUNT - 1;
-  if (color_picker_index >= CUSTOM_COLOR_COUNT)
-    color_picker_index = 0;
+  lv_color_hsv_t hsv;
 
-  if (color_picker_swatch != NULL)
-    lv_obj_set_style_bg_color(
-        color_picker_swatch,
-        get_custom_color_vib(color_picker_index, LIFE_VIB_MID), 0);
-  if (color_picker_name_label != NULL)
-    lv_label_set_text(color_picker_name_label,
-                      get_custom_color_name(color_picker_index));
+  if (color_wheel == NULL) return;
+  hsv = lv_colorwheel_get_hsv(color_wheel);
+  hsv.h = (uint16_t)(((int)hsv.h + delta * 5 + 360) % 360);
+  lv_colorwheel_set_hsv(color_wheel, hsv);
+  update_color_picker_hex_label();
+}
+
+static void event_colorwheel_changed(lv_event_t *e) {
+  (void)e;
+  update_color_picker_hex_label();
 }
 
 void commit_player_color(void) {
   if (menu_player < 0 || menu_player >= MAX_DISPLAY_PLAYERS)
     return;
+  if (color_wheel != NULL) {
+    player_custom_hsv[menu_player] = lv_colorwheel_get_hsv(color_wheel);
+  }
   player_has_override[menu_player] = true;
-  player_color_index[menu_player] = color_picker_index;
   player_life_color[menu_player] = false;
   refresh_player_ui();
 }
@@ -506,8 +516,6 @@ void build_player_color_menu_screen(void) {
 }
 
 void build_player_color_picker_screen(void) {
-  lv_obj_t *hint;
-
   screen_player_color_picker = lv_obj_create(NULL);
   lv_obj_set_size(screen_player_color_picker, 360, 360);
   lv_obj_set_style_bg_color(screen_player_color_picker, lv_color_black(), 0);
@@ -517,37 +525,37 @@ void build_player_color_picker_screen(void) {
   color_picker_title_label = lv_label_create(screen_player_color_picker);
   lv_label_set_text(color_picker_title_label, "Color");
   lv_obj_set_style_text_color(color_picker_title_label, lv_color_white(), 0);
-  lv_obj_set_style_text_font(color_picker_title_label, &lv_font_es_22,
-                             0);
-  lv_obj_set_style_text_align(color_picker_title_label, LV_TEXT_ALIGN_CENTER,
-                              0);
-  lv_obj_align(color_picker_title_label, LV_ALIGN_TOP_MID, 0, 20);
+  lv_obj_set_style_text_font(color_picker_title_label, &lv_font_es_22, 0);
+  lv_obj_set_style_text_align(color_picker_title_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(color_picker_title_label, LV_ALIGN_TOP_MID, 0, 14);
 
-  color_picker_swatch = lv_obj_create(screen_player_color_picker);
-  lv_obj_remove_style_all(color_picker_swatch);
-  lv_obj_set_size(color_picker_swatch, 120, 120);
-  lv_obj_align(color_picker_swatch, LV_ALIGN_CENTER, 0, -15);
-  lv_obj_set_style_radius(color_picker_swatch, 12, 0);
-  lv_obj_set_style_bg_opa(color_picker_swatch, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(color_picker_swatch,
-                            get_custom_color_vib(0, LIFE_VIB_MID), 0);
-  lv_obj_clear_flag(color_picker_swatch,
-                    LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+  /* Hue ring instead of the old fixed swatches - drag the knob dot
+     anywhere around it (or turn the physical knob, see
+     change_player_color()) to pick any hue, sized to make the most of
+     this being a round display. The three vibrancy tiers the rest of
+     the app needs (see get_custom_color_vib()) are derived from this
+     one hue afterward, so full saturation/value here is enough. */
+  color_wheel = lv_colorwheel_create(screen_player_color_picker, true);
+  lv_obj_set_size(color_wheel, 190, 190);
+  lv_obj_align(color_wheel, LV_ALIGN_CENTER, 0, 2);
+  lv_obj_add_event_cb(color_wheel, event_colorwheel_changed, LV_EVENT_VALUE_CHANGED, NULL);
 
-  color_picker_name_label = lv_label_create(screen_player_color_picker);
-  lv_label_set_text(color_picker_name_label, get_custom_color_name(0));
-  lv_obj_set_style_text_color(color_picker_name_label, lv_color_white(), 0);
-  lv_obj_set_style_text_font(color_picker_name_label, &lv_font_es_16,
-                             0);
-  lv_obj_align(color_picker_name_label, LV_ALIGN_CENTER, 0, 54);
+  /* Sits over the wheel's own empty hub in the center - labels aren't
+     clickable by default, so this doesn't block dragging the wheel
+     underneath it. */
+  color_picker_hex_label = lv_label_create(screen_player_color_picker);
+  lv_label_set_text(color_picker_hex_label, "#000000");
+  lv_obj_set_style_text_color(color_picker_hex_label, lv_color_white(), 0);
+  lv_obj_set_style_text_font(color_picker_hex_label, &lv_font_es_16, 0);
+  lv_obj_align_to(color_picker_hex_label, color_wheel, LV_ALIGN_CENTER, 0, 0);
 
-  hint = lv_label_create(screen_player_color_picker);
-  lv_label_set_text(hint, t(STR_TURN_KNOB_THEN_APPLY));
+  lv_obj_t *hint = lv_label_create(screen_player_color_picker);
+  lv_label_set_text(hint, t(STR_COLOR_WHEEL_HINT));
   lv_obj_set_style_text_color(hint, lv_color_hex(0x7A7A7A), 0);
   lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
-  lv_obj_align(hint, LV_ALIGN_CENTER, 0, 73);
+  lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -66);
 
   lv_obj_t *btn = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
                               event_color_apply);
-  lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
+  lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -22);
 }
