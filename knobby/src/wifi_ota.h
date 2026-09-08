@@ -83,6 +83,14 @@ const char *ota_get_error(void);          /* valid when state == OTA_STATE_ERROR
 #define OTA_MIN_BATTERY_PERCENT 40
 void ota_apply_update(void);
 
+/* ota_apply_update() blocks for the whole download+flash, so progress
+ * has to be pushed out from inside it rather than polled from the main
+ * loop. Called with 0..100 as bytes arrive; the UI is the only thing
+ * that needs to know, so this stays a plain function pointer instead
+ * of adding a UI dependency to this file. */
+typedef void (*ota_progress_cb_t)(int percent);
+void ota_set_progress_cb(ota_progress_cb_t cb);
+
 #ifdef __cplusplus
 }
 #endif

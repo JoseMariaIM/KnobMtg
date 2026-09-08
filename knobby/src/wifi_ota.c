@@ -125,12 +125,25 @@ bool ota_auto_check_done(void)
     return true;
 }
 
+static ota_progress_cb_t s_progress_cb = NULL;
+
+void ota_set_progress_cb(ota_progress_cb_t cb)
+{
+    s_progress_cb = cb;
+}
+
 void ota_apply_update(void)
 {
     if (!battery_ok_for_update()) {
         g_ota_state = OTA_STATE_ERROR;
         snprintf(g_ota_error, sizeof(g_ota_error), t(STR_OTA_LOW_BATTERY_FMT), OTA_MIN_BATTERY_PERCENT);
         return;
+    }
+    /* No real network in the simulator, but fake a full sweep so the
+       progress ring itself can be exercised/screenshotted. */
+    if (s_progress_cb != NULL) {
+        int pct;
+        for (pct = 0; pct <= 100; pct += 10) s_progress_cb(pct);
     }
     g_ota_state = OTA_STATE_ERROR;
     snprintf(g_ota_error, sizeof(g_ota_error), "OTA not available in simulator");

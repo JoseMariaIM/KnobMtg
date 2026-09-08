@@ -45,6 +45,7 @@ static lv_obj_t *label_ota_current = NULL;
 static lv_obj_t *label_ota_status = NULL;
 static lv_obj_t *btn_ota_apply = NULL;
 static lv_obj_t *btn_ota_open_wifi = NULL;
+static lv_obj_t *arc_ota_progress = NULL;
 
 // ---------- wifi settings ----------
 static bool failed_clear_timer_pending = false;
@@ -567,13 +568,31 @@ static void event_ota_check(lv_event_t *e)
     refresh_ota_update_ui();
 }
 
+/* ota_apply_update() blocks for the whole download+flash and calls this
+   straight from inside that call (see ota_set_progress_cb()), so the
+   redraw has to happen here too - nothing else pumps the display while
+   it's running. */
+static void ota_progress_update(int percent)
+{
+    if (arc_ota_progress == NULL) return;
+    lv_arc_set_value(arc_ota_progress, percent);
+    lv_refr_now(NULL);
+}
+
 static void event_ota_apply(lv_event_t *e)
 {
     (void)e;
     if (ota_get_state() != OTA_STATE_AVAILABLE) return;
     lv_label_set_text(label_ota_status, t(STR_OTA_UPDATING));
+    if (arc_ota_progress != NULL) {
+        lv_arc_set_value(arc_ota_progress, 0);
+        lv_obj_clear_flag(arc_ota_progress, LV_OBJ_FLAG_HIDDEN);
+    }
     lv_refr_now(NULL);
     ota_apply_update(); /* reboots on success and never returns */
+    if (arc_ota_progress != NULL) {
+        lv_obj_add_flag(arc_ota_progress, LV_OBJ_FLAG_HIDDEN);
+    }
     refresh_ota_update_ui();
 }
 
@@ -590,6 +609,27 @@ void build_ota_update_screen(void)
     lv_obj_set_style_bg_color(screen_ota_update, lv_color_black(), 0);
     lv_obj_set_style_border_width(screen_ota_update, 0, 0);
     lv_obj_set_scrollbar_mode(screen_ota_update, LV_SCROLLBAR_MODE_OFF);
+
+    /* Full-perimeter ring instead of a bar: this display is round, and
+       hugging the bezel leaves the center free for the existing status
+       text instead of squeezing a straight bar in above/below it. Built
+       first so it sits behind everything else drawn on this screen. */
+    arc_ota_progress = lv_arc_create(screen_ota_update);
+    lv_obj_set_size(arc_ota_progress, 356, 356);
+    lv_obj_center(arc_ota_progress);
+    lv_arc_set_bg_angles(arc_ota_progress, 0, 360);
+    lv_arc_set_rotation(arc_ota_progress, 270); /* 0% starts at 12 o'clock */
+    lv_arc_set_range(arc_ota_progress, 0, 100);
+    lv_arc_set_value(arc_ota_progress, 0);
+    lv_obj_remove_style(arc_ota_progress, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(arc_ota_progress, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_arc_width(arc_ota_progress, 8, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc_ota_progress, lv_color_hex(0x202020), LV_PART_MAIN);
+    lv_obj_set_style_arc_width(arc_ota_progress, 8, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(arc_ota_progress, lv_color_hex(0x06D6A0), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_rounded(arc_ota_progress, false, LV_PART_INDICATOR);
+    lv_obj_add_flag(arc_ota_progress, LV_OBJ_FLAG_HIDDEN); /* shown only while actually updating */
+    ota_set_progress_cb(ota_progress_update);
 
     lv_obj_t *title = lv_label_create(screen_ota_update);
     lv_label_set_text(title, t(STR_OTA_TITLE));

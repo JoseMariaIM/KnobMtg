@@ -58,6 +58,13 @@ extern char g_latest_version[32];
 extern char g_ota_error[64];
 }
 
+static ota_progress_cb_t s_progress_cb = NULL;
+
+extern "C" void ota_set_progress_cb(ota_progress_cb_t cb)
+{
+    s_progress_cb = cb;
+}
+
 /* Auto-connect at boot is non-blocking - boot must stay instant even if
  * the saved network is out of range - so a lightweight LVGL timer polls
  * WiFi.status() until it resolves one way or the other. (A previous
@@ -413,6 +420,14 @@ extern "C" void ota_apply_update(void)
     }
 
     httpUpdate.rebootOnUpdate(false);
+    if (s_progress_cb != NULL) {
+        s_progress_cb(0);
+        httpUpdate.onProgress([](int current, int total) {
+            if (s_progress_cb != NULL && total > 0) {
+                s_progress_cb((current * 100) / total);
+            }
+        });
+    }
     t_httpUpdate_return ret = httpUpdate.update(http);
 
     switch (ret) {
