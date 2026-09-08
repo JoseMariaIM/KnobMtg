@@ -6,7 +6,12 @@
 // ---------- cached state ----------
 static bool settings_dirty = false;
 static int cached_brightness = DEFAULT_BRIGHTNESS_PERCENT;
-static int cached_auto_dim = AUTO_DIM_OFF;
+/* Backlight is this device's dominant power draw by a wide margin (the
+   CPU idles at a measured 0.15% duty cycle), so leaving it lit at full
+   brightness forever is what actually flattens the battery. Dimming
+   after 30s of no input is the default; any explicitly saved choice
+   still wins, see knob_nvs_init(). */
+static int cached_auto_dim = AUTO_DIM_30S;
 static int cached_color_mode = 0;
 static int cached_deselect_timeout = 0; /* index: 0=never, 1=5s, 2=15s, 3=30s */
 static int cached_orientation = ORIENTATION_MODE_ABSOLUTE;
@@ -34,7 +39,7 @@ void knob_nvs_init(void)
 
     nvs_handle_t handle;
     if (nvs_open("knobby", NVS_READONLY, &handle) == ESP_OK) {
-        int8_t dim_val = 0;
+        int8_t dim_val = AUTO_DIM_30S; /* seed: nvs_get_i8 leaves it alone when the key is absent */
         int8_t bri_val = DEFAULT_BRIGHTNESS_PERCENT;
         int8_t lc_val = 0;
         int8_t dt_val = 0;
