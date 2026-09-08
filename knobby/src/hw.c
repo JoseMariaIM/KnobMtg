@@ -193,39 +193,66 @@ void update_icon_unregister(lv_obj_t *icon)
     }
 }
 
+static lv_obj_t *s_toast = NULL;
+static lv_timer_t *s_toast_timer = NULL;
+
+static void dismiss_update_toast(void)
+{
+    if (s_toast_timer != NULL) {
+        lv_timer_del(s_toast_timer);
+        s_toast_timer = NULL;
+    }
+    if (s_toast != NULL) {
+        lv_obj_del(s_toast);
+        s_toast = NULL;
+    }
+}
+
 static void update_toast_timer_cb(lv_timer_t *timer)
 {
-    lv_obj_t *toast = (lv_obj_t *)timer->user_data;
-    lv_obj_del(toast);
+    (void)timer;
+    s_toast_timer = NULL; /* one-shot timer deletes itself on return */
+    dismiss_update_toast();
+}
+
+static void update_toast_click_cb(lv_event_t *e)
+{
+    (void)e;
+    dismiss_update_toast();
+    open_ota_update_screen();
 }
 
 /* A small persistent icon is easy to miss on a screen this size, so the
    moment an update is first seen this also drops a self-dismissing
    banner on lv_layer_top() (renders above whatever screen is active,
    independent of which one that is) spelling the update out in words.
-   The icon then stays behind as a quieter, tappable reminder that
-   jumps straight to the update screen. */
+   Tapping it (like the icon) jumps straight to the update screen. The
+   icon then stays behind as a quieter, tappable reminder after the
+   banner is gone. */
 static void show_update_toast(void)
 {
     char msg[64];
-    lv_obj_t *toast;
+
+    dismiss_update_toast(); /* replace any still-showing toast rather than stack them */
 
     snprintf(msg, sizeof(msg), t(STR_OTA_AVAILABLE_FMT), ota_get_latest_version());
 
-    toast = lv_label_create(lv_layer_top());
-    lv_label_set_text(toast, msg);
-    lv_obj_set_style_text_font(toast, &lv_font_es_16, 0);
-    lv_obj_set_style_text_align(toast, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(toast, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(toast, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(toast, LV_OPA_80, 0);
-    lv_obj_set_style_radius(toast, 12, 0);
-    lv_obj_set_style_pad_all(toast, 10, 0);
-    lv_obj_set_width(toast, 220);
-    lv_obj_align(toast, LV_ALIGN_TOP_MID, 0, 50);
+    s_toast = lv_label_create(lv_layer_top());
+    lv_label_set_text(s_toast, msg);
+    lv_obj_set_style_text_font(s_toast, &lv_font_es_16, 0);
+    lv_obj_set_style_text_align(s_toast, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_toast, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(s_toast, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_toast, LV_OPA_80, 0);
+    lv_obj_set_style_radius(s_toast, 12, 0);
+    lv_obj_set_style_pad_all(s_toast, 10, 0);
+    lv_obj_set_width(s_toast, 220);
+    lv_obj_align(s_toast, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_add_flag(s_toast, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_toast, update_toast_click_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_timer_t *timer = lv_timer_create(update_toast_timer_cb, UPDATE_TOAST_MS, toast);
-    lv_timer_set_repeat_count(timer, 1);
+    s_toast_timer = lv_timer_create(update_toast_timer_cb, UPDATE_TOAST_MS, NULL);
+    lv_timer_set_repeat_count(s_toast_timer, 1);
 }
 
 static void update_icon_refresh(void)

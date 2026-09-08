@@ -73,8 +73,41 @@ extern "C" bool ota_auto_check_done(void)
     return s_auto_check_done;
 }
 
+/* An available update keeps the radio on so the user can apply it from
+ * the notification, but if they never come back to it that's WiFi left
+ * on indefinitely for nothing - worse than the "always connected" state
+ * this whole feature was built to avoid. Whichever check last found an
+ * update (auto or manual, from the OTA screen) (re)arms this; applying
+ * or dismissing before it fires is fine, the callback only acts if the
+ * update is still just sitting there ignored. */
+#define WIFI_IDLE_OFF_MS (5UL * 60UL * 1000UL)
+static lv_timer_t *s_idle_off_timer = NULL;
+
+static void wifi_idle_off_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    s_idle_off_timer = NULL;
+    if (g_wifi_state == WIFI_STATE_CONNECTED && g_ota_state == OTA_STATE_AVAILABLE) {
+        Serial.println(F("[OTA] update ignored for 5 minutes, powering wifi off"));
+        wifi_radio_off();
+    }
+}
+
+static void arm_wifi_idle_off(void)
+{
+    if (s_idle_off_timer != NULL) {
+        lv_timer_del(s_idle_off_timer);
+    }
+    s_idle_off_timer = lv_timer_create(wifi_idle_off_cb, WIFI_IDLE_OFF_MS, NULL);
+    lv_timer_set_repeat_count(s_idle_off_timer, 1);
+}
+
 extern "C" void wifi_radio_off(void)
 {
+    if (s_idle_off_timer != NULL) {
+        lv_timer_del(s_idle_off_timer);
+        s_idle_off_timer = NULL;
+    }
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     g_wifi_state = WIFI_STATE_DISCONNECTED;
@@ -344,6 +377,7 @@ extern "C" void ota_check_now(void)
     } else {
         g_ota_state = OTA_STATE_AVAILABLE;
         snprintf(g_latest_version, sizeof(g_latest_version), "%s", latest);
+        arm_wifi_idle_off();
     }
 }
 
