@@ -2,7 +2,6 @@
 #include "src/hw.h"
 #include "src/storage.h"
 #include "src/game.h"
-#include "src/timer.h"
 #include "src/dice.h"
 #include "src/intro.h"
 #include "src/ui_1p.h"
@@ -377,8 +376,6 @@ void reset_all_values(void)
     brightness_percent = nvs_get_brightness();
     brightness_apply();
 
-    turn_timer_reset();
-
     refresh_main_ui();
     refresh_select_ui();
     refresh_damage_ui();
@@ -480,7 +477,6 @@ void knob_gui(void)
 
     wifi_ota_init(); /* non-blocking: begins connecting if credentials are saved */
 
-    knob_timer_init();
     knob_life_init();
     knob_intro_init();
 }

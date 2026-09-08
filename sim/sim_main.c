@@ -14,7 +14,6 @@
 #include "settings.h"
 #include "intro.h"
 #include "dice.h"
-#include "timer.h"
 #include "damage_log.h"
 #include "game_mode.h"
 #include "rename.h"
@@ -269,8 +268,6 @@ static void print_usage(void)
            "  --mana-selected <n>    Selected mana color, -1=none (default: -1)\n"
            "  --mana-delta <n>       Pending mana delta for preview display (e.g. +5, -3)\n"
            "\nTimer state (1p only):\n"
-           "  --turn-number <n>      Turn number (enables timer display when > 0)\n"
-           "  --turn-elapsed <ms>    Elapsed game time in milliseconds\n"
            "\n  --help, -h             Show this message\n"
            "\nAvailable screens:\n"
            "  main 1p 2p 3p 4p intro menu tools settings-menu\n"
@@ -366,10 +363,6 @@ int main(int argc, char *argv[])
     int brightness_set = 0;
     int do_random_counters = 0;
     int do_random_log = 0;
-    int turn_number_val = 0;
-    int turn_number_set = 0;
-    uint32_t turn_elapsed_val = 0;
-    int turn_elapsed_set = 0;
     int mana_vals[MANA_COLOR_COUNT] = {0};
     int mana_set = 0;
     int mana_sel_val = -1;
@@ -473,12 +466,6 @@ int main(int argc, char *argv[])
             do_random_counters = 1;
         } else if (strcmp(argv[i], "--random-log") == 0) {
             do_random_log = 1;
-        } else if (strcmp(argv[i], "--turn-number") == 0 && i + 1 < argc) {
-            turn_number_val = atoi(argv[++i]);
-            turn_number_set = 1;
-        } else if (strcmp(argv[i], "--turn-elapsed") == 0 && i + 1 < argc) {
-            turn_elapsed_val = (uint32_t)atol(argv[++i]);
-            turn_elapsed_set = 1;
         } else if (strcmp(argv[i], "--mana") == 0 && i + 1 < argc) {
             parse_csv_ints(argv[++i], mana_vals, MANA_COLOR_COUNT);
             mana_set = 1;
@@ -607,16 +594,6 @@ int main(int argc, char *argv[])
         if (do_random_log) { \
             sim_populate_random_log(); \
             open_damage_log_screen(); \
-        } \
-        if (turn_number_set) { \
-            turn_number = turn_number_val; \
-            turn_timer_enabled = (turn_number_val > 0); \
-            turn_ui_visible = (turn_number_val > 0); \
-            turn_started_ms = lv_tick_get(); \
-            if (turn_elapsed_set) \
-                turn_elapsed_ms = turn_elapsed_val; \
-            else \
-                turn_elapsed_ms = 0; \
         } \
         if (mana_set) { \
             for (i = 0; i < MANA_COLOR_COUNT; i++) \

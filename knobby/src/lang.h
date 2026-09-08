@@ -61,7 +61,6 @@ typedef enum {
     STR_MENU_TOOLS,
     STR_MENU_RESET_HOLD,
     STR_TOOL_DICE,
-    STR_TOOL_TIMER,
     STR_TOOL_EVENT_LOG,
     STR_TOOL_MANA_POOL,
     STR_BRIGHTNESS_FMT,      /* "Brightness: %d%%" */
@@ -135,9 +134,6 @@ typedef enum {
     STR_DAMAGE_PREFIX,
     STR_TURN_KNOB_THEN_APPLY,
     STR_APPLY,
-    STR_TURN_FMT_SOLO,      /* "turn  %lu:%02lu" */
-    STR_TURN_FMT_NUMBERED,  /* "turn %d  %lu:%02lu" */
-    STR_TURN_INITIAL,       /* "turn  0:00" */
 
     /* ui_player_menu.c */
     STR_MENU_NAME_COLOR,

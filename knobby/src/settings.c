@@ -4,7 +4,6 @@
 #include <string.h>
 #include "dice.h"
 #include "lang.h"
-#include "timer.h"
 #include "game_mode.h"
 #include "damage_log.h"
 #include "rename.h"
@@ -735,7 +734,7 @@ void build_quad_menus(void)
 
     quad_item_t tools_items[4] = {
         {t(STR_TOOL_DICE),        event_tool_dice, true, LV_EVENT_CLICKED},
-        {t(STR_TOOL_TIMER),       event_tool_timer, true, LV_EVENT_CLICKED},
+        {"",                      NULL, false, LV_EVENT_CLICKED}, /* free slot - Timer removed, replacement TBD */
         {t(STR_TOOL_EVENT_LOG),  event_open_damage_log, true, LV_EVENT_CLICKED},
         {t(STR_TOOL_MANA_POOL),  event_tool_mana, true, LV_EVENT_CLICKED},
     };
