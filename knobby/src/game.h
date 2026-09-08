@@ -71,6 +71,7 @@ void damage_cancel(void);
 void change_player_life(int delta);
 void change_all_damage(int delta);
 void apply_life_delta(int player, int delta);
+void start_life_preview(int delta);
 
 // ---------- player selection set ----------
 int selection_count(void);

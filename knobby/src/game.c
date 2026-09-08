@@ -706,6 +706,33 @@ void change_player_life(int delta)
     refresh_player_ui();
 }
 
+/* Arms the same preview-then-auto-commit flow as dialing a life change
+   in with the knob (see change_player_life() above), but for callers
+   that already know the final delta up front - All Damage sets its
+   whole set of selected targets and one delta in one shot instead of
+   accumulating it turn by turn. Applying instantly and jumping back to
+   the game screen (the previous behavior) meant damage that was easy
+   to miss if you looked away for a second; showing it as a preview
+   that lingers for life_preview_timer's normal delay before committing
+   fixes that for free, reusing the exact "-N / = total" rendering
+   everywhere it already exists (see refresh_mp_panel/refresh_life_digits). */
+void start_life_preview(int delta)
+{
+    pending_life_delta = delta;
+    life_preview_active = (pending_life_delta != 0);
+
+    if (life_preview_timer != NULL) {
+        if (life_preview_active) {
+            lv_timer_reset(life_preview_timer);
+            lv_timer_resume(life_preview_timer);
+        } else {
+            lv_timer_pause(life_preview_timer);
+        }
+    }
+
+    refresh_player_ui();
+}
+
 void prepare_cmd_damage_for_player(int target)
 {
     int i, row = 0;

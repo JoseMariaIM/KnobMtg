@@ -190,6 +190,7 @@ static void event_counter_experience(lv_event_t *e) {
 
 static void event_all_damage_apply(lv_event_t *e) {
   int i;
+  int track = nvs_get_players_to_track();
   bool include_myself = false;
 
   if (cb_include_myself != NULL) {
@@ -197,14 +198,21 @@ static void event_all_damage_apply(lv_event_t *e) {
   }
 
   (void)e;
-  for (i = 0; i < nvs_get_players_to_track(); i++) {
-    if (i == menu_player && !include_myself) {
-      continue;
-    }
-    apply_life_delta(i, -all_damage_value);
+
+  /* Preview-then-commit instead of applying instantly: with everyone
+     hit in one tap it was easy to look away and miss what just
+     happened. Selecting the targets and arming the same delayed
+     commit the knob uses shows each one's "-N / = total" for a few
+     seconds (see start_life_preview()) before the damage actually
+     lands. */
+  selection_clear();
+  for (i = 0; i < track; i++) {
+    if (i == menu_player && !include_myself) continue;
+    if (player_eliminated[i]) continue;
+    player_selected[i] = true;
   }
 
-  refresh_player_ui();
+  start_life_preview(-all_damage_value);
   back_to_main();
 }
 
