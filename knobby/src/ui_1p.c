@@ -54,12 +54,19 @@ static void refresh_ring(void)
 
 static void refresh_life_digits(void)
 {
-    int display_value = life_preview_active ? pending_life_delta : player_life[0];
+    bool flash_here = all_damage_flash_active && all_damage_flash_player[0];
+    bool showing_change = life_preview_active || flash_here;
+    /* Live preview shows the still-pending delta; the flash is
+       read-only feedback for a change already committed, so its delta
+       is just for display and player_life[0] below is already final. */
+    int display_value = life_preview_active ? pending_life_delta
+                       : flash_here ? all_damage_flash_delta
+                       : player_life[0];
     bool negative = (display_value < 0);
     lv_color_t c;
     char buf[16];
 
-    if (life_preview_active) {
+    if (showing_change) {
         c = negative ? lv_color_hex(0xFF1744)
                      : lv_color_hex(0x06D6A0);
         if (display_value > 0)
@@ -75,8 +82,8 @@ static void refresh_life_digits(void)
     lv_obj_set_style_text_color(label_life_total, c, 0);
     lv_obj_align(label_life_total, LV_ALIGN_CENTER, 0, -6);
 
-    if (life_preview_active && label_life_preview_total != NULL) {
-        int new_total = player_life[0] + pending_life_delta;
+    if (showing_change && label_life_preview_total != NULL) {
+        int new_total = life_preview_active ? (player_life[0] + pending_life_delta) : player_life[0];
         snprintf(buf, sizeof(buf), "= %d", new_total);
         lv_label_set_text(label_life_preview_total, buf);
         lv_obj_clear_flag(label_life_preview_total, LV_OBJ_FLAG_HIDDEN);

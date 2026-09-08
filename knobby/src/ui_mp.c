@@ -428,7 +428,9 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
 {
     char buf[8];
     bool selected = is_player_selected(i);
-    bool preview_here = life_preview_active && selected;
+    bool live_preview_here = life_preview_active && selected;
+    bool flash_here = all_damage_flash_active && all_damage_flash_player[i];
+    bool preview_here = live_preview_here || flash_here;
     lv_color_t bg_color;
     lv_color_t text_color;
 
@@ -455,12 +457,17 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
 
     if (life_lbl != NULL) {
         if (preview_here) {
-            snprintf(buf, sizeof(buf), "%+d", pending_life_delta);
+            /* Live preview still adds pending_life_delta on top of the
+               unchanged player_life[i]; the flash is read-only feedback
+               for a change already committed, so its delta is just for
+               display and player_life[i] below is already the result. */
+            int shown_delta = live_preview_here ? pending_life_delta : all_damage_flash_delta;
+            snprintf(buf, sizeof(buf), "%+d", shown_delta);
             lv_label_set_text(life_lbl, buf);
             {
                 lv_color_t preview_c;
                 if (nvs_get_color_mode() == COLOR_MODE_PLAYER && !player_has_override[i]) {
-                    preview_c = get_player_preview_color(color_i, pending_life_delta);
+                    preview_c = get_player_preview_color(color_i, shown_delta);
                     if (color_is_light(bg_color) && color_is_light(preview_c))
                         preview_c = lv_color_black();
                     else if (!color_is_light(bg_color) && !color_is_light(preview_c))
@@ -480,7 +487,7 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
     if (name_lbl != NULL) {
         if (preview_here) {
             char total_buf[16];
-            int new_total = player_life[i] + pending_life_delta;
+            int new_total = live_preview_here ? (player_life[i] + pending_life_delta) : player_life[i];
             snprintf(total_buf, sizeof(total_buf), "= %d", new_total);
             lv_label_set_text(name_lbl, total_buf);
         } else {

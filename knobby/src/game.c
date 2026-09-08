@@ -706,28 +706,43 @@ void change_player_life(int delta)
     refresh_player_ui();
 }
 
-/* Arms the same preview-then-auto-commit flow as dialing a life change
-   in with the knob (see change_player_life() above), but for callers
-   that already know the final delta up front - All Damage sets its
-   whole set of selected targets and one delta in one shot instead of
-   accumulating it turn by turn. Applying instantly and jumping back to
-   the game screen (the previous behavior) meant damage that was easy
-   to miss if you looked away for a second; showing it as a preview
-   that lingers for life_preview_timer's normal delay before committing
-   fixes that for free, reusing the exact "-N / = total" rendering
-   everywhere it already exists (see refresh_mp_panel/refresh_life_digits). */
-void start_life_preview(int delta)
-{
-    pending_life_delta = delta;
-    life_preview_active = (pending_life_delta != 0);
+/* ---------- all-damage flash ---------- */
+/* All Damage applies instantly (like any other life change) and then
+   flashes the same "-N / = total" widgets the knob's live preview
+   uses, purely for a couple of seconds of read-only feedback - a first
+   version reused the knob's actual pending_life_delta/player_selected
+   preview state to get that rendering for free, but that left the
+   knob live during the flash: turning it kept piling more damage onto
+   everyone it had just hit, which is exactly the "should apply and
+   return to normal" behavior this replaces. This state is deliberately
+   separate from player_selected and never touched by change_player_life -
+   the numbers are already committed by the time this displays. */
+#define ALL_DAMAGE_FLASH_MS 2500
+static lv_timer_t *all_damage_flash_timer = NULL;
+bool all_damage_flash_active = false;
+int all_damage_flash_delta = 0;
+bool all_damage_flash_player[MAX_DISPLAY_PLAYERS];
 
-    if (life_preview_timer != NULL) {
-        if (life_preview_active) {
-            lv_timer_reset(life_preview_timer);
-            lv_timer_resume(life_preview_timer);
-        } else {
-            lv_timer_pause(life_preview_timer);
-        }
+static void all_damage_flash_end_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    all_damage_flash_active = false;
+    memset(all_damage_flash_player, 0, sizeof(all_damage_flash_player));
+    lv_timer_pause(all_damage_flash_timer);
+    refresh_player_ui();
+}
+
+void start_all_damage_flash(int delta, const bool *targets)
+{
+    memcpy(all_damage_flash_player, targets, sizeof(all_damage_flash_player));
+    all_damage_flash_delta = delta;
+    all_damage_flash_active = true;
+
+    if (all_damage_flash_timer == NULL) {
+        all_damage_flash_timer = lv_timer_create(all_damage_flash_end_cb, ALL_DAMAGE_FLASH_MS, NULL);
+    } else {
+        lv_timer_reset(all_damage_flash_timer);
+        lv_timer_resume(all_damage_flash_timer);
     }
 
     refresh_player_ui();

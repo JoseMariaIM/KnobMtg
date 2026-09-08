@@ -192,6 +192,8 @@ static void event_all_damage_apply(lv_event_t *e) {
   int i;
   int track = nvs_get_players_to_track();
   bool include_myself = false;
+  bool targets[MAX_DISPLAY_PLAYERS] = {0};
+  bool any_target = false;
 
   if (cb_include_myself != NULL) {
     include_myself = lv_obj_has_state(cb_include_myself, LV_STATE_CHECKED);
@@ -199,20 +201,24 @@ static void event_all_damage_apply(lv_event_t *e) {
 
   (void)e;
 
-  /* Preview-then-commit instead of applying instantly: with everyone
-     hit in one tap it was easy to look away and miss what just
-     happened. Selecting the targets and arming the same delayed
-     commit the knob uses shows each one's "-N / = total" for a few
-     seconds (see start_life_preview()) before the damage actually
-     lands. */
-  selection_clear();
+  /* Applies instantly, same as any other life change - a first version
+     previewed the change for a couple of seconds before committing it,
+     but that reused the knob's live-preview state, so turning the knob
+     during the wait kept piling more damage onto everyone it had just
+     hit. Only the read-only flash afterward (start_all_damage_flash())
+     is left to show what happened. */
   for (i = 0; i < track; i++) {
     if (i == menu_player && !include_myself) continue;
     if (player_eliminated[i]) continue;
-    player_selected[i] = true;
+    apply_life_delta(i, -all_damage_value);
+    targets[i] = true;
+    any_target = true;
   }
 
-  start_life_preview(-all_damage_value);
+  if (any_target && all_damage_value != 0) {
+    start_all_damage_flash(-all_damage_value, targets);
+  }
+
   back_to_main();
 }
 

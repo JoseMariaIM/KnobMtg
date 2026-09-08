@@ -71,7 +71,12 @@ void damage_cancel(void);
 void change_player_life(int delta);
 void change_all_damage(int delta);
 void apply_life_delta(int player, int delta);
-void start_life_preview(int delta);
+
+// ---------- all-damage flash (read-only post-commit feedback) ----------
+extern bool all_damage_flash_active;
+extern int all_damage_flash_delta;
+extern bool all_damage_flash_player[MAX_DISPLAY_PLAYERS];
+void start_all_damage_flash(int delta, const bool *targets);
 
 // ---------- player selection set ----------
 int selection_count(void);
