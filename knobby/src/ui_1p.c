@@ -463,16 +463,6 @@ void build_main_screen(void)
         lv_obj_align(batt, LV_ALIGN_TOP_MID, 0, 28);
         battery_icon_register(batt);
     }
-
-    {
-        /* Offset from the battery icon so the two can show at once. */
-        lv_obj_t *upd = lv_label_create(screen_1p);
-        lv_label_set_text(upd, LV_SYMBOL_DOWNLOAD);
-        lv_obj_set_style_text_color(upd, lv_color_hex(0x06D6A0), 0);
-        lv_obj_set_style_text_font(upd, &lv_font_es_22, 0);
-        lv_obj_align(upd, LV_ALIGN_TOP_MID, 26, 28);
-        update_icon_register(upd);
-    }
 }
 
 void build_select_screen(void)

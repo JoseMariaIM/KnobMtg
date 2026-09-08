@@ -301,6 +301,11 @@ static void open_menu_for_screen(lv_obj_t *screen)
     }
 }
 
+void knob_remember_return_screen(lv_obj_t *screen)
+{
+    previous_screen = screen;
+}
+
 static void handle_back_navigation(lv_obj_t *screen);
 
 static void handle_swipe_navigation(knob_swipe_direction_t direction, lv_obj_t *screen)

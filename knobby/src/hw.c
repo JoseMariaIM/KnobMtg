@@ -4,6 +4,7 @@
 #include "lang.h"
 #include "wifi_ota.h"
 #include "ui_wifi.h"
+#include "../knob.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
 #include <stdio.h>
@@ -38,12 +39,6 @@ static lv_timer_t *auto_dim_timer = NULL;
 static lv_obj_t *battery_icons[BATTERY_ICON_MAX];
 static int battery_icon_count = 0;
 
-/* "An update is waiting" markers on the player screens. Shown/hidden
-   from battery_icon_timer_cb() rather than on their own timer: the boot
-   update check finishes long after the screens were last drawn, so
-   something periodic has to notice, and that timer is already awake. */
-static lv_obj_t *update_icons[BATTERY_ICON_MAX];
-static int update_icon_count = 0;
 static bool battery_icon_blink_visible = true;
 static lv_timer_t *battery_icon_timer = NULL;
 
@@ -163,35 +158,8 @@ static void battery_icon_apply(bool visible)
     }
 }
 
-// ---------- update-available indicator ----------
+// ---------- update-available notice ----------
 #define UPDATE_TOAST_MS 5000
-
-static void update_icon_click_cb(lv_event_t *e)
-{
-    (void)e;
-    open_ota_update_screen();
-}
-
-void update_icon_register(lv_obj_t *icon)
-{
-    if (icon == NULL || update_icon_count >= BATTERY_ICON_MAX) return;
-    update_icons[update_icon_count++] = icon;
-    lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(icon, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(icon, update_icon_click_cb, LV_EVENT_CLICKED, NULL);
-}
-
-void update_icon_unregister(lv_obj_t *icon)
-{
-    int i;
-    if (icon == NULL) return;
-    for (i = 0; i < update_icon_count; i++) {
-        if (update_icons[i] == icon) {
-            update_icons[i] = update_icons[--update_icon_count];
-            return;
-        }
-    }
-}
 
 static lv_obj_t *s_toast = NULL;
 static lv_timer_t *s_toast_timer = NULL;
@@ -219,16 +187,22 @@ static void update_toast_click_cb(lv_event_t *e)
 {
     (void)e;
     dismiss_update_toast();
+    /* The OTA screen's back gesture returns to whatever screen sent it
+       there (see settings_handle_back()'s chain back to screen_quad_menu,
+       then knob.c's previous_screen check) - normally that's only ever
+       reached via the settings menu, which sets this itself. Tapping the
+       toast is a shortcut around that whole chain, so it has to set the
+       breadcrumb too, or back leaves the user stranded in settings with
+       no way to reach the life counter again. */
+    knob_remember_return_screen(lv_scr_act());
     open_ota_update_screen();
 }
 
-/* A small persistent icon is easy to miss on a screen this size, so the
-   moment an update is first seen this also drops a self-dismissing
-   banner on lv_layer_top() (renders above whatever screen is active,
-   independent of which one that is) spelling the update out in words.
-   Tapping it (like the icon) jumps straight to the update screen. The
-   icon then stays behind as a quieter, tappable reminder after the
-   banner is gone. */
+/* Rather than a persistent icon (too easy to miss on a screen this
+   size), the moment an update is first seen this drops a
+   self-dismissing banner on lv_layer_top() (renders above whatever
+   screen is active, independent of which one that is) spelling the
+   update out in words. Tapping it jumps straight to the update screen. */
 static void show_update_toast(void)
 {
     char msg[64];
@@ -255,22 +229,16 @@ static void show_update_toast(void)
     lv_timer_set_repeat_count(s_toast_timer, 1);
 }
 
-static void update_icon_refresh(void)
+static void update_notice_check(void)
 {
     static bool s_toast_shown = false;
-    bool visible = (ota_get_state() == OTA_STATE_AVAILABLE);
-    int i;
+    bool available = (ota_get_state() == OTA_STATE_AVAILABLE);
 
-    if (visible && !s_toast_shown) {
+    if (available && !s_toast_shown) {
         s_toast_shown = true;
         show_update_toast();
-    } else if (!visible) {
+    } else if (!available) {
         s_toast_shown = false;
-    }
-
-    for (i = 0; i < update_icon_count; i++) {
-        if (visible) lv_obj_clear_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);
-        else         lv_obj_add_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -278,7 +246,7 @@ static void battery_icon_timer_cb(lv_timer_t *timer)
 {
     int pct = read_battery_percent();
 
-    update_icon_refresh();
+    update_notice_check();
     if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
         /* Icon stays hidden essentially the entire time the device is
            used - falling back to a slow check instead of waking every

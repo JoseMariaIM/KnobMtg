@@ -19,20 +19,7 @@ static lv_obj_t *add_low_battery_icon(lv_obj_t *parent)
     return batt;
 }
 
-static lv_obj_t *add_update_available_icon(lv_obj_t *parent)
-{
-    /* Offset from the battery icon so the two can show at once. */
-    lv_obj_t *upd = lv_label_create(parent);
-    lv_label_set_text(upd, LV_SYMBOL_DOWNLOAD);
-    lv_obj_set_style_text_color(upd, lv_color_hex(0x06D6A0), 0);
-    lv_obj_set_style_text_font(upd, &lv_font_es_22, 0);
-    lv_obj_align(upd, LV_ALIGN_TOP_MID, 26, 28);
-    update_icon_register(upd);
-    return upd;
-}
-
 static lv_obj_t *mp_battery_icon = NULL;
-static lv_obj_t *mp_update_icon = NULL;
 
 #include <string.h>
 
@@ -867,10 +854,6 @@ void rebuild_multiplayer_layout(int track)
 
     victory_shown = false;
 
-    if (mp_update_icon != NULL) {
-        update_icon_unregister(mp_update_icon);
-        mp_update_icon = NULL;
-    }
     if (mp_battery_icon != NULL) {
         battery_icon_unregister(mp_battery_icon);
         mp_battery_icon = NULL;
@@ -954,7 +937,6 @@ void rebuild_multiplayer_layout(int track)
     }
 
     mp_battery_icon = add_low_battery_icon(screen_multiplayer);
-    mp_update_icon = add_update_available_icon(screen_multiplayer);
 
     refresh_multiplayer_ui();
 }

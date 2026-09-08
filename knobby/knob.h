@@ -47,6 +47,12 @@ void knob_notify_swipe_up(void);
 void knob_notify_swipe_down(void);
 void knob_notify_swipe_left(void);
 void knob_notify_swipe_right(void);
+/* Records where the back gesture should return to once it eventually
+   unwinds to screen_quad_menu (see handle_back_navigation() in knob.c).
+   Anything that jumps straight to a settings sub-screen from outside
+   the normal settings menu chain must call this first, or back leaves
+   the user stranded with no path to the life counter. */
+void knob_remember_return_screen(lv_obj_t *screen);
 float knob_read_battery_voltage(void);
 void scr_display_on(void);
 void display_apply_rotation(int rot);
