@@ -2,6 +2,7 @@
 #include "storage.h"
 #include "net_sync.h"
 #include "lang.h"
+#include "wifi_ota.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
 
@@ -34,6 +35,13 @@ static lv_timer_t *auto_dim_timer = NULL;
 #define BATTERY_ICON_MAX 8
 static lv_obj_t *battery_icons[BATTERY_ICON_MAX];
 static int battery_icon_count = 0;
+
+/* "An update is waiting" markers on the player screens. Shown/hidden
+   from battery_icon_timer_cb() rather than on their own timer: the boot
+   update check finishes long after the screens were last drawn, so
+   something periodic has to notice, and that timer is already awake. */
+static lv_obj_t *update_icons[BATTERY_ICON_MAX];
+static int update_icon_count = 0;
 static bool battery_icon_blink_visible = true;
 static lv_timer_t *battery_icon_timer = NULL;
 
@@ -153,9 +161,41 @@ static void battery_icon_apply(bool visible)
     }
 }
 
+// ---------- update-available indicator ----------
+void update_icon_register(lv_obj_t *icon)
+{
+    if (icon == NULL || update_icon_count >= BATTERY_ICON_MAX) return;
+    update_icons[update_icon_count++] = icon;
+    lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+}
+
+void update_icon_unregister(lv_obj_t *icon)
+{
+    int i;
+    if (icon == NULL) return;
+    for (i = 0; i < update_icon_count; i++) {
+        if (update_icons[i] == icon) {
+            update_icons[i] = update_icons[--update_icon_count];
+            return;
+        }
+    }
+}
+
+static void update_icon_refresh(void)
+{
+    bool visible = (ota_get_state() == OTA_STATE_AVAILABLE);
+    int i;
+    for (i = 0; i < update_icon_count; i++) {
+        if (visible) lv_obj_clear_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);
+        else         lv_obj_add_flag(update_icons[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 static void battery_icon_timer_cb(lv_timer_t *timer)
 {
     int pct = read_battery_percent();
+
+    update_icon_refresh();
     if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
         /* Icon stays hidden essentially the entire time the device is
            used - falling back to a slow check instead of waking every

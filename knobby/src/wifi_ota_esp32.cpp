@@ -66,6 +66,48 @@ extern char g_ota_error[64];
  * this timer is what was missing.) */
 #define WIFI_AUTO_CONNECT_TIMEOUT_MS 15000
 static uint32_t s_auto_connect_started_at = 0;
+static bool s_auto_check_done = false;
+
+extern "C" bool ota_auto_check_done(void)
+{
+    return s_auto_check_done;
+}
+
+extern "C" void wifi_radio_off(void)
+{
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    g_wifi_state = WIFI_STATE_DISCONNECTED;
+    g_wifi_ip[0] = '\0';
+}
+
+/* Runs once, shortly after the boot auto-connect succeeds: looks for an
+ * update and then decides whether the radio has earned its keep. If one
+ * is waiting, WiFi stays up so the user can apply it straight from the
+ * notification; otherwise the radio is parked immediately - there's
+ * nothing else on this device that wants a network. Deferred behind a
+ * one-shot timer rather than run inline from the connect poll because
+ * ota_check_now() blocks on HTTPS for a second or two, and this way the
+ * intro animation has finished by the time that happens. */
+static void ota_auto_check_cb(lv_timer_t *timer)
+{
+    lv_timer_del(timer);
+
+    if (g_wifi_state != WIFI_STATE_CONNECTED) {
+        s_auto_check_done = true;
+        wifi_radio_off();
+        return;
+    }
+
+    ota_check_now();
+    s_auto_check_done = true;
+
+    /* Only an available update justifies keeping the radio powered;
+       "up to date" and a failed check both mean nobody needs it. */
+    if (g_ota_state != OTA_STATE_AVAILABLE) {
+        wifi_radio_off();
+    }
+}
 
 static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
 {
@@ -77,9 +119,12 @@ static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
         g_wifi_state = WIFI_STATE_CONNECTED;
         snprintf(g_wifi_ip, sizeof(g_wifi_ip), "%s", WiFi.localIP().toString().c_str());
         lv_timer_del(timer);
+        lv_timer_create(ota_auto_check_cb, 1500, NULL);
     } else if (millis() - s_auto_connect_started_at > WIFI_AUTO_CONNECT_TIMEOUT_MS) {
         g_wifi_state = WIFI_STATE_FAILED;
+        s_auto_check_done = true;
         lv_timer_del(timer);
+        wifi_radio_off(); /* out of range or wrong password - don't leave the radio hunting */
     }
 }
 

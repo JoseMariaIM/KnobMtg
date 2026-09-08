@@ -59,6 +59,20 @@ const char *get_firmware_version(void);
  * Requires wifi_get_state() == WIFI_STATE_CONNECTED. */
 void ota_check_now(void);
 ota_state_t ota_get_state(void);
+
+/* Fully powers down the radio (not just a disconnect). Connected WiFi is
+ * by far this device's largest power draw: the station keeps modem sleep
+ * disabled - see the comment on the setSleep() calls - and, worse, the
+ * main loop refuses to light-sleep the CPU at all while the radio is up,
+ * so an idle connection pins both the radio and the CPU on indefinitely.
+ * Nothing here needs a standing connection, so the radio is only raised
+ * to check/apply an update and parked again right after. */
+void wifi_radio_off(void);
+
+/* True once the post-boot update check has run to completion, whatever
+ * its outcome - lets the UI tell "no update" apart from "not looked
+ * yet" without exposing the auto-check state machine. */
+bool ota_auto_check_done(void);
 const char *ota_get_latest_version(void); /* valid when state == OTA_STATE_AVAILABLE */
 const char *ota_get_error(void);          /* valid when state == OTA_STATE_ERROR */
 

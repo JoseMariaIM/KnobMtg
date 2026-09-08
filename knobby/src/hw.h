@@ -49,6 +49,8 @@ bool in_undim_grace(void);
 void knob_enter_deep_sleep(void);
 void battery_icon_register(lv_obj_t *icon);
 void battery_icon_unregister(lv_obj_t *icon);
+void update_icon_register(lv_obj_t *icon);
+void update_icon_unregister(lv_obj_t *icon);
 
 #ifdef __cplusplus
 }

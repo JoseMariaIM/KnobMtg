@@ -113,6 +113,18 @@ void wifi_disconnect(void)
     g_wifi_ip[0] = '\0';
 }
 
+void wifi_radio_off(void)
+{
+    wifi_disconnect();
+}
+
+bool ota_auto_check_done(void)
+{
+    /* The simulator never runs the boot auto-check, so report it as
+       finished - otherwise the UI would sit on "checking" forever. */
+    return true;
+}
+
 void ota_apply_update(void)
 {
     if (!battery_ok_for_update()) {
