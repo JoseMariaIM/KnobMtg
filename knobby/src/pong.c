@@ -16,7 +16,9 @@
 #define PONG_CY 180
 #define PONG_ARENA_RADIUS 165  /* a few px inside the physical glass edge */
 #define PONG_BALL_RADIUS 6
-#define PONG_PADDLE_HALF_WIDTH_DEG 20
+#define PONG_PADDLE_HALF_WIDTH_START 20 /* degrees */
+#define PONG_PADDLE_HALF_WIDTH_MIN   8  /* degrees - never shrinks past this */
+#define PONG_PADDLE_SHRINK_PER_POINTS 3 /* -1 degree of half-width every N points */
 #define PONG_PADDLE_THICKNESS 7
 #define PONG_PADDLE_STEP_DEG 5  /* paddle slide per knob detent */
 #define PONG_TICK_MS 30
@@ -28,6 +30,17 @@
 #define PONG_STEER_FACTOR     1.6f  /* how much off-center paddle hits steer the ball */
 #define PONG_DEG2RAD 0.017453292f
 #define PONG_RAD2DEG 57.29577951f
+
+/* Two fixed pegs off in the upper half of the arena (away from the
+   paddle's starting position at the bottom) - the ball caroms off them
+   unpredictably, breaking up the otherwise-clean geometry a lone
+   paddle-vs-wall game settles into. */
+#define PONG_PEG_COUNT 2
+#define PONG_PEG_RADIUS 9
+static const lv_point_t pong_pegs[PONG_PEG_COUNT] = {
+    {140, 125},
+    {220, 125},
+};
 
 typedef enum {
     PONG_STATE_READY = 0,
@@ -66,6 +79,16 @@ static int pong_angle_diff(int a, int b)
     if (d < -180) d += 360;
     if (d >= 180) d -= 360;
     return d;
+}
+
+/* The paddle narrows as the run goes on - by the time the ball is
+   moving fast (see PONG_BALL_SPEED_GROWTH) landing a return also takes
+   noticeably more precision, so difficulty ramps on two axes at once
+   instead of just raw speed. */
+static int pong_current_half_width(void)
+{
+    int hw = PONG_PADDLE_HALF_WIDTH_START - pong_score / PONG_PADDLE_SHRINK_PER_POINTS;
+    return (hw < PONG_PADDLE_HALF_WIDTH_MIN) ? PONG_PADDLE_HALF_WIDTH_MIN : hw;
 }
 
 /* "The selected player" per the life-counter's own selection state -
@@ -151,6 +174,37 @@ static void pong_refresh_score(void)
     lv_label_set_text(pong_score_lbl, buf);
 }
 
+/* Circle-vs-circle reflection, same specular-bounce math as the wall
+   collision below but against a small fixed obstacle instead of the
+   arena boundary. Doesn't score or change speed - pegs are pure
+   chaos/skill, not progression. */
+static void pong_check_peg_collisions(void)
+{
+    int i;
+
+    for (i = 0; i < PONG_PEG_COUNT; i++) {
+        float dx = pong_ball_x - pong_pegs[i].x;
+        float dy = pong_ball_y - pong_pegs[i].y;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float limit = (float)(PONG_BALL_RADIUS + PONG_PEG_RADIUS);
+        float nx, ny, dot;
+
+        if (dist >= limit || dist < 0.0001f) continue;
+
+        nx = dx / dist;
+        ny = dy / dist;
+        dot = pong_ball_vx * nx + pong_ball_vy * ny;
+        if (dot < 0.0f) {
+            pong_ball_vx -= 2.0f * dot * nx;
+            pong_ball_vy -= 2.0f * dot * ny;
+        }
+        /* Push the ball just outside the peg so it can't stay
+           overlapping it and re-trigger the same bounce next tick. */
+        pong_ball_x = pong_pegs[i].x + nx * limit;
+        pong_ball_y = pong_pegs[i].y + ny * limit;
+    }
+}
+
 static void pong_on_game_over(void)
 {
     pong_state = PONG_STATE_GAME_OVER;
@@ -176,6 +230,7 @@ static void pong_tick_cb(lv_timer_t *timer)
 
     pong_ball_x += pong_ball_vx;
     pong_ball_y += pong_ball_vy;
+    pong_check_peg_collisions();
 
     dx = pong_ball_x - PONG_CX;
     dy = pong_ball_y - PONG_CY;
@@ -185,8 +240,9 @@ static void pong_tick_cb(lv_timer_t *timer)
     if (dist + PONG_BALL_RADIUS >= PONG_ARENA_RADIUS) {
         int contact_angle = pong_norm_angle((int)lroundf(atan2f(dy, dx) * PONG_RAD2DEG));
         int diff = pong_angle_diff(contact_angle, pong_paddle_angle);
+        int half_width = pong_current_half_width();
 
-        if (diff >= -PONG_PADDLE_HALF_WIDTH_DEG && diff <= PONG_PADDLE_HALF_WIDTH_DEG) {
+        if (diff >= -half_width && diff <= half_width) {
             /* Specular reflection off the circular wall's normal at the
                contact point, plus a bit of "english" from how far off
                paddle-center the ball landed - classic paddle-hit steering,
@@ -196,7 +252,7 @@ static void pong_tick_cb(lv_timer_t *timer)
             float rvx = pong_ball_vx - 2.0f * dot * nx;
             float rvy = pong_ball_vy - 2.0f * dot * ny;
             float tx = -ny, ty = nx;
-            float offset_ratio = (float)diff / (float)PONG_PADDLE_HALF_WIDTH_DEG;
+            float offset_ratio = (float)diff / (float)half_width;
             float rmag;
 
             pong_score++;
@@ -307,8 +363,8 @@ static void event_pong_draw(lv_event_t *e)
     area.y2 = PONG_CY + PONG_ARENA_RADIUS;
     lv_draw_rect(draw_ctx, &wall_dsc, &area);
 
-    start_angle = pong_norm_angle(pong_paddle_angle - PONG_PADDLE_HALF_WIDTH_DEG);
-    end_angle = start_angle + PONG_PADDLE_HALF_WIDTH_DEG * 2;
+    start_angle = pong_norm_angle(pong_paddle_angle - pong_current_half_width());
+    end_angle = start_angle + pong_current_half_width() * 2;
     lv_draw_arc_dsc_init(&paddle_dsc);
     paddle_dsc.color = lv_color_hex(0x2E86FF);
     paddle_dsc.width = PONG_PADDLE_THICKNESS;
@@ -316,6 +372,26 @@ static void event_pong_draw(lv_event_t *e)
     paddle_dsc.opa = LV_OPA_COVER;
     lv_draw_arc(draw_ctx, &paddle_dsc, &center, PONG_ARENA_RADIUS,
                 (uint16_t)start_angle, (uint16_t)end_angle);
+
+    {
+        lv_draw_rect_dsc_t peg_dsc;
+        int i;
+
+        lv_draw_rect_dsc_init(&peg_dsc);
+        peg_dsc.radius = LV_RADIUS_CIRCLE;
+        peg_dsc.bg_color = lv_color_hex(0xFFA726);
+        peg_dsc.bg_opa = LV_OPA_COVER;
+        peg_dsc.border_width = 1;
+        peg_dsc.border_color = lv_color_hex(0x7A4A00);
+        peg_dsc.border_opa = LV_OPA_COVER;
+        for (i = 0; i < PONG_PEG_COUNT; i++) {
+            area.x1 = pong_pegs[i].x - PONG_PEG_RADIUS;
+            area.y1 = pong_pegs[i].y - PONG_PEG_RADIUS;
+            area.x2 = pong_pegs[i].x + PONG_PEG_RADIUS;
+            area.y2 = pong_pegs[i].y + PONG_PEG_RADIUS;
+            lv_draw_rect(draw_ctx, &peg_dsc, &area);
+        }
+    }
 
     lv_draw_rect_dsc_init(&ball_dsc);
     ball_dsc.radius = LV_RADIUS_CIRCLE;
