@@ -275,6 +275,12 @@ void check_firmware_update_toast(void)
     }
     if (strcmp(last, current) != 0) {
         nvs_set_last_fw_version(current);
+        /* Must commit right now, not just mark dirty: this runs once at
+           boot and nothing else is guaranteed to call settings_save()
+           before the next reboot (e.g. if the user never opens
+           Settings), so without this the stored version never actually
+           advances and the toast re-fires on every single boot. */
+        settings_save();
     }
 }
 

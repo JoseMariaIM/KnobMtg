@@ -20,9 +20,11 @@
 #define PONG_PADDLE_THICKNESS 7
 #define PONG_PADDLE_STEP_DEG 5  /* paddle slide per knob detent */
 #define PONG_TICK_MS 30
-#define PONG_BALL_SPEED_START 2.4f
-#define PONG_BALL_SPEED_STEP  0.06f /* speedup per successful bounce */
-#define PONG_BALL_SPEED_MAX   5.0f
+#define PONG_BALL_SPEED_START  2.4f
+#define PONG_BALL_SPEED_GROWTH 1.035f /* multiplicative speedup per bounce - compounds
+                                          into real late-game tension instead of the
+                                          barely-there ramp a flat per-bounce step gives */
+#define PONG_BALL_SPEED_MAX    11.0f
 #define PONG_STEER_FACTOR     1.6f  /* how much off-center paddle hits steer the ball */
 #define PONG_DEG2RAD 0.017453292f
 #define PONG_RAD2DEG 57.29577951f
@@ -198,8 +200,7 @@ static void pong_tick_cb(lv_timer_t *timer)
             float rmag;
 
             pong_score++;
-            pong_ball_speed = LV_MIN(PONG_BALL_SPEED_MAX,
-                                      PONG_BALL_SPEED_START + pong_score * PONG_BALL_SPEED_STEP);
+            pong_ball_speed = LV_MIN(PONG_BALL_SPEED_MAX, pong_ball_speed * PONG_BALL_SPEED_GROWTH);
 
             rvx += tx * offset_ratio * PONG_STEER_FACTOR;
             rvy += ty * offset_ratio * PONG_STEER_FACTOR;
