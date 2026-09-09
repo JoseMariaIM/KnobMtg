@@ -19,6 +19,7 @@
 #include "rename.h"
 #include "mana.h"
 #include "attack.h"
+#include "ui_wifi.h"
 
 #include <stdio.h>
 #include <stdlib.h>

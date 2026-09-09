@@ -685,6 +685,7 @@ void refresh_multiplayer_ui(void)
 #define ATTACK_DRAG_THRESHOLD_PX 14
 
 static int attack_drag_source = -1;
+static int attack_drag_source_color_idx = 0; /* spec->color_index for attack_drag_source */
 static bool attack_drag_active = false;
 static bool attack_drag_suppress_click = false;
 static lv_point_t attack_drag_start;
@@ -696,9 +697,6 @@ static lv_point_t attack_drag_current;
    drag doesn't pack them all into one spot. */
 #define ATTACK_TRAIL_MAX 40
 #define ATTACK_TRAIL_MIN_STEP_PX 4
-/* Fixed glow color, independent of source/target player - a color that
-   changed with whoever you dragged from read as arbitrary/"random". */
-#define ATTACK_TRAIL_GLOW_COLOR lv_color_hex(0x40C4FF)
 static lv_point_t attack_trail[ATTACK_TRAIL_MAX];
 static int attack_trail_count = 0;
 
@@ -742,6 +740,7 @@ bool attack_gesture_in_progress(void)
 {
     return attack_drag_active;
 }
+
 
 
 
@@ -973,6 +972,7 @@ static void event_wedge_drag(lv_event_t *e)
            release (see point_in_swipe_edge_zone). */
         if (point_in_swipe_edge_zone(pt.x, pt.y)) return;
         attack_drag_source = spec->player_index;
+        attack_drag_source_color_idx = spec->color_index;
         attack_drag_active = false;
         attack_drag_start = pt;
         attack_drag_current = pt;
@@ -1047,24 +1047,28 @@ static int attack_hover_panel_index(lv_point_t pt, bool layout_is_wedge)
 /* Live comet-trail from where the attack drag started to the current
    touch point, drawn on top of everything else (registered on the same
    full-screen overlay as the wedge separators, after them): a tapering
-   fixed-color halo + a thin white core along the recent path
-   (attack_trail, sampled densely enough that the short segments read as
-   one continuous stroke rather than separate lines), ending in a small
-   filled "head" at the fingertip. Also glows the panel currently under
-   the finger, tinted with ITS OWN color, as a preview of who's about to
-   be targeted. */
+   halo, tinted with the SOURCE player's own assigned color (whatever
+   they actually see on their panel - custom override, life-color mode,
+   or the 2p color swap all included, see get_effective_player_color),
+   under a thin white core along the recent path (attack_trail, sampled
+   densely enough that the short segments read as one continuous stroke
+   rather than separate lines), ending in a small filled "head" at the
+   fingertip. Also glows the panel currently under the finger, tinted
+   with ITS OWN color, as a preview of who's about to be targeted. */
 static void event_attack_drag_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t halo_dsc, core_dsc;
     lv_draw_rect_dsc_t tip_dsc;
     lv_area_t tip_area;
+    lv_color_t src_color;
     lv_point_t tip;
     int denom, i, hover_idx;
     bool layout_is_wedge;
 
     if (!attack_drag_active || attack_trail_count == 0) return;
 
+    src_color = get_effective_player_color(attack_drag_source, attack_drag_source_color_idx, LIFE_VIB_MID);
     tip = attack_trail[attack_trail_count - 1];
     layout_is_wedge = mp_state.layout != NULL && mp_state.layout->panel_count > 0 &&
                       spec_is_wedge(&mp_state.layout->panels[0]);
@@ -1088,7 +1092,7 @@ static void event_attack_drag_draw(lv_event_t *e)
 
         lv_draw_rect_dsc_init(&glow_dsc);
         glow_dsc.radius = LV_RADIUS_CIRCLE;
-        glow_dsc.bg_color = get_player_active_color(spec->player_index);
+        glow_dsc.bg_color = get_effective_player_color(spec->player_index, spec->color_index, LIFE_VIB_VIV);
         glow_dsc.bg_opa = LV_OPA_50;
         glow_dsc.border_width = 3;
         glow_dsc.border_color = lv_color_white();
@@ -1108,7 +1112,7 @@ static void event_attack_drag_draw(lv_event_t *e)
        segments overlap into what reads as one continuous stroke instead
        of a few visible straight pieces. */
     lv_draw_line_dsc_init(&halo_dsc);
-    halo_dsc.color = ATTACK_TRAIL_GLOW_COLOR;
+    halo_dsc.color = src_color;
     halo_dsc.round_start = 1;
     halo_dsc.round_end = 1;
     lv_draw_line_dsc_init(&core_dsc);
@@ -1132,7 +1136,7 @@ static void event_attack_drag_draw(lv_event_t *e)
        primitive (this LVGL build only draws lines/rects/arcs). */
     lv_draw_rect_dsc_init(&tip_dsc);
     tip_dsc.radius = LV_RADIUS_CIRCLE;
-    tip_dsc.bg_color = ATTACK_TRAIL_GLOW_COLOR;
+    tip_dsc.bg_color = src_color;
     tip_dsc.bg_opa = LV_OPA_COVER;
     tip_dsc.border_width = 2;
     tip_dsc.border_color = lv_color_white();

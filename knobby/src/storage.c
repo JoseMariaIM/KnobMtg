@@ -27,6 +27,7 @@ static int cached_language = 0; /* 0=English (default), 1=Espanol - see lang_t *
 static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
 static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
+static char cached_last_fw_version[FW_VERSION_LEN] = "";
 
 // ---------- init ----------
 void knob_nvs_init(void)
@@ -107,6 +108,10 @@ void knob_nvs_init(void)
         size_t pass_size = sizeof(cached_wifi_pass);
         nvs_get_blob(handle, "wifi_pass", cached_wifi_pass, &pass_size);
         cached_wifi_pass[WIFI_PASS_LEN - 1] = '\0';
+
+        size_t fwv_size = sizeof(cached_last_fw_version);
+        nvs_get_blob(handle, "last_fw_ver", cached_last_fw_version, &fwv_size);
+        cached_last_fw_version[FW_VERSION_LEN - 1] = '\0';
 
         nvs_close(handle);
     }
@@ -309,6 +314,17 @@ void nvs_set_wifi_pass(const char *pass)
     settings_dirty = true;
 }
 
+void nvs_get_last_fw_version(char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%s", cached_last_fw_version);
+}
+
+void nvs_set_last_fw_version(const char *version)
+{
+    snprintf(cached_last_fw_version, sizeof(cached_last_fw_version), "%s", version);
+    settings_dirty = true;
+}
+
 // ---------- persist ----------
 void settings_save(void)
 {
@@ -332,6 +348,7 @@ void settings_save(void)
         nvs_set_blob(handle, "name_list", cached_name_list, sizeof(cached_name_list));
         nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));
+        nvs_set_blob(handle, "last_fw_ver", cached_last_fw_version, sizeof(cached_last_fw_version));
         esp_err_t commit_err = nvs_commit(handle);
         nvs_close(handle);
         /* Keep the dirty flag set if the commit failed (e.g. NVS full) so a

@@ -56,6 +56,10 @@ void knob_enter_deep_sleep(void);
 void battery_icon_register(lv_obj_t *icon);
 void battery_icon_unregister(lv_obj_t *icon);
 
+/* Call once at boot, after screens are built: shows the "just updated"
+   toast if the firmware version changed since the last boot. */
+void check_firmware_update_toast(void);
+
 #ifdef __cplusplus
 }
 #endif

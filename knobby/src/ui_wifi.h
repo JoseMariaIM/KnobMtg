@@ -21,6 +21,11 @@ void open_wifi_settings_screen(void);
 void open_wifi_scan_list_screen(void);
 void open_ota_update_screen(void);
 void open_ota_qr_screen(void);
+/* Jumps straight to the QR screen, skipping Updates - used by the
+   "just updated" toast (see hw.c). Marks the visit so the back handler
+   (knob.c) can send back to the life counter instead of Updates. */
+void open_ota_qr_screen_from_toast(void);
+bool ota_qr_consume_from_toast(void);
 
 void refresh_wifi_settings_ui(void);
 void refresh_ota_update_ui(void);

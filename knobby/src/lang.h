@@ -93,6 +93,7 @@ typedef enum {
     STR_OTA_CHECKING,
     STR_OTA_UP_TO_DATE,
     STR_OTA_AVAILABLE_FMT,    /* "Update available\n%s" */
+    STR_OTA_UPDATED_FMT,      /* "Updated to\n%s" */
     STR_OTA_UPDATING,
     STR_OTA_ERROR_FMT,        /* "Error: %s" */
     STR_OTA_LOW_BATTERY_FMT,  /* "Battery too low to update\nneed %d%% or more" */

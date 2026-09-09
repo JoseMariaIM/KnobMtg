@@ -673,6 +673,25 @@ void open_ota_qr_screen(void)
     load_screen_if_needed(screen_ota_qr);
 }
 
+/* Set when the "just updated" toast (see hw.c) jumps straight here,
+   skipping the Updates screen entirely - so back has nowhere sensible
+   to return to there and should go to the life counter instead (see
+   ota_qr_consume_from_toast(), read once by knob.c's back handler). */
+static bool ota_qr_from_toast = false;
+
+void open_ota_qr_screen_from_toast(void)
+{
+    ota_qr_from_toast = true;
+    load_screen_if_needed(screen_ota_qr);
+}
+
+bool ota_qr_consume_from_toast(void)
+{
+    bool was_from_toast = ota_qr_from_toast;
+    ota_qr_from_toast = false;
+    return was_from_toast;
+}
+
 void build_ota_qr_screen(void)
 {
     lv_obj_t *qr;

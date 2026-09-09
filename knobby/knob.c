@@ -366,7 +366,14 @@ static void handle_back_navigation(lv_obj_t *screen)
     } else if (screen == screen_wifi_status) {
         wifi_status_handle_back();
     } else if (screen == screen_ota_qr) {
-        load_screen_if_needed(screen_ota_update);
+        /* Reached via the "just updated" toast (see hw.c): there's no
+           Updates screen in that history to return to, so go straight
+           to the life counter instead. */
+        if (ota_qr_consume_from_toast()) {
+            back_to_main();
+        } else {
+            load_screen_if_needed(screen_ota_update);
+        }
     } else if (screen == screen_counter_menu) {
         open_player_menu(menu_player);
     } else if (screen == screen_counter_edit) {

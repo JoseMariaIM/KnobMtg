@@ -206,17 +206,14 @@ static void update_toast_click_cb(lv_event_t *e)
 }
 
 /* Rather than a persistent icon (too easy to miss on a screen this
-   size), the moment an update is first seen this drops a
-   self-dismissing banner on lv_layer_top() (renders above whatever
-   screen is active, independent of which one that is) spelling the
-   update out in words. Tapping it jumps straight to the update screen. */
-static void show_update_toast(void)
+   size), this drops a self-dismissing banner on lv_layer_top() (renders
+   above whatever screen is active, independent of which one that is)
+   spelling out a message in words; tapping it runs click_cb, which owns
+   navigating wherever that message points to. Shared by the "update
+   available" and "just updated" toasts below. */
+static void show_toast(const char *msg, lv_event_cb_t click_cb)
 {
-    char msg[64];
-
     dismiss_update_toast(); /* replace any still-showing toast rather than stack them */
-
-    snprintf(msg, sizeof(msg), t(STR_OTA_AVAILABLE_FMT), ota_get_latest_version());
 
     s_toast = lv_label_create(lv_layer_top());
     lv_label_set_text(s_toast, msg);
@@ -230,10 +227,55 @@ static void show_update_toast(void)
     lv_obj_set_width(s_toast, 220);
     lv_obj_align(s_toast, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_add_flag(s_toast, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(s_toast, update_toast_click_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(s_toast, click_cb, LV_EVENT_CLICKED, NULL);
 
     s_toast_timer = lv_timer_create(update_toast_timer_cb, UPDATE_TOAST_MS, NULL);
     lv_timer_set_repeat_count(s_toast_timer, 1);
+}
+
+/* The moment an update is first seen this shows the update-available
+   toast; tapping it jumps straight to the update screen. */
+static void show_update_toast(void)
+{
+    char msg[64];
+    snprintf(msg, sizeof(msg), t(STR_OTA_AVAILABLE_FMT), ota_get_latest_version());
+    show_toast(msg, update_toast_click_cb);
+}
+
+static void update_applied_toast_click_cb(lv_event_t *e)
+{
+    (void)e;
+    dismiss_update_toast();
+    /* Straight to the QR (release notes), skipping the Updates screen -
+       open_ota_qr_screen_from_toast() marks the visit so knob.c's back
+       handler sends back to the life counter instead of Updates, which
+       this toast never went through. */
+    open_ota_qr_screen_from_toast();
+}
+
+/* Shown once, right after boot, when the running firmware version
+   differs from the one stored at the previous boot (see
+   check_firmware_update_toast) - i.e. an OTA update just landed.
+   Tapping it shows the QR code to the release notes. */
+static void show_update_applied_toast(const char *version)
+{
+    char msg[64];
+    snprintf(msg, sizeof(msg), t(STR_OTA_UPDATED_FMT), version);
+    show_toast(msg, update_applied_toast_click_cb);
+}
+
+void check_firmware_update_toast(void)
+{
+    char last[FW_VERSION_LEN];
+    const char *current = get_firmware_version();
+
+    nvs_get_last_fw_version(last, sizeof(last));
+    if (last[0] != '\0' && strcmp(last, current) != 0) {
+        show_update_applied_toast(current);
+    }
+    if (strcmp(last, current) != 0) {
+        nvs_set_last_fw_version(current);
+    }
 }
 
 static void update_notice_check(void)

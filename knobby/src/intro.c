@@ -1,5 +1,6 @@
 #include "intro.h"
 #include "assets_intro.h"
+#include "hw.h"
 
 // Forward declarations
 extern void back_to_main(void);
@@ -47,6 +48,10 @@ static void intro_finish_timer_cb(lv_timer_t *timer)
        on every ordinary back navigation. Runs only when "random first
        player" is on and there's more than one player; a no-op otherwise. */
     start_player_selection_animation();
+    /* Same reasoning: boot is the one moment to check whether this is
+       the first time this firmware has run, so the "just updated" toast
+       (see hw.c) can't show mid-animation or repeat on every reset. */
+    check_firmware_update_toast();
 }
 
 static void comics_pop_ready_cb(lv_anim_t *a)

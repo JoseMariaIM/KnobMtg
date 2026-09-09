@@ -52,4 +52,8 @@ void nvs_set_wifi_ssid(const char *ssid);
 void nvs_get_wifi_pass(char *out, size_t out_len);
 void nvs_set_wifi_pass(const char *pass);
 
+#define FW_VERSION_LEN 24 /* "vX.Y.Z" style tags, generous headroom */
+void nvs_get_last_fw_version(char *out, size_t out_len);
+void nvs_set_last_fw_version(const char *version);
+
 #endif // _STORAGE_H
