@@ -204,6 +204,16 @@ typedef enum {
     /* ui_mp.c */
     STR_VICTORY_WINNER,
 
+    /* attack.c */
+    STR_ATTACK_MODE_DAMAGE,
+    STR_ATTACK_MODE_HEAL,
+    STR_ATTACK_MODE_CMDR,
+    STR_ATTACK_MODE_INFECT,
+    STR_ATTACK_LIFELINK,
+    STR_ATTACK_TITLE_FMT,   /* "%s > %s" */
+    STR_CANCEL,
+    STR_RESOLVE,
+
     STR_COUNT,
 } string_id_t;
 

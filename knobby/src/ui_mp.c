@@ -5,6 +5,7 @@
 #include "storage.h"
 #include "hw.h"
 #include "lang.h"
+#include "attack.h"
 
 extern void reset_all_values(void);
 
@@ -670,10 +671,44 @@ void refresh_multiplayer_ui(void)
     check_for_winner();
 }
 
+/* ---------- attack drag gesture ----------
+   Dragging from one player's wedge onto another's arms an "Attack" flow
+   (see attack.c): press-down picks the source, live position draws a
+   following arrow, and release over a different, live wedge opens the
+   mode/amount screen for that pair. A quick tap without enough movement
+   never sets attack_drag_active, so it still reaches the normal
+   SHORT_CLICKED/LONG_PRESSED handlers below untouched. Wedge panels
+   clear LV_OBJ_FLAG_PRESS_LOCK (see rebuild_multiplayer_layout), so
+   LVGL re-targets PRESSED to whichever wedge is currently under the
+   finger as it crosses boundaries - exactly what's needed to read off
+   the target at release time from the event's own panel index. */
+#define ATTACK_DRAG_THRESHOLD_PX 14
+
+static int attack_drag_source = -1;
+static bool attack_drag_active = false;
+static bool attack_drag_suppress_click = false;
+static lv_point_t attack_drag_start;
+static lv_point_t attack_drag_current;
+
+/* Used by knob.c's swipe classifier so a drag that crosses an edge zone
+   can't also be read as the back/menu swipe gesture. */
+bool attack_gesture_in_progress(void)
+{
+    return attack_drag_active;
+}
+
 /* ---------- events ---------- */
 static void event_multiplayer_select(lv_event_t *e)
 {
     int player = (int)(intptr_t)lv_event_get_user_data(e);
+
+    if (attack_drag_suppress_click) {
+        /* This CLICKED is the tail end of a drag gesture that already
+           opened (or declined to open) the Attack screen - not a real
+           tap on this wedge. */
+        attack_drag_suppress_click = false;
+        return;
+    }
     bool had_pending;
     bool was_selected;
 
@@ -731,6 +766,10 @@ static void event_multiplayer_open_menu(lv_event_t *e)
     int player = (int)(intptr_t)lv_event_get_user_data(e);
 
     if (player < 0 || player >= MULTIPLAYER_COUNT) return;
+
+    /* A long hold that's already past the drag threshold is an in-flight
+       attack gesture, not a request for this wedge's menu. */
+    if (attack_drag_active) return;
 
     if (player_selection_animation_active()) {
         stop_player_selection_animation();
@@ -856,6 +895,144 @@ static void event_wedge_separators(lv_event_t *e)
     }
 }
 
+static void event_wedge_drag(lv_event_t *e)
+{
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    const mp_panel_spec_t *spec;
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_indev_t *indev;
+
+    if (mp_state.layout == NULL || idx < 0 || idx >= mp_state.layout->panel_count)
+        return;
+    spec = &mp_state.layout->panels[idx];
+
+    if (code == LV_EVENT_PRESSED) {
+        /* Only the very first wedge touched in a gesture arms it - a
+           re-search caused by the finger sliding onto a new wedge (see
+           the comment above attack_drag_source's declaration) must not
+           reset the source to wherever it currently is. */
+        if (attack_drag_source >= 0) return;
+        if (player_selection_animation_active()) return;
+        if (player_eliminated[spec->player_index]) return;
+        attack_drag_source = spec->player_index;
+        attack_drag_active = false;
+        indev = lv_indev_get_act();
+        if (indev != NULL) lv_indev_get_point(indev, &attack_drag_start);
+        attack_drag_current = attack_drag_start;
+    } else if (code == LV_EVENT_PRESSING) {
+        int ddx, ddy;
+
+        if (attack_drag_source < 0) return;
+        indev = lv_indev_get_act();
+        if (indev != NULL) lv_indev_get_point(indev, &attack_drag_current);
+        if (!attack_drag_active) {
+            ddx = attack_drag_current.x - attack_drag_start.x;
+            ddy = attack_drag_current.y - attack_drag_start.y;
+            if (ddx * ddx + ddy * ddy >= ATTACK_DRAG_THRESHOLD_PX * ATTACK_DRAG_THRESHOLD_PX) {
+                attack_drag_active = true;
+            }
+        }
+        if (attack_drag_active) lv_obj_invalidate(screen_multiplayer);
+    } else if (code == LV_EVENT_RELEASED) {
+        int target = spec->player_index;
+
+        if (attack_drag_source < 0) return;
+        if (attack_drag_active) {
+            attack_drag_active = false;
+            attack_drag_suppress_click = true;
+            if (target != attack_drag_source && !player_eliminated[target] &&
+                !player_eliminated[attack_drag_source]) {
+                open_attack_screen(attack_drag_source, target);
+            }
+            lv_obj_invalidate(screen_multiplayer);
+        }
+        attack_drag_source = -1;
+    }
+}
+
+/* Live arrow from where the attack drag started to the current touch
+   point, drawn on top of everything else (registered on the same
+   full-screen overlay as the wedge separators, after them). Also glows
+   the wedge currently under the finger, when it differs from the
+   source, as a preview of who's about to be targeted. */
+static void event_attack_drag_draw(lv_event_t *e)
+{
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+    lv_draw_line_dsc_t line_dsc;
+    lv_point_t p0, p1;
+    int dx, dy, ang;
+    int i;
+
+    if (!attack_drag_active) return;
+
+    p0 = attack_drag_start;
+    p1 = attack_drag_current;
+
+    if (mp_state.layout != NULL) {
+        bool layout_is_wedge = mp_state.layout->panel_count > 0 &&
+                               spec_is_wedge(&mp_state.layout->panels[0]);
+        for (i = 0; i < mp_state.layout->panel_count; i++) {
+            const mp_panel_spec_t *spec = &mp_state.layout->panels[i];
+            bool hit;
+            lv_coord_t gx, gy;
+
+            if (spec->player_index == attack_drag_source) continue;
+
+            if (layout_is_wedge) {
+                int hdx = p1.x - WEDGE_CX;
+                int hdy = p1.y - WEDGE_CY;
+                if (hdx == 0 && hdy == 0) hdx = 1;
+                hit = wedge_contains_angle(spec, lv_atan2(hdy, hdx));
+                gx = WEDGE_CX + wedge_geom[i].label_dx;
+                gy = WEDGE_CY + wedge_geom[i].label_dy;
+            } else {
+                hit = p1.x >= spec->x && p1.x < spec->x + spec->w &&
+                      p1.y >= spec->y && p1.y < spec->y + spec->h;
+                gx = spec->x + spec->w / 2;
+                gy = spec->y + spec->h / 2;
+            }
+
+            if (hit) {
+                lv_draw_rect_dsc_t glow_dsc;
+                lv_area_t glow_area;
+
+                lv_draw_rect_dsc_init(&glow_dsc);
+                glow_dsc.radius = LV_RADIUS_CIRCLE;
+                glow_dsc.bg_color = lv_color_white();
+                glow_dsc.bg_opa = LV_OPA_30;
+                glow_area.x1 = gx - 46;
+                glow_area.y1 = gy - 46;
+                glow_area.x2 = gx + 46;
+                glow_area.y2 = gy + 46;
+                lv_draw_rect(draw_ctx, &glow_dsc, &glow_area);
+                break;
+            }
+        }
+    }
+
+    lv_draw_line_dsc_init(&line_dsc);
+    line_dsc.color = lv_color_white();
+    line_dsc.width = 5;
+    line_dsc.round_start = 1;
+    line_dsc.round_end = 1;
+    lv_draw_line(draw_ctx, &line_dsc, &p0, &p1);
+
+    dx = p1.x - p0.x;
+    dy = p1.y - p0.y;
+    if (dx != 0 || dy != 0) {
+        /* Small back-swept chevron at the tip, in place of a filled
+           arrowhead (this LVGL build has no polygon draw primitive). */
+        lv_point_t wing1, wing2;
+        ang = lv_atan2(dy, dx);
+        wing1.x = p1.x + wedge_polar(lv_trigo_cos((ang + 180 - 25 + 360) % 360), 16);
+        wing1.y = p1.y + wedge_polar(lv_trigo_sin((ang + 180 - 25 + 360) % 360), 16);
+        wing2.x = p1.x + wedge_polar(lv_trigo_cos((ang + 180 + 25 + 360) % 360), 16);
+        wing2.y = p1.y + wedge_polar(lv_trigo_sin((ang + 180 + 25 + 360) % 360), 16);
+        lv_draw_line(draw_ctx, &line_dsc, &p1, &wing1);
+        lv_draw_line(draw_ctx, &line_dsc, &p1, &wing2);
+    }
+}
+
 /* ---------- layout rebuild ---------- */
 void rebuild_multiplayer_layout(int track)
 {
@@ -863,6 +1040,12 @@ void rebuild_multiplayer_layout(int track)
     int i;
 
     if (screen_multiplayer == NULL) return;
+
+    /* Panels are about to be destroyed and rebuilt (lv_obj_clean below) -
+       any in-flight drag gesture refers to indices that won't exist. */
+    attack_drag_source = -1;
+    attack_drag_active = false;
+    attack_drag_suppress_click = false;
 
     victory_shown = false;
 
@@ -908,6 +1091,14 @@ void rebuild_multiplayer_layout(int track)
             lv_obj_set_style_border_width(panel, 1, 0);
             lv_obj_set_style_border_color(panel, lv_color_black(), 0);
         }
+        /* Attack-drag gesture tracking: attached regardless of panel shape.
+           2p/4p use plain rectangular quadrants (see panels_4p/panels_2p),
+           only 3p is an actual angular wedge layout - the drag/target
+           logic itself doesn't care which, it only needs each panel's own
+           PRESSED/RELEASED and player_index (see event_wedge_drag). */
+        lv_obj_add_event_cb(panel, event_wedge_drag, LV_EVENT_PRESSED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(panel, event_wedge_drag, LV_EVENT_PRESSING, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(panel, event_wedge_drag, LV_EVENT_RELEASED, (void *)(intptr_t)i);
         lv_obj_add_event_cb(panel, event_multiplayer_select, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)p);
         lv_obj_add_event_cb(panel, event_multiplayer_open_menu, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)p);
         mp_state.panels[i] = panel;
@@ -940,12 +1131,17 @@ void rebuild_multiplayer_layout(int track)
             &mp_state.counter_values[i][COUNTER_TYPE_EXPERIENCE], p);
     }
 
-    if (layout->panel_count > 0 && spec_is_wedge(&layout->panels[0])) {
-        /* Transparent overlay that draws the separator lines between
-           slices (LV_USE_LINE is disabled, so draw them directly). */
-        lv_obj_t *sep = make_plain_box(screen_multiplayer, 360, 360);
-        lv_obj_set_pos(sep, 0, 0);
-        lv_obj_add_event_cb(sep, event_wedge_separators, LV_EVENT_DRAW_MAIN, NULL);
+    if (layout->panel_count > 0) {
+        /* Transparent full-screen overlay, drawn last (on top): paints the
+           wedge separator lines (LV_USE_LINE is disabled, so drawn
+           directly) for pie layouts, and the attack-drag arrow for any
+           layout - both are no-ops when there's nothing to show. */
+        lv_obj_t *overlay = make_plain_box(screen_multiplayer, 360, 360);
+        lv_obj_set_pos(overlay, 0, 0);
+        if (spec_is_wedge(&layout->panels[0])) {
+            lv_obj_add_event_cb(overlay, event_wedge_separators, LV_EVENT_DRAW_MAIN, NULL);
+        }
+        lv_obj_add_event_cb(overlay, event_attack_drag_draw, LV_EVENT_DRAW_MAIN, NULL);
     }
 
     mp_battery_icon = add_low_battery_icon(screen_multiplayer);

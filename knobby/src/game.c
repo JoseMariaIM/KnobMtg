@@ -654,6 +654,52 @@ void damage_cancel(void)
         enemies[selected_enemy].damage = damage_start_value;
 }
 
+/* Attack screen's Cmdr mode: source/target are already known (picked via
+   the drag gesture), so this applies straight to cmd_damage_totals
+   instead of going through the enemies[]-list editor damage_apply()
+   uses. Mirrors its log/elimination/sync sequence exactly. */
+void apply_attack_cmd_damage(int source, int target, int delta)
+{
+    int *cell;
+    int encoded_source;
+
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[target]) return;
+    if (delta == 0) return;
+
+    cell = &cmd_damage_totals[source][target];
+    *cell += delta;
+    encoded_source = encode_cmd_source(source, 0);
+    damage_log_add(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
+    player_life[target] = clamp_life(player_life[target] - delta);
+    if (*cell >= 21 || player_life[target] <= 0) {
+        set_player_elimination_action(target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
+    }
+    check_player_elimination(target);
+    net_sync_commit_player(target);
+}
+
+/* Attack screen's Infect mode: same poison-threshold rule as
+   apply_counter_edit(), applied as a delta against a known target
+   instead of through the counter editor's menu_player global. */
+void apply_attack_poison(int target, int delta)
+{
+    int old_value;
+
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[target]) return;
+    if (delta == 0) return;
+
+    old_value = player_counters[target][COUNTER_TYPE_POISON];
+    player_counters[target][COUNTER_TYPE_POISON] = clamp_counter(old_value + delta);
+    damage_log_add(target, delta, LOG_EVT_COUNTER, COUNTER_TYPE_POISON);
+    if (old_value < 10 && player_counters[target][COUNTER_TYPE_POISON] >= 10) {
+        set_player_elimination_action(target, LOG_EVT_COUNTER, COUNTER_TYPE_POISON, delta);
+    }
+    check_player_elimination(target);
+    net_sync_commit_player(target);
+}
+
 void change_player_life(int delta)
 {
     /* The shared delta applies to every currently-selected player. Clamp it

@@ -24,4 +24,9 @@ int mp_player_seat_rotation(int player);
 
 void select_kick_timer(void);
 
+/* True while a wedge-to-wedge attack drag has moved past the tap
+   threshold (see attack_drag_source in ui_mp.c) - lets the swipe/back
+   gesture classifier back off so it can't fire mid-drag. */
+bool attack_gesture_in_progress(void);
+
 #endif // _UI_MP_H

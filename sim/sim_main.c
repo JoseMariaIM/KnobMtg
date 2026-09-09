@@ -18,6 +18,7 @@
 #include "game_mode.h"
 #include "rename.h"
 #include "mana.h"
+#include "attack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,6 +158,11 @@ static void nav_color_picker(void) {
     load_screen_if_needed(screen_player_color_picker);
 }
 static void nav_mana(void) { open_mana_screen(); }
+static void nav_attack(void) {
+    nvs_set_players_to_track(4);
+    reset_all_values();
+    open_attack_screen(0, 1);
+}
 
 static const screen_entry_t all_screens[] = {
     {"main",          nav_main},
@@ -188,6 +194,7 @@ static const screen_entry_t all_screens[] = {
     {"color-menu",    nav_color_menu},
     {"color-picker",  nav_color_picker},
     {"mana",          nav_mana},
+    {"attack",        nav_attack},
     {NULL, NULL}
 };
 

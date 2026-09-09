@@ -185,6 +185,15 @@ static const char *strings_en[STR_COUNT] = {
     [STR_MANA_CLEAR_ALL_HOLD] = "Clear All\n(Hold)",
 
     [STR_VICTORY_WINNER] = "Winner",
+
+    [STR_ATTACK_MODE_DAMAGE] = "Dmg",
+    [STR_ATTACK_MODE_HEAL] = "Heal",
+    [STR_ATTACK_MODE_CMDR] = "Cmdr",
+    [STR_ATTACK_MODE_INFECT] = "Infect",
+    [STR_ATTACK_LIFELINK] = "Lifelink",
+    [STR_ATTACK_TITLE_FMT] = "%s > %s",
+    [STR_CANCEL] = "Cancel",
+    [STR_RESOLVE] = "Resolve",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -365,6 +374,15 @@ static const char *strings_es[STR_COUNT] = {
     [STR_MANA_CLEAR_ALL_HOLD] = "Borrar Todo\n(Mantener)",
 
     [STR_VICTORY_WINNER] = "Ganador",
+
+    [STR_ATTACK_MODE_DAMAGE] = "Daño",
+    [STR_ATTACK_MODE_HEAL] = "Curar",
+    [STR_ATTACK_MODE_CMDR] = "Cmdr",
+    [STR_ATTACK_MODE_INFECT] = "Infectar",
+    [STR_ATTACK_LIFELINK] = "Vínculo vital",
+    [STR_ATTACK_TITLE_FMT] = "%s > %s",
+    [STR_CANCEL] = "Cancelar",
+    [STR_RESOLVE] = "Resolver",
 };
 
 void lang_init(void)

@@ -14,6 +14,7 @@
 #include "src/mana.h"
 #include "src/ui_wifi.h"
 #include "src/wifi_ota.h"
+#include "src/attack.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -107,6 +108,11 @@ knob_swipe_direction_t knob_classify_swipe_direction(lv_obj_t *screen,
     int abs_dy = dy >= 0 ? dy : -dy;
 
     if (screen == NULL || screen == screen_intro) return KNOB_SWIPE_NONE;
+
+    /* A wedge-to-wedge attack drag can easily cross an edge zone with
+       mostly-axis-aligned movement (see attack_drag_source in ui_mp.c) -
+       without this it could double-fire as a menu-open swipe too. */
+    if (attack_gesture_in_progress()) return KNOB_SWIPE_NONE;
 
     if (is_player_screen(screen)) {
         if (start_x <= KNOB_SWIPE_LEFT_EDGE_ZONE &&
@@ -374,6 +380,8 @@ static void handle_back_navigation(lv_obj_t *screen)
     } else if (screen == screen_mana) {
         mana_discard_preview();
         lv_scr_load(screen_tools_menu);
+    } else if (screen == screen_attack) {
+        back_to_main();
     }
 }
 
@@ -446,6 +454,7 @@ void knob_gui(void)
     build_main_screen();
     build_multiplayer_screen();
     build_victory_screen();
+    build_attack_screen();
     build_player_menu_screen();
     build_eliminated_player_menu_screen();
     build_rename_screen();
@@ -574,6 +583,11 @@ static void handle_knob_event(knob_event_t k)
     {
         if (k == KNOB_LEFT)      change_dice_quantity(-1);
         else if (k == KNOB_RIGHT) change_dice_quantity(+1);
+    }
+    else if (lv_scr_act() == screen_attack)
+    {
+        if (k == KNOB_LEFT)      change_attack_amount(-1);
+        else if (k == KNOB_RIGHT) change_attack_amount(+1);
     }
     else if (k == KNOB_LEFT || k == KNOB_RIGHT)
     {

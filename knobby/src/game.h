@@ -71,6 +71,8 @@ void damage_cancel(void);
 void change_player_life(int delta);
 void change_all_damage(int delta);
 void apply_life_delta(int player, int delta);
+void apply_attack_cmd_damage(int source, int target, int delta);
+void apply_attack_poison(int target, int delta);
 
 // ---------- all-damage flash (read-only post-commit feedback) ----------
 extern bool all_damage_flash_active;
