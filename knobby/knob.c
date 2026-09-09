@@ -16,6 +16,7 @@
 #include "src/wifi_ota.h"
 #include "src/attack.h"
 #include "src/snake.h"
+#include "src/pong.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -393,6 +394,9 @@ static void handle_back_navigation(lv_obj_t *screen)
     } else if (screen == screen_snake) {
         snake_leave_screen();
         open_minigames_menu();
+    } else if (screen == screen_pong) {
+        pong_leave_screen();
+        open_minigames_menu();
     }
 }
 
@@ -492,6 +496,7 @@ void knob_gui(void)
     build_game_mode_menu_screen();
     build_custom_life_screen();
     build_snake_screen();
+    build_pong_screen();
     menu_facing_hook_screens();
 
     refresh_main_ui();
@@ -543,6 +548,11 @@ static void handle_knob_event(knob_event_t k)
     {
         if (k == KNOB_LEFT)      snake_turn(-1);
         else if (k == KNOB_RIGHT) snake_turn(+1);
+    }
+    else if (lv_scr_act() == screen_pong)
+    {
+        if (k == KNOB_LEFT)      pong_turn(-1);
+        else if (k == KNOB_RIGHT) pong_turn(+1);
     }
     else if (lv_scr_act() == screen_multiplayer)
     {

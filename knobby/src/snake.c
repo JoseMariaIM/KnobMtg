@@ -91,31 +91,98 @@ static bool snake_occupies(int gx, int gy)
     return false;
 }
 
-static void snake_spawn_food(void)
-{
-    int gx, gy, tries;
+/* Food used to be able to spawn on any valid+unoccupied cell, including
+   ones right against the wall ring - reachable in principle (the whole
+   arena is one 4-connected region), but approaching a cell that hugs
+   the boundary leaves almost no margin to turn without clipping the
+   wall, which is exactly what it looks like when it happens: the food
+   sits right on the ring and dying trying to reach it feels like it
+   was never actually reachable. snake_spawn_food() now also requires
+   food to be at least SNAKE_FOOD_MARGIN_PX inside the wall (see
+   is_cell_food_safe), leaving room to approach it safely.
 
-    /* The arena is mostly empty for nearly all of a normal game, so a
-       few random retries almost always land a free valid cell; the
-       exhaustive fallback only matters once the snake is very long. */
-    for (tries = 0; tries < 200; tries++) {
-        gx = (int)(esp_random() % SNAKE_GRID_DIM);
-        gy = (int)(esp_random() % SNAKE_GRID_DIM);
-        if (is_cell_valid(gx, gy) && !snake_occupies(gx, gy)) {
-            snake_food.x = (int8_t)gx;
-            snake_food.y = (int8_t)gy;
-            return;
+   Separately, a long snake's own body can temporarily wall off part of
+   the arena from the head - flood-filling from the head through valid,
+   unoccupied cells and only spawning food inside that reachable set
+   keeps food from ever landing somewhere genuinely cut off right now. */
+static bool snake_reachable[SNAKE_GRID_DIM][SNAKE_GRID_DIM];
+
+#define SNAKE_FOOD_MARGIN_PX (SNAKE_CELL_PX * 2)
+#define SNAKE_FOOD_RADIUS    (SNAKE_ARENA_RADIUS - SNAKE_FOOD_MARGIN_PX)
+
+static bool is_cell_food_safe(int gx, int gy)
+{
+    int cx, cy, dx, dy;
+
+    if (!is_cell_valid(gx, gy)) return false;
+    cx = gx * SNAKE_CELL_PX + SNAKE_CELL_PX / 2;
+    cy = gy * SNAKE_CELL_PX + SNAKE_CELL_PX / 2;
+    dx = cx - SNAKE_ARENA_CX;
+    dy = cy - SNAKE_ARENA_CY;
+    return (dx * dx + dy * dy) <= (SNAKE_FOOD_RADIUS * SNAKE_FOOD_RADIUS);
+}
+
+static void snake_compute_reachable(void)
+{
+    static snake_pt_t queue[SNAKE_GRID_DIM * SNAKE_GRID_DIM];
+    static const int dxs[4] = {0, 0, -1, 1};
+    static const int dys[4] = {-1, 1, 0, 0};
+    int qh = 0, qt = 0, d;
+
+    memset(snake_reachable, 0, sizeof(snake_reachable));
+    queue[qt++] = snake_body[0];
+    snake_reachable[snake_body[0].x][snake_body[0].y] = true;
+
+    while (qh < qt) {
+        snake_pt_t p = queue[qh++];
+        for (d = 0; d < 4; d++) {
+            int gx = p.x + dxs[d];
+            int gy = p.y + dys[d];
+            if (!is_cell_valid(gx, gy)) continue;
+            if (snake_reachable[gx][gy]) continue;
+            if (snake_occupies(gx, gy)) continue;
+            snake_reachable[gx][gy] = true;
+            queue[qt].x = (int8_t)gx;
+            queue[qt].y = (int8_t)gy;
+            qt++;
         }
     }
+}
+
+static void snake_spawn_food(void)
+{
+    static snake_pt_t candidates[SNAKE_GRID_DIM * SNAKE_GRID_DIM];
+    int gx, gy, count = 0;
+
+    snake_compute_reachable();
     for (gy = 0; gy < SNAKE_GRID_DIM; gy++) {
         for (gx = 0; gx < SNAKE_GRID_DIM; gx++) {
-            if (is_cell_valid(gx, gy) && !snake_occupies(gx, gy)) {
-                snake_food.x = (int8_t)gx;
-                snake_food.y = (int8_t)gy;
-                return;
+            /* The head's own cell is marked reachable as the BFS's
+               starting point, so it must be excluded here explicitly -
+               every other occupied cell is already excluded above. */
+            if (snake_reachable[gx][gy] && !snake_occupies(gx, gy) && is_cell_food_safe(gx, gy)) {
+                candidates[count].x = (int8_t)gx;
+                candidates[count].y = (int8_t)gy;
+                count++;
             }
         }
     }
+    if (count == 0) {
+        /* Only once the snake is long enough to fill every cell with
+           safe clearance - fall back to any reachable cell at all
+           rather than getting stuck with no food to place. */
+        for (gy = 0; gy < SNAKE_GRID_DIM; gy++) {
+            for (gx = 0; gx < SNAKE_GRID_DIM; gx++) {
+                if (snake_reachable[gx][gy] && !snake_occupies(gx, gy)) {
+                    candidates[count].x = (int8_t)gx;
+                    candidates[count].y = (int8_t)gy;
+                    count++;
+                }
+            }
+        }
+    }
+    if (count == 0) return; /* the snake fills the entire reachable arena - a win, effectively */
+    snake_food = candidates[esp_random() % (uint32_t)count];
 }
 
 static void snake_reset(void)

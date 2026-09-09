@@ -223,6 +223,16 @@ typedef enum {
     STR_SNAKE_BEST_FMT,        /* "Best: %d" */
     STR_SNAKE_NEW_BEST,
 
+    /* pong.c */
+    STR_MINIGAME_PONG,
+    STR_PONG_TAP_START,
+    STR_PONG_HINT,
+    STR_PONG_SCORE_FMT,        /* "Score: %d" */
+    STR_PONG_PAUSED,
+    STR_PONG_GAME_OVER_FMT,    /* "Game Over\nScore: %d\nTap to Retry" */
+    STR_PONG_BEST_FMT,         /* "Best: %d" */
+    STR_PONG_NEW_BEST,
+
     STR_COUNT,
 } string_id_t;
 

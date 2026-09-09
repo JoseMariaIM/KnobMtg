@@ -29,6 +29,7 @@ static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
 static char cached_last_fw_version[FW_VERSION_LEN] = "";
 static int cached_snake_high_score[MAX_GAME_PLAYERS] = {0};
+static int cached_pong_high_score[MAX_GAME_PLAYERS] = {0};
 
 // ---------- init ----------
 void knob_nvs_init(void)
@@ -116,6 +117,9 @@ void knob_nvs_init(void)
 
         size_t shs_size = sizeof(cached_snake_high_score);
         nvs_get_blob(handle, "snake_hi", cached_snake_high_score, &shs_size);
+
+        size_t phs_size = sizeof(cached_pong_high_score);
+        nvs_get_blob(handle, "pong_hi", cached_pong_high_score, &phs_size);
 
         nvs_close(handle);
     }
@@ -342,6 +346,19 @@ void nvs_set_snake_high_score(int player, int score)
     settings_dirty = true;
 }
 
+int nvs_get_pong_high_score(int player)
+{
+    if (player < 0 || player >= MAX_GAME_PLAYERS) return 0;
+    return cached_pong_high_score[player];
+}
+
+void nvs_set_pong_high_score(int player, int score)
+{
+    if (player < 0 || player >= MAX_GAME_PLAYERS) return;
+    cached_pong_high_score[player] = score;
+    settings_dirty = true;
+}
+
 // ---------- persist ----------
 void settings_save(void)
 {
@@ -367,6 +384,7 @@ void settings_save(void)
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));
         nvs_set_blob(handle, "last_fw_ver", cached_last_fw_version, sizeof(cached_last_fw_version));
         nvs_set_blob(handle, "snake_hi", cached_snake_high_score, sizeof(cached_snake_high_score));
+        nvs_set_blob(handle, "pong_hi", cached_pong_high_score, sizeof(cached_pong_high_score));
         esp_err_t commit_err = nvs_commit(handle);
         nvs_close(handle);
         /* Keep the dirty flag set if the commit failed (e.g. NVS full) so a

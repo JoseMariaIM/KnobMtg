@@ -202,6 +202,15 @@ static const char *strings_en[STR_COUNT] = {
     [STR_SNAKE_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
     [STR_SNAKE_BEST_FMT] = "Best: %d",
     [STR_SNAKE_NEW_BEST] = "New Best!",
+
+    [STR_MINIGAME_PONG] = "Pong",
+    [STR_PONG_TAP_START] = "Tap or Turn to Start",
+    [STR_PONG_HINT] = "Turn knob to move paddle",
+    [STR_PONG_SCORE_FMT] = "Score: %d",
+    [STR_PONG_PAUSED] = "Paused\nTap to Resume",
+    [STR_PONG_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
+    [STR_PONG_BEST_FMT] = "Best: %d",
+    [STR_PONG_NEW_BEST] = "New Best!",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -399,6 +408,15 @@ static const char *strings_es[STR_COUNT] = {
     [STR_SNAKE_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
     [STR_SNAKE_BEST_FMT] = "Récord: %d",
     [STR_SNAKE_NEW_BEST] = "¡Nuevo Récord!",
+
+    [STR_MINIGAME_PONG] = "Pong",
+    [STR_PONG_TAP_START] = "Toca o Gira para Empezar",
+    [STR_PONG_HINT] = "Gira la rueda para mover la pala",
+    [STR_PONG_SCORE_FMT] = "Puntos: %d",
+    [STR_PONG_PAUSED] = "Pausado\nToca para Continuar",
+    [STR_PONG_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
+    [STR_PONG_BEST_FMT] = "Récord: %d",
+    [STR_PONG_NEW_BEST] = "¡Nuevo Récord!",
 };
 
 void lang_init(void)

@@ -16,6 +16,7 @@
 #include "ui_wifi.h"
 #include "round_safe.h"
 #include "snake.h"
+#include "pong.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -786,6 +787,12 @@ static void event_open_snake(lv_event_t *e)
     open_snake_screen();
 }
 
+static void event_open_pong(lv_event_t *e)
+{
+    (void)e;
+    open_pong_screen();
+}
+
 void open_minigames_menu(void)
 {
     load_screen_if_needed(screen_minigames_menu);
@@ -793,13 +800,13 @@ void open_minigames_menu(void)
 
 void build_minigames_menu_screen(void)
 {
-    /* Only one game exists today; the other three tiles are disabled
+    /* Only two games exist today; the remaining tiles are disabled
        placeholders (same look as an empty settings-page slot) so this
-       screen doesn't need its own "More" pagination until a second
+       screen doesn't need its own "More" pagination until a third
        game shows up - see build_settings_pages() for that pattern. */
     quad_item_t items[4] = {
         {t(STR_MINIGAME_SNAKE), event_open_snake, true, LV_EVENT_CLICKED},
-        {"", NULL, false, LV_EVENT_CLICKED},
+        {t(STR_MINIGAME_PONG),  event_open_pong,  true, LV_EVENT_CLICKED},
         {"", NULL, false, LV_EVENT_CLICKED},
         {"", NULL, false, LV_EVENT_CLICKED},
     };

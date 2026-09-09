@@ -21,6 +21,7 @@
 #include "attack.h"
 #include "ui_wifi.h"
 #include "snake.h"
+#include "pong.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -128,6 +129,7 @@ static void nav_brightness(void) { open_settings_screen(); }
 static void nav_battery(void)    { open_battery_screen(); }
 static void nav_minigames(void)  { open_minigames_menu(); }
 static void nav_snake(void)      { open_snake_screen(); }
+static void nav_pong(void)       { open_pong_screen(); }
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
@@ -181,6 +183,7 @@ static const screen_entry_t all_screens[] = {
     {"battery",       nav_battery},
     {"minigames",     nav_minigames},
     {"snake",         nav_snake},
+    {"pong",          nav_pong},
     {"table-sync",    nav_table_sync},
     {"dice",          nav_dice},
     {"dice-menu",     nav_dice_menu},
