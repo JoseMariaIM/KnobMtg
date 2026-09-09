@@ -334,6 +334,8 @@ static void handle_back_navigation(lv_obj_t *screen)
         open_dice_menu_screen();
     } else if (screen == screen_dice_menu) {
         lv_scr_load(screen_tools_menu);
+    } else if (screen == screen_coin) {
+        lv_scr_load(screen_tools_menu);
     } else if (screen == screen_damage_log) {
         lv_scr_load(screen_tools_menu);
     } else if (screen == screen_select) {
@@ -440,6 +442,7 @@ void knob_gui(void)
     brightness_apply();
     build_dice_menu_screen();
     build_dice_screen();
+    build_coin_screen();
     build_main_screen();
     build_multiplayer_screen();
     build_victory_screen();
@@ -566,6 +569,11 @@ static void handle_knob_event(knob_event_t k)
     {
         if (k == KNOB_LEFT)      change_mana_value(-1);
         else if (k == KNOB_RIGHT) change_mana_value(+1);
+    }
+    else if (lv_scr_act() == screen_dice_menu)
+    {
+        if (k == KNOB_LEFT)      change_dice_quantity(-1);
+        else if (k == KNOB_RIGHT) change_dice_quantity(+1);
     }
     else if (k == KNOB_LEFT || k == KNOB_RIGHT)
     {

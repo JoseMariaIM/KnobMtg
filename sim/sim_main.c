@@ -126,6 +126,8 @@ static void nav_battery(void)    { open_battery_screen(); }
 static void nav_rotate(void)     { open_rotate_screen(); }
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
+static void nav_dice_menu(void)  { open_dice_menu_screen(); }
+static void nav_coin(void)       { open_coin_screen(); }
 static void nav_damage_log(void) { open_damage_log_screen(); }
 static void nav_game_mode(void)  { open_game_mode_menu(); }
 static void nav_custom_life(void){ open_game_mode_menu(); lv_scr_load(screen_custom_life); refresh_custom_life_ui(); }
@@ -171,6 +173,8 @@ static const screen_entry_t all_screens[] = {
     {"rotate",        nav_rotate},
     {"table-sync",    nav_table_sync},
     {"dice",          nav_dice},
+    {"dice-menu",     nav_dice_menu},
+    {"coin",          nav_coin},
     {"damage-log",    nav_damage_log},
     {"game-mode",     nav_game_mode},
     {"custom-life",   nav_custom_life},

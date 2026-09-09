@@ -734,7 +734,7 @@ void build_quad_menus(void)
 
     quad_item_t tools_items[4] = {
         {t(STR_TOOL_DICE),        event_tool_dice, true, LV_EVENT_CLICKED},
-        {"",                      NULL, false, LV_EVENT_CLICKED}, /* free slot - Timer removed, replacement TBD */
+        {t(STR_TOOL_COIN),        event_tool_coin, true, LV_EVENT_CLICKED},
         {t(STR_TOOL_EVENT_LOG),  event_open_damage_log, true, LV_EVENT_CLICKED},
         {t(STR_TOOL_MANA_POOL),  event_tool_mana, true, LV_EVENT_CLICKED},
     };
