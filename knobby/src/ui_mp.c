@@ -690,12 +690,56 @@ static bool attack_drag_suppress_click = false;
 static lv_point_t attack_drag_start;
 static lv_point_t attack_drag_current;
 
+/* Trailing points behind the current touch, oldest first, used to draw a
+   tapering comet-trail instead of one flat line (see event_attack_drag_draw).
+   Recorded roughly every ATTACK_TRAIL_MIN_STEP_PX of movement so a slow
+   drag doesn't pack them all into one spot. */
+#define ATTACK_TRAIL_MAX 16
+#define ATTACK_TRAIL_MIN_STEP_PX 8
+static lv_point_t attack_trail[ATTACK_TRAIL_MAX];
+static int attack_trail_count = 0;
+
+static void attack_trail_reset(lv_point_t pt)
+{
+    attack_trail[0] = pt;
+    attack_trail_count = 1;
+}
+
+static void attack_trail_push(lv_point_t pt)
+{
+    if (attack_trail_count > 0) {
+        lv_point_t *last = &attack_trail[attack_trail_count - 1];
+        int ddx = pt.x - last->x;
+        int ddy = pt.y - last->y;
+        if (ddx * ddx + ddy * ddy < ATTACK_TRAIL_MIN_STEP_PX * ATTACK_TRAIL_MIN_STEP_PX) {
+            *last = pt; /* still moving toward the same spot: just update the tip */
+            return;
+        }
+    }
+    if (attack_trail_count >= ATTACK_TRAIL_MAX) {
+        memmove(&attack_trail[0], &attack_trail[1], sizeof(lv_point_t) * (ATTACK_TRAIL_MAX - 1));
+        attack_trail_count = ATTACK_TRAIL_MAX - 1;
+    }
+    attack_trail[attack_trail_count++] = pt;
+}
+
+/* Gestures that start inside this band of the four edges are left alone
+   for knob_classify_swipe_direction (menu-open swipe) instead of arming
+   the attack drag - matches the swipe classifier's own start-zone gating
+   in knob.c/knob.h, so a deliberate edge-grab still works. */
+static bool point_in_swipe_edge_zone(lv_coord_t x, lv_coord_t y)
+{
+    return x <= KNOB_SWIPE_LEFT_EDGE_ZONE || x >= (360 - KNOB_SWIPE_RIGHT_EDGE_ZONE) ||
+           y <= KNOB_SWIPE_TOP_EDGE_ZONE || y >= (360 - KNOB_SWIPE_BOTTOM_EDGE_ZONE);
+}
+
 /* Used by knob.c's swipe classifier so a drag that crosses an edge zone
    can't also be read as the back/menu swipe gesture. */
 bool attack_gesture_in_progress(void)
 {
     return attack_drag_active;
 }
+
 
 /* ---------- events ---------- */
 static void event_multiplayer_select(lv_event_t *e)
@@ -907,6 +951,8 @@ static void event_wedge_drag(lv_event_t *e)
     spec = &mp_state.layout->panels[idx];
 
     if (code == LV_EVENT_PRESSED) {
+        lv_point_t pt;
+
         /* Only the very first wedge touched in a gesture arms it - a
            re-search caused by the finger sliding onto a new wedge (see
            the comment above attack_drag_source's declaration) must not
@@ -914,11 +960,19 @@ static void event_wedge_drag(lv_event_t *e)
         if (attack_drag_source >= 0) return;
         if (player_selection_animation_active()) return;
         if (player_eliminated[spec->player_index]) return;
+        indev = lv_indev_get_act();
+        if (indev == NULL) return;
+        lv_indev_get_point(indev, &pt);
+        /* Starting in the edge band is a deliberate swipe-to-menu grab -
+           leave attack_drag_source unset so this whole gesture is never
+           armed, and the swipe classifier gets an unobstructed read at
+           release (see point_in_swipe_edge_zone). */
+        if (point_in_swipe_edge_zone(pt.x, pt.y)) return;
         attack_drag_source = spec->player_index;
         attack_drag_active = false;
-        indev = lv_indev_get_act();
-        if (indev != NULL) lv_indev_get_point(indev, &attack_drag_start);
-        attack_drag_current = attack_drag_start;
+        attack_drag_start = pt;
+        attack_drag_current = pt;
+        attack_trail_reset(pt);
     } else if (code == LV_EVENT_PRESSING) {
         int ddx, ddy;
 
@@ -932,7 +986,10 @@ static void event_wedge_drag(lv_event_t *e)
                 attack_drag_active = true;
             }
         }
-        if (attack_drag_active) lv_obj_invalidate(screen_multiplayer);
+        if (attack_drag_active) {
+            attack_trail_push(attack_drag_current);
+            lv_obj_invalidate(screen_multiplayer);
+        }
     } else if (code == LV_EVENT_RELEASED) {
         int target = spec->player_index;
 
@@ -955,82 +1012,128 @@ static void event_wedge_drag(lv_event_t *e)
    full-screen overlay as the wedge separators, after them). Also glows
    the wedge currently under the finger, when it differs from the
    source, as a preview of who's about to be targeted. */
+/* Finds which panel (other than the source) the point currently sits
+   over, for the hover glow below. Works for both real angular wedges
+   (3p) and the plain rectangular quadrants 2p/4p actually use. */
+static int attack_hover_panel_index(lv_point_t pt, bool layout_is_wedge)
+{
+    int i;
+
+    if (mp_state.layout == NULL) return -1;
+    for (i = 0; i < mp_state.layout->panel_count; i++) {
+        const mp_panel_spec_t *spec = &mp_state.layout->panels[i];
+        bool hit;
+
+        if (spec->player_index == attack_drag_source) continue;
+
+        if (layout_is_wedge) {
+            int hdx = pt.x - WEDGE_CX;
+            int hdy = pt.y - WEDGE_CY;
+            if (hdx == 0 && hdy == 0) hdx = 1;
+            hit = wedge_contains_angle(spec, lv_atan2(hdy, hdx));
+        } else {
+            hit = pt.x >= spec->x && pt.x < spec->x + spec->w &&
+                  pt.y >= spec->y && pt.y < spec->y + spec->h;
+        }
+        if (hit) return i;
+    }
+    return -1;
+}
+
+/* Live comet-trail from where the attack drag started to the current
+   touch point, drawn on top of everything else (registered on the same
+   full-screen overlay as the wedge separators, after them): a tapering
+   colored halo + a thin white core along the recent path (attack_trail),
+   ending in a small filled "head" at the fingertip. Also glows the
+   panel currently under the finger, tinted with ITS OWN color, as a
+   preview of who's about to be targeted. */
 static void event_attack_drag_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
-    lv_draw_line_dsc_t line_dsc;
-    lv_point_t p0, p1;
-    int dx, dy, ang;
-    int i;
+    lv_draw_line_dsc_t halo_dsc, core_dsc;
+    lv_draw_rect_dsc_t tip_dsc;
+    lv_area_t tip_area;
+    lv_color_t src_color;
+    lv_point_t tip;
+    int denom, i, hover_idx;
+    bool layout_is_wedge;
 
-    if (!attack_drag_active) return;
+    if (!attack_drag_active || attack_trail_count == 0) return;
 
-    p0 = attack_drag_start;
-    p1 = attack_drag_current;
+    src_color = get_player_active_color(attack_drag_source);
+    tip = attack_trail[attack_trail_count - 1];
+    layout_is_wedge = mp_state.layout != NULL && mp_state.layout->panel_count > 0 &&
+                      spec_is_wedge(&mp_state.layout->panels[0]);
 
-    if (mp_state.layout != NULL) {
-        bool layout_is_wedge = mp_state.layout->panel_count > 0 &&
-                               spec_is_wedge(&mp_state.layout->panels[0]);
-        for (i = 0; i < mp_state.layout->panel_count; i++) {
-            const mp_panel_spec_t *spec = &mp_state.layout->panels[i];
-            bool hit;
-            lv_coord_t gx, gy;
+    /* Target preview glow, tinted with the hovered player's own color -
+       drawn first so the trail/head sit on top of it. */
+    hover_idx = attack_hover_panel_index(tip, layout_is_wedge);
+    if (hover_idx >= 0 && mp_state.layout != NULL) {
+        const mp_panel_spec_t *spec = &mp_state.layout->panels[hover_idx];
+        lv_draw_rect_dsc_t glow_dsc;
+        lv_area_t glow_area;
+        lv_coord_t gx, gy;
 
-            if (spec->player_index == attack_drag_source) continue;
-
-            if (layout_is_wedge) {
-                int hdx = p1.x - WEDGE_CX;
-                int hdy = p1.y - WEDGE_CY;
-                if (hdx == 0 && hdy == 0) hdx = 1;
-                hit = wedge_contains_angle(spec, lv_atan2(hdy, hdx));
-                gx = WEDGE_CX + wedge_geom[i].label_dx;
-                gy = WEDGE_CY + wedge_geom[i].label_dy;
-            } else {
-                hit = p1.x >= spec->x && p1.x < spec->x + spec->w &&
-                      p1.y >= spec->y && p1.y < spec->y + spec->h;
-                gx = spec->x + spec->w / 2;
-                gy = spec->y + spec->h / 2;
-            }
-
-            if (hit) {
-                lv_draw_rect_dsc_t glow_dsc;
-                lv_area_t glow_area;
-
-                lv_draw_rect_dsc_init(&glow_dsc);
-                glow_dsc.radius = LV_RADIUS_CIRCLE;
-                glow_dsc.bg_color = lv_color_white();
-                glow_dsc.bg_opa = LV_OPA_30;
-                glow_area.x1 = gx - 46;
-                glow_area.y1 = gy - 46;
-                glow_area.x2 = gx + 46;
-                glow_area.y2 = gy + 46;
-                lv_draw_rect(draw_ctx, &glow_dsc, &glow_area);
-                break;
-            }
+        if (layout_is_wedge) {
+            gx = WEDGE_CX + wedge_geom[hover_idx].label_dx;
+            gy = WEDGE_CY + wedge_geom[hover_idx].label_dy;
+        } else {
+            gx = spec->x + spec->w / 2;
+            gy = spec->y + spec->h / 2;
         }
+
+        lv_draw_rect_dsc_init(&glow_dsc);
+        glow_dsc.radius = LV_RADIUS_CIRCLE;
+        glow_dsc.bg_color = get_player_active_color(spec->player_index);
+        glow_dsc.bg_opa = LV_OPA_50;
+        glow_dsc.border_width = 3;
+        glow_dsc.border_color = lv_color_white();
+        glow_dsc.border_opa = LV_OPA_70;
+        glow_area.x1 = gx - 48;
+        glow_area.y1 = gy - 48;
+        glow_area.x2 = gx + 48;
+        glow_area.y2 = gy + 48;
+        lv_draw_rect(draw_ctx, &glow_dsc, &glow_area);
     }
 
-    lv_draw_line_dsc_init(&line_dsc);
-    line_dsc.color = lv_color_white();
-    line_dsc.width = 5;
-    line_dsc.round_start = 1;
-    line_dsc.round_end = 1;
-    lv_draw_line(draw_ctx, &line_dsc, &p0, &p1);
+    /* Tapering trail: a wide, source-colored halo under a thin white
+       core, both growing from faint/thin at the tail to solid/thick at
+       the tip - reads as a glowing comet rather than a flat ruler line. */
+    lv_draw_line_dsc_init(&halo_dsc);
+    halo_dsc.round_start = 1;
+    halo_dsc.round_end = 1;
+    lv_draw_line_dsc_init(&core_dsc);
+    core_dsc.color = lv_color_white();
+    core_dsc.round_start = 1;
+    core_dsc.round_end = 1;
 
-    dx = p1.x - p0.x;
-    dy = p1.y - p0.y;
-    if (dx != 0 || dy != 0) {
-        /* Small back-swept chevron at the tip, in place of a filled
-           arrowhead (this LVGL build has no polygon draw primitive). */
-        lv_point_t wing1, wing2;
-        ang = lv_atan2(dy, dx);
-        wing1.x = p1.x + wedge_polar(lv_trigo_cos((ang + 180 - 25 + 360) % 360), 16);
-        wing1.y = p1.y + wedge_polar(lv_trigo_sin((ang + 180 - 25 + 360) % 360), 16);
-        wing2.x = p1.x + wedge_polar(lv_trigo_cos((ang + 180 + 25 + 360) % 360), 16);
-        wing2.y = p1.y + wedge_polar(lv_trigo_sin((ang + 180 + 25 + 360) % 360), 16);
-        lv_draw_line(draw_ctx, &line_dsc, &p1, &wing1);
-        lv_draw_line(draw_ctx, &line_dsc, &p1, &wing2);
+    denom = (attack_trail_count > 2) ? (attack_trail_count - 2) : 1;
+    for (i = 0; i < attack_trail_count - 1; i++) {
+        halo_dsc.color = src_color;
+        halo_dsc.width = (lv_coord_t)(3 + (i * 11) / denom);
+        halo_dsc.opa = (lv_opa_t)(70 + (i * (255 - 70)) / denom);
+        lv_draw_line(draw_ctx, &halo_dsc, &attack_trail[i], &attack_trail[i + 1]);
+
+        core_dsc.width = (lv_coord_t)(1 + (i * 3) / denom);
+        core_dsc.opa = (lv_opa_t)(90 + (i * (255 - 90)) / denom);
+        lv_draw_line(draw_ctx, &core_dsc, &attack_trail[i], &attack_trail[i + 1]);
     }
+
+    /* Comet head: a small filled, ringed dot at the fingertip - stands
+       in for a directional arrowhead without needing a filled polygon
+       primitive (this LVGL build only draws lines/rects/arcs). */
+    lv_draw_rect_dsc_init(&tip_dsc);
+    tip_dsc.radius = LV_RADIUS_CIRCLE;
+    tip_dsc.bg_color = src_color;
+    tip_dsc.bg_opa = LV_OPA_COVER;
+    tip_dsc.border_width = 2;
+    tip_dsc.border_color = lv_color_white();
+    tip_dsc.border_opa = LV_OPA_COVER;
+    tip_area.x1 = tip.x - 8;
+    tip_area.y1 = tip.y - 8;
+    tip_area.x2 = tip.x + 8;
+    tip_area.y2 = tip.y + 8;
+    lv_draw_rect(draw_ctx, &tip_dsc, &tip_area);
 }
 
 /* ---------- layout rebuild ---------- */
