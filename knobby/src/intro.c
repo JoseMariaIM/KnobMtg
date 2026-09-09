@@ -28,9 +28,10 @@ static const lv_point_t genex_letter_pos[GENEX_LETTER_COUNT] = {
     {0, 0}, {66, 1}, {120, 1}, {189, 1}, {237, 1},
 };
 
-#define GENEX_LETTER_STAGGER_MS 140
-#define GENEX_LETTER_FADE_MS    260
-#define COMICS_POP_DELAY_MS     (((GENEX_LETTER_COUNT - 1) * GENEX_LETTER_STAGGER_MS) + GENEX_LETTER_FADE_MS + 150)
+#define GENEX_LETTER_STAGGER_MS 190
+#define GENEX_LETTER_FADE_MS    320
+#define GENEX_TO_COMICS_GAP_MS  500  /* pause after GENEX finishes, before COMICS pops */
+#define COMICS_POP_DELAY_MS     (((GENEX_LETTER_COUNT - 1) * GENEX_LETTER_STAGGER_MS) + GENEX_LETTER_FADE_MS + GENEX_TO_COMICS_GAP_MS)
 #define COMICS_POP_FADE_MS      150
 #define COMICS_POP_ZOOM_MS      450
 #define COMICS_POP_ZOOM_START   160  /* out of LV_IMG_ZOOM_NONE=256, i.e. ~62% */
