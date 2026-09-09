@@ -694,8 +694,11 @@ static lv_point_t attack_drag_current;
    tapering comet-trail instead of one flat line (see event_attack_drag_draw).
    Recorded roughly every ATTACK_TRAIL_MIN_STEP_PX of movement so a slow
    drag doesn't pack them all into one spot. */
-#define ATTACK_TRAIL_MAX 16
-#define ATTACK_TRAIL_MIN_STEP_PX 8
+#define ATTACK_TRAIL_MAX 40
+#define ATTACK_TRAIL_MIN_STEP_PX 4
+/* Fixed glow color, independent of source/target player - a color that
+   changed with whoever you dragged from read as arbitrary/"random". */
+#define ATTACK_TRAIL_GLOW_COLOR lv_color_hex(0x40C4FF)
 static lv_point_t attack_trail[ATTACK_TRAIL_MAX];
 static int attack_trail_count = 0;
 
@@ -739,6 +742,7 @@ bool attack_gesture_in_progress(void)
 {
     return attack_drag_active;
 }
+
 
 
 /* ---------- events ---------- */
@@ -1043,24 +1047,24 @@ static int attack_hover_panel_index(lv_point_t pt, bool layout_is_wedge)
 /* Live comet-trail from where the attack drag started to the current
    touch point, drawn on top of everything else (registered on the same
    full-screen overlay as the wedge separators, after them): a tapering
-   colored halo + a thin white core along the recent path (attack_trail),
-   ending in a small filled "head" at the fingertip. Also glows the
-   panel currently under the finger, tinted with ITS OWN color, as a
-   preview of who's about to be targeted. */
+   fixed-color halo + a thin white core along the recent path
+   (attack_trail, sampled densely enough that the short segments read as
+   one continuous stroke rather than separate lines), ending in a small
+   filled "head" at the fingertip. Also glows the panel currently under
+   the finger, tinted with ITS OWN color, as a preview of who's about to
+   be targeted. */
 static void event_attack_drag_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t halo_dsc, core_dsc;
     lv_draw_rect_dsc_t tip_dsc;
     lv_area_t tip_area;
-    lv_color_t src_color;
     lv_point_t tip;
     int denom, i, hover_idx;
     bool layout_is_wedge;
 
     if (!attack_drag_active || attack_trail_count == 0) return;
 
-    src_color = get_player_active_color(attack_drag_source);
     tip = attack_trail[attack_trail_count - 1];
     layout_is_wedge = mp_state.layout != NULL && mp_state.layout->panel_count > 0 &&
                       spec_is_wedge(&mp_state.layout->panels[0]);
@@ -1096,10 +1100,15 @@ static void event_attack_drag_draw(lv_event_t *e)
         lv_draw_rect(draw_ctx, &glow_dsc, &glow_area);
     }
 
-    /* Tapering trail: a wide, source-colored halo under a thin white
-       core, both growing from faint/thin at the tail to solid/thick at
-       the tip - reads as a glowing comet rather than a flat ruler line. */
+    /* Tapering trail: a wide, fixed-color halo under a thin white core,
+       both growing from faint/thin at the tail to solid/thick at the
+       tip - reads as a glowing comet rather than a flat ruler line.
+       Points are recorded every ATTACK_TRAIL_MIN_STEP_PX (see
+       attack_trail_push), dense enough that consecutive round-capped
+       segments overlap into what reads as one continuous stroke instead
+       of a few visible straight pieces. */
     lv_draw_line_dsc_init(&halo_dsc);
+    halo_dsc.color = ATTACK_TRAIL_GLOW_COLOR;
     halo_dsc.round_start = 1;
     halo_dsc.round_end = 1;
     lv_draw_line_dsc_init(&core_dsc);
@@ -1109,7 +1118,6 @@ static void event_attack_drag_draw(lv_event_t *e)
 
     denom = (attack_trail_count > 2) ? (attack_trail_count - 2) : 1;
     for (i = 0; i < attack_trail_count - 1; i++) {
-        halo_dsc.color = src_color;
         halo_dsc.width = (lv_coord_t)(3 + (i * 11) / denom);
         halo_dsc.opa = (lv_opa_t)(70 + (i * (255 - 70)) / denom);
         lv_draw_line(draw_ctx, &halo_dsc, &attack_trail[i], &attack_trail[i + 1]);
@@ -1124,7 +1132,7 @@ static void event_attack_drag_draw(lv_event_t *e)
        primitive (this LVGL build only draws lines/rects/arcs). */
     lv_draw_rect_dsc_init(&tip_dsc);
     tip_dsc.radius = LV_RADIUS_CIRCLE;
-    tip_dsc.bg_color = src_color;
+    tip_dsc.bg_color = ATTACK_TRAIL_GLOW_COLOR;
     tip_dsc.bg_opa = LV_OPA_COVER;
     tip_dsc.border_width = 2;
     tip_dsc.border_color = lv_color_white();
