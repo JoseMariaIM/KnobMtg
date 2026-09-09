@@ -605,6 +605,63 @@ static void event_ota_open_wifi(lv_event_t *e)
     open_wifi_settings_screen();
 }
 
+/* The Montserrat symbol set has no QR glyph and shipping a font just for
+   one icon isn't worth the flash, so the icon is painted directly: a
+   miniature code on a 7x7 module grid - the three finder squares every QR
+   has, plus a scatter of data modules so it reads as a code rather than as
+   an abstract pattern. */
+#define QR_ICON_MODULE 4
+#define QR_ICON_GRID   7
+static void event_ota_qr_icon_draw(lv_event_t *e)
+{
+    static const uint8_t finders[3][2] = {{0, 0}, {4, 0}, {0, 4}};
+    /* Kept clear of the row/column directly abutting a finder so the three
+       corner squares stay visually separate at this size. */
+    static const uint8_t modules[][2] = {
+        {4, 4}, {6, 4}, {5, 5}, {4, 6}, {6, 6}, {3, 3}, {3, 6}, {6, 3},
+    };
+    lv_obj_t *btn = lv_event_get_target(e);
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
+    lv_draw_rect_dsc_t dsc;
+    lv_area_t btn_area, cell;
+    lv_coord_t x0, y0;
+    size_t i;
+
+    lv_obj_get_coords(btn, &btn_area);
+    x0 = btn_area.x1 + (lv_area_get_width(&btn_area) - QR_ICON_GRID * QR_ICON_MODULE) / 2;
+    y0 = btn_area.y1 + (lv_area_get_height(&btn_area) - QR_ICON_GRID * QR_ICON_MODULE) / 2;
+
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_opa = LV_OPA_COVER;
+
+    /* Finder patterns: a 3x3 dark block with the middle module punched back
+       out to the button face colour, same as the real thing. */
+    for (i = 0; i < 3; i++) {
+        cell.x1 = x0 + finders[i][0] * QR_ICON_MODULE;
+        cell.y1 = y0 + finders[i][1] * QR_ICON_MODULE;
+        cell.x2 = cell.x1 + 3 * QR_ICON_MODULE - 1;
+        cell.y2 = cell.y1 + 3 * QR_ICON_MODULE - 1;
+        dsc.bg_color = lv_color_black();
+        lv_draw_rect(draw_ctx, &dsc, &cell);
+
+        cell.x1 += QR_ICON_MODULE;
+        cell.y1 += QR_ICON_MODULE;
+        cell.x2 = cell.x1 + QR_ICON_MODULE - 1;
+        cell.y2 = cell.y1 + QR_ICON_MODULE - 1;
+        dsc.bg_color = lv_color_white();
+        lv_draw_rect(draw_ctx, &dsc, &cell);
+    }
+
+    dsc.bg_color = lv_color_black();
+    for (i = 0; i < sizeof(modules) / sizeof(modules[0]); i++) {
+        cell.x1 = x0 + modules[i][0] * QR_ICON_MODULE;
+        cell.y1 = y0 + modules[i][1] * QR_ICON_MODULE;
+        cell.x2 = cell.x1 + QR_ICON_MODULE - 1;
+        cell.y2 = cell.y1 + QR_ICON_MODULE - 1;
+        lv_draw_rect(draw_ctx, &dsc, &cell);
+    }
+}
+
 static void event_ota_qr(lv_event_t *e)
 {
     (void)e;
@@ -701,16 +758,20 @@ void build_ota_update_screen(void)
     lv_obj_align(btn_ota_open_wifi, LV_ALIGN_BOTTOM_MID, 0, -44);
     lv_obj_add_flag(btn_ota_open_wifi, LV_OBJ_FLAG_HIDDEN); /* shown only while WiFi isn't connected */
 
-    /* Small, always-available shortcut to the QR code screen - not
-       tied to check/apply state like the buttons above, so it sits off
-       to the side instead of in that stack. */
+    /* Small, always-available shortcut to the QR code screen - not tied to
+       check/apply state like the buttons above, so it sits off to the side
+       instead of in that stack. Aligned from the centre rather than a
+       corner: a 44px button in the TOP_RIGHT corner has its outer corner
+       ~212px from the middle, i.e. well past ROUND_SAFE_RADIUS and mostly
+       swallowed by the bezel. At (118,-60) the farthest corner sits at
+       ~145px, comfortably inside the glass and clear of the version label
+       above it and the status text below. */
     btn_ota_qr = lv_btn_create(screen_ota_update);
     lv_obj_set_size(btn_ota_qr, 44, 44);
     lv_obj_set_style_radius(btn_ota_qr, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(btn_ota_qr, LV_ALIGN_TOP_RIGHT, -24, 36);
+    lv_obj_set_style_bg_color(btn_ota_qr, lv_color_white(), 0);
+    lv_obj_set_style_shadow_width(btn_ota_qr, 0, 0);
+    lv_obj_align(btn_ota_qr, LV_ALIGN_CENTER, 118, -60);
     lv_obj_add_event_cb(btn_ota_qr, event_ota_qr, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *qr_icon = lv_label_create(btn_ota_qr);
-    lv_label_set_text(qr_icon, "QR");
-    lv_obj_set_style_text_font(qr_icon, &lv_font_es_14, 0);
-    lv_obj_center(qr_icon);
+    lv_obj_add_event_cb(btn_ota_qr, event_ota_qr_icon_draw, LV_EVENT_DRAW_MAIN_END, NULL);
 }
