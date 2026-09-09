@@ -56,4 +56,7 @@ void nvs_set_wifi_pass(const char *pass);
 void nvs_get_last_fw_version(char *out, size_t out_len);
 void nvs_set_last_fw_version(const char *version);
 
+int nvs_get_snake_high_score(int player);
+void nvs_set_snake_high_score(int player, int score);
+
 #endif // _STORAGE_H

@@ -1,6 +1,8 @@
 #include "snake.h"
 #include "settings.h"
 #include "lang.h"
+#include "game.h"
+#include "storage.h"
 #include "esp_random.h"
 #include <string.h>
 
@@ -51,6 +53,21 @@ static snake_dir_t snake_dir;
 static snake_pt_t snake_food;
 static int snake_score;
 static snake_state_t snake_state = SNAKE_STATE_READY;
+static bool snake_turned_this_tick = false;
+static int snake_player = -1;       /* selected player this run is scored to, -1 = none */
+static bool snake_is_new_best = false;
+
+/* "The selected player" per the life-counter's own selection state
+   (is_player_selected), resolved once when the game starts - that
+   selection doesn't change while Snake itself is on screen. */
+static int snake_resolve_player(void)
+{
+    int i;
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) {
+        if (is_player_selected(i)) return i;
+    }
+    return -1;
+}
 
 static bool is_cell_valid(int gx, int gy)
 {
@@ -116,15 +133,28 @@ static void snake_reset(void)
     snake_state = SNAKE_STATE_READY;
 }
 
+/* Appends a "Best: %d" line when this run is scored to a player - shown
+   both before playing (so there's a target) and on Game Over. */
+static size_t snake_append_best_line(char *buf, size_t buf_len, size_t pos)
+{
+    char best_buf[24];
+
+    if (snake_player < 0) return pos;
+    snprintf(best_buf, sizeof(best_buf), t(STR_SNAKE_BEST_FMT), nvs_get_snake_high_score(snake_player));
+    return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
+}
+
 static void snake_refresh_message(void)
 {
-    char buf[48];
+    char buf[96];
+    size_t pos;
 
     if (snake_message_lbl == NULL) return;
 
     switch (snake_state) {
     case SNAKE_STATE_READY:
-        snprintf(buf, sizeof(buf), "%s\n%s", t(STR_SNAKE_TAP_START), t(STR_SNAKE_HINT));
+        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_SNAKE_TAP_START), t(STR_SNAKE_HINT));
+        snake_append_best_line(buf, sizeof(buf), pos);
         lv_label_set_text(snake_message_lbl, buf);
         lv_obj_clear_flag(snake_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
@@ -133,7 +163,12 @@ static void snake_refresh_message(void)
         lv_obj_clear_flag(snake_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case SNAKE_STATE_GAME_OVER:
-        snprintf(buf, sizeof(buf), t(STR_SNAKE_GAME_OVER_FMT), snake_score);
+        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_SNAKE_GAME_OVER_FMT), snake_score);
+        if (snake_is_new_best) {
+            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_SNAKE_NEW_BEST));
+        } else {
+            snake_append_best_line(buf, sizeof(buf), pos);
+        }
         lv_label_set_text(snake_message_lbl, buf);
         lv_obj_clear_flag(snake_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
@@ -152,6 +187,19 @@ static void snake_refresh_score(void)
     lv_label_set_text(snake_score_lbl, buf);
 }
 
+static void snake_on_game_over(void)
+{
+    snake_state = SNAKE_STATE_GAME_OVER;
+    lv_timer_pause(snake_timer);
+    snake_is_new_best = (snake_player >= 0 && snake_score > 0 &&
+                          snake_score > nvs_get_snake_high_score(snake_player));
+    if (snake_is_new_best) {
+        nvs_set_snake_high_score(snake_player, snake_score);
+        settings_save();
+    }
+    snake_refresh_message();
+}
+
 static void snake_tick_cb(lv_timer_t *timer)
 {
     snake_pt_t new_head;
@@ -164,6 +212,11 @@ static void snake_tick_cb(lv_timer_t *timer)
     }
     if (snake_state != SNAKE_STATE_PLAYING) return;
 
+    /* Only one knob turn is allowed to land between ticks (see
+       snake_turn()) - the window for the next one reopens now, after
+       this tick has consumed whichever direction was queued. */
+    snake_turned_this_tick = false;
+
     new_head = snake_body[0];
     switch (snake_dir) {
     case SNAKE_DIR_UP:    new_head.y--; break;
@@ -173,9 +226,7 @@ static void snake_tick_cb(lv_timer_t *timer)
     }
 
     if (!is_cell_valid(new_head.x, new_head.y)) {
-        snake_state = SNAKE_STATE_GAME_OVER;
-        lv_timer_pause(snake_timer);
-        snake_refresh_message();
+        snake_on_game_over();
         return;
     }
 
@@ -185,9 +236,7 @@ static void snake_tick_cb(lv_timer_t *timer)
     check_len = will_grow ? snake_len : snake_len - 1;
     for (i = 0; i < check_len; i++) {
         if (snake_body[i].x == new_head.x && snake_body[i].y == new_head.y) {
-            snake_state = SNAKE_STATE_GAME_OVER;
-            lv_timer_pause(snake_timer);
-            snake_refresh_message();
+            snake_on_game_over();
             return;
         }
     }
@@ -211,24 +260,43 @@ static void snake_tick_cb(lv_timer_t *timer)
     lv_obj_invalidate(screen_snake);
 }
 
+static void snake_start(void)
+{
+    snake_state = SNAKE_STATE_PLAYING;
+    snake_turned_this_tick = false;
+    snake_refresh_message();
+    lv_timer_set_period(snake_timer, SNAKE_TICK_START_MS);
+    lv_timer_resume(snake_timer);
+}
+
 void snake_turn(int dir)
 {
+    if (snake_state == SNAKE_STATE_READY) snake_start();
     if (snake_state != SNAKE_STATE_PLAYING) return;
+    /* At most one turn is allowed to land between ticks - otherwise a
+       quick double-turn (e.g. two detents arriving before the next
+       tick fires) could add up to a 180-degree flip and kill the snake
+       on its own neck, which read as "the knob randomly does nothing"
+       since the direction it settled on wasn't the last one dialed in.
+       See snake_tick_cb() for where the window reopens. */
+    if (snake_turned_this_tick) return;
     /* Relative steering (not absolute up/down/left/right) so a single
        knob detent - one 90-degree step - can never turn the snake
        directly into itself; the classic "no reversing" rule falls out
        for free instead of needing a separate guard. */
     snake_dir = (snake_dir_t)((snake_dir + (dir > 0 ? 1 : 3)) % 4);
+    snake_turned_this_tick = true;
+    /* Immediate redraw so a turn between ticks is visibly acknowledged
+       right away instead of only becoming apparent up to a whole tick
+       period later, which was the other half of "feels unresponsive". */
+    lv_obj_invalidate(screen_snake);
 }
 
 void snake_handle_tap(void)
 {
     switch (snake_state) {
     case SNAKE_STATE_READY:
-        snake_state = SNAKE_STATE_PLAYING;
-        snake_refresh_message();
-        lv_timer_set_period(snake_timer, SNAKE_TICK_START_MS);
-        lv_timer_resume(snake_timer);
+        snake_start();
         break;
     case SNAKE_STATE_PLAYING:
         snake_state = SNAKE_STATE_PAUSED;
@@ -256,6 +324,7 @@ void snake_leave_screen(void)
 
 void open_snake_screen(void)
 {
+    snake_player = snake_resolve_player();
     snake_reset();
     snake_refresh_score();
     snake_refresh_message();
@@ -308,6 +377,35 @@ static void event_snake_draw(lv_event_t *e)
         area.y2 = area.y1 + SNAKE_CELL_PX - 2;
         lv_draw_rect(draw_ctx, &seg_dsc, &area);
     }
+
+    /* Heading nub: a small bright dot offset from the head in the
+       current direction of travel. snake_turn() invalidates the screen
+       the instant a turn is dialed in (state, not just the head
+       position, changes right away) so this repaints immediately too -
+       the player sees their turn register well before the next tick
+       actually moves the snake. */
+    if (snake_len > 0) {
+        int hx = snake_body[0].x * SNAKE_CELL_PX + SNAKE_CELL_PX / 2;
+        int hy = snake_body[0].y * SNAKE_CELL_PX + SNAKE_CELL_PX / 2;
+        int nx = hx, ny = hy;
+        lv_draw_rect_dsc_t nub_dsc;
+
+        switch (snake_dir) {
+        case SNAKE_DIR_UP:    ny -= 6; break;
+        case SNAKE_DIR_DOWN:  ny += 6; break;
+        case SNAKE_DIR_LEFT:  nx -= 6; break;
+        case SNAKE_DIR_RIGHT: nx += 6; break;
+        }
+        lv_draw_rect_dsc_init(&nub_dsc);
+        nub_dsc.radius = LV_RADIUS_CIRCLE;
+        nub_dsc.bg_color = lv_color_white();
+        nub_dsc.bg_opa = LV_OPA_COVER;
+        area.x1 = nx - 2;
+        area.y1 = ny - 2;
+        area.x2 = nx + 2;
+        area.y2 = ny + 2;
+        lv_draw_rect(draw_ctx, &nub_dsc, &area);
+    }
 }
 
 static void event_snake_tap(lv_event_t *e)
@@ -350,4 +448,5 @@ void build_snake_screen(void)
 
     snake_reset();
 }
+
 

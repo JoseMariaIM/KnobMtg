@@ -195,11 +195,13 @@ static const char *strings_en[STR_COUNT] = {
     [STR_RESOLVE] = "Resolve",
 
     [STR_MINIGAME_SNAKE] = "Snake",
-    [STR_SNAKE_TAP_START] = "Tap to Start",
+    [STR_SNAKE_TAP_START] = "Tap or Turn to Start",
     [STR_SNAKE_HINT] = "Turn knob to steer",
     [STR_SNAKE_SCORE_FMT] = "Score: %d",
     [STR_SNAKE_PAUSED] = "Paused\nTap to Resume",
     [STR_SNAKE_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
+    [STR_SNAKE_BEST_FMT] = "Best: %d",
+    [STR_SNAKE_NEW_BEST] = "New Best!",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -390,11 +392,13 @@ static const char *strings_es[STR_COUNT] = {
     [STR_RESOLVE] = "Resolver",
 
     [STR_MINIGAME_SNAKE] = "Snake",
-    [STR_SNAKE_TAP_START] = "Toca para Empezar",
+    [STR_SNAKE_TAP_START] = "Toca o Gira para Empezar",
     [STR_SNAKE_HINT] = "Gira la rueda para girar",
     [STR_SNAKE_SCORE_FMT] = "Puntos: %d",
     [STR_SNAKE_PAUSED] = "Pausado\nToca para Continuar",
     [STR_SNAKE_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
+    [STR_SNAKE_BEST_FMT] = "Récord: %d",
+    [STR_SNAKE_NEW_BEST] = "¡Nuevo Récord!",
 };
 
 void lang_init(void)

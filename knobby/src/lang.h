@@ -220,6 +220,8 @@ typedef enum {
     STR_SNAKE_SCORE_FMT,       /* "Score: %d" */
     STR_SNAKE_PAUSED,
     STR_SNAKE_GAME_OVER_FMT,   /* "Game Over\nScore: %d\nTap to Retry" */
+    STR_SNAKE_BEST_FMT,        /* "Best: %d" */
+    STR_SNAKE_NEW_BEST,
 
     STR_COUNT,
 } string_id_t;
