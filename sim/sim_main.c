@@ -20,6 +20,7 @@
 #include "mana.h"
 #include "attack.h"
 #include "ui_wifi.h"
+#include "snake.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,7 +126,8 @@ static void nav_tools(void)      { lv_scr_load(screen_tools_menu); }
 static void nav_settings_menu(void) { lv_scr_load(settings_pages[0]); }
 static void nav_brightness(void) { open_settings_screen(); }
 static void nav_battery(void)    { open_battery_screen(); }
-static void nav_rotate(void)     { open_rotate_screen(); }
+static void nav_minigames(void)  { open_minigames_menu(); }
+static void nav_snake(void)      { open_snake_screen(); }
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
@@ -177,7 +179,8 @@ static const screen_entry_t all_screens[] = {
     {"settings-menu", nav_settings_menu},
     {"brightness",    nav_brightness},
     {"battery",       nav_battery},
-    {"rotate",        nav_rotate},
+    {"minigames",     nav_minigames},
+    {"snake",         nav_snake},
     {"table-sync",    nav_table_sync},
     {"dice",          nav_dice},
     {"dice-menu",     nav_dice_menu},

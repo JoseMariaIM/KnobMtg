@@ -15,6 +15,7 @@
 #include "ui_player_menu.h"
 #include "ui_wifi.h"
 #include "round_safe.h"
+#include "snake.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -25,7 +26,7 @@ lv_obj_t *screen_quad_menu = NULL;
 lv_obj_t *screen_tools_menu = NULL;
 lv_obj_t *screen_settings = NULL;
 lv_obj_t *screen_battery = NULL;
-lv_obj_t *screen_rotate = NULL;
+lv_obj_t *screen_minigames_menu = NULL;
 
 // ---------- widgets ----------
 static lv_obj_t *arc_brightness = NULL;
@@ -33,7 +34,6 @@ static lv_obj_t *label_settings_value = NULL;
 static lv_obj_t *label_settings_hint = NULL;
 static lv_obj_t *label_settings_battery = NULL;
 static lv_obj_t *label_settings_battery_detail = NULL;
-static lv_obj_t *label_rotate_value = NULL;
 
 // ---------- quadrant menu builder ----------
 void build_quad_screen(lv_obj_t **screen, quad_item_t items[4])
@@ -137,14 +137,6 @@ void refresh_battery_ui(void)
         snprintf(detail_buf, sizeof(detail_buf), t(STR_BATTERY_CALIBRATED_FMT), battery_voltage);
         lv_label_set_text(label_settings_battery_detail, detail_buf);
     }
-}
-
-void refresh_rotate_ui(void)
-{
-    char buf[16];
-    if (label_rotate_value == NULL) return;
-    snprintf(buf, sizeof(buf), "%d°", nvs_get_display_rotation() * 90);
-    lv_label_set_text(label_rotate_value, buf);
 }
 
 // ---------- navigation ----------
@@ -276,21 +268,6 @@ void open_battery_screen(void)
     update_battery_measurement(true);
     refresh_battery_ui();
     lv_scr_load(screen_battery);
-}
-
-void open_rotate_screen(void)
-{
-    refresh_rotate_ui();
-    lv_scr_load(screen_rotate);
-}
-
-void change_display_rotation(int dir)
-{
-    int v = (nvs_get_display_rotation() +
-             (dir > 0 ? 1 : DISPLAY_ROTATION_COUNT - 1)) % DISPLAY_ROTATION_COUNT;
-    nvs_set_display_rotation(v);
-    refresh_rotate_ui();
-    menu_facing_refresh();
 }
 
 /* Player-scoped menu screens that should face the acting player when
@@ -557,7 +534,7 @@ static const setting_item_t settings_items[] = {
     { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
     { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
     { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
-    { .id = "rotate",         .fixed_label_id = STR_SETTING_ROTATE_SCREEN, .navigate = open_rotate_screen, .nav_screen = &screen_rotate },
+    { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES, .navigate = open_minigames_menu, .nav_screen = &screen_minigames_menu },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
     { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE, .navigate = open_language_picker_screen, .nav_screen = &screen_language_picker },
     { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI, .navigate = open_wifi_settings_screen, .nav_screen = &screen_wifi_settings },
@@ -653,7 +630,7 @@ bool settings_handle_back(lv_obj_t *screen)
 
     for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
         if (settings_items[i].nav_screen != NULL && screen == *settings_items[i].nav_screen) {
-            if (screen == screen_settings || screen == screen_rotate) settings_save();
+            if (screen == screen_settings) settings_save();
             lv_scr_load(settings_pages[setting_page_of[i]]);
             return true;
         }
@@ -741,6 +718,7 @@ void build_quad_menus(void)
     build_quad_screen(&screen_tools_menu, tools_items);
 
     build_settings_pages();
+    build_minigames_menu_screen();
 }
 
 void build_settings_screen(void)
@@ -801,29 +779,29 @@ void build_battery_screen(void)
     lv_obj_align(label_settings_battery_detail, LV_ALIGN_CENTER, 0, 30);
 }
 
-void build_rotate_screen(void)
+// ---------- minigames menu ----------
+static void event_open_snake(lv_event_t *e)
 {
-    screen_rotate = lv_obj_create(NULL);
-    lv_obj_set_size(screen_rotate, 360, 360);
-    lv_obj_set_style_bg_color(screen_rotate, lv_color_black(), 0);
-    lv_obj_set_style_border_width(screen_rotate, 0, 0);
-    lv_obj_set_scrollbar_mode(screen_rotate, LV_SCROLLBAR_MODE_OFF);
+    (void)e;
+    open_snake_screen();
+}
 
-    lv_obj_t *title = lv_label_create(screen_rotate);
-    lv_label_set_text(title, t(STR_ROTATE_TITLE));
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
+void open_minigames_menu(void)
+{
+    load_screen_if_needed(screen_minigames_menu);
+}
 
-    label_rotate_value = lv_label_create(screen_rotate);
-    lv_label_set_text(label_rotate_value, "0°");
-    lv_obj_set_style_text_color(label_rotate_value, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_rotate_value, &lv_font_es_32, 0);
-    lv_obj_align(label_rotate_value, LV_ALIGN_CENTER, 0, -10);
-
-    lv_obj_t *hint = lv_label_create(screen_rotate);
-    lv_label_set_text(hint, t(STR_ROTATE_HINT));
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x6A6A6A), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
-    lv_obj_align(hint, LV_ALIGN_CENTER, 0, 40);
+void build_minigames_menu_screen(void)
+{
+    /* Only one game exists today; the other three tiles are disabled
+       placeholders (same look as an empty settings-page slot) so this
+       screen doesn't need its own "More" pagination until a second
+       game shows up - see build_settings_pages() for that pattern. */
+    quad_item_t items[4] = {
+        {t(STR_MINIGAME_SNAKE), event_open_snake, true, LV_EVENT_CLICKED},
+        {"", NULL, false, LV_EVENT_CLICKED},
+        {"", NULL, false, LV_EVENT_CLICKED},
+        {"", NULL, false, LV_EVENT_CLICKED},
+    };
+    build_quad_screen(&screen_minigames_menu, items);
 }

@@ -35,7 +35,7 @@ static const char *strings_en[STR_COUNT] = {
     [STR_SETTING_BRIGHTNESS] = "Brightness",
     [STR_SETTING_BATTERY] = "Battery",
     [STR_SETTING_TABLE_SYNC] = "Table Sync\n(Experimental)",
-    [STR_SETTING_ROTATE_SCREEN] = "Rotate\nScreen",
+    [STR_SETTING_MINIGAMES] = "Minigames",
     [STR_SETTINGS_MORE] = "More",
     [STR_TABLE_SYNC_JOINING] = "Joining...",
     [STR_TABLE_SYNC_INVITING] = "Inviting\n#%04d",
@@ -62,8 +62,6 @@ static const char *strings_en[STR_COUNT] = {
     [STR_BATTERY_FMT] = "Battery: %d%%",
     [STR_BATTERY_NOT_CALIBRATED] = "No calibrated reading",
     [STR_BATTERY_CALIBRATED_FMT] = "%.2fV calibrated",
-    [STR_ROTATE_TITLE] = "Rotate Screen",
-    [STR_ROTATE_HINT] = "Turn knob to rotate",
     [STR_SETTING_WIFI] = "WiFi",
     [STR_SETTING_UPDATES] = "Updates",
     [STR_WIFI_TITLE] = "WiFi",
@@ -195,6 +193,13 @@ static const char *strings_en[STR_COUNT] = {
     [STR_ATTACK_TITLE_FMT] = "%s > %s",
     [STR_CANCEL] = "Cancel",
     [STR_RESOLVE] = "Resolve",
+
+    [STR_MINIGAME_SNAKE] = "Snake",
+    [STR_SNAKE_TAP_START] = "Tap to Start",
+    [STR_SNAKE_HINT] = "Turn knob to steer",
+    [STR_SNAKE_SCORE_FMT] = "Score: %d",
+    [STR_SNAKE_PAUSED] = "Paused\nTap to Resume",
+    [STR_SNAKE_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -225,7 +230,7 @@ static const char *strings_es[STR_COUNT] = {
     [STR_SETTING_BRIGHTNESS] = "Brillo",
     [STR_SETTING_BATTERY] = "Batería",
     [STR_SETTING_TABLE_SYNC] = "Sync. Mesa\n(Experimental)",
-    [STR_SETTING_ROTATE_SCREEN] = "Rotar\nPantalla",
+    [STR_SETTING_MINIGAMES] = "Minijuegos",
     [STR_SETTINGS_MORE] = "Más",
     [STR_TABLE_SYNC_JOINING] = "Uniéndose...",
     [STR_TABLE_SYNC_INVITING] = "Invitando\n#%04d",
@@ -252,8 +257,6 @@ static const char *strings_es[STR_COUNT] = {
     [STR_BATTERY_FMT] = "Batería: %d%%",
     [STR_BATTERY_NOT_CALIBRATED] = "Lectura no calibrada",
     [STR_BATTERY_CALIBRATED_FMT] = "%.2fV calibrado",
-    [STR_ROTATE_TITLE] = "Rotar Pantalla",
-    [STR_ROTATE_HINT] = "Gira la rueda para rotar",
     [STR_SETTING_WIFI] = "WiFi",
     [STR_SETTING_UPDATES] = "Actualizaciones",
     [STR_WIFI_TITLE] = "WiFi",
@@ -385,6 +388,13 @@ static const char *strings_es[STR_COUNT] = {
     [STR_ATTACK_TITLE_FMT] = "%s > %s",
     [STR_CANCEL] = "Cancelar",
     [STR_RESOLVE] = "Resolver",
+
+    [STR_MINIGAME_SNAKE] = "Snake",
+    [STR_SNAKE_TAP_START] = "Toca para Empezar",
+    [STR_SNAKE_HINT] = "Gira la rueda para girar",
+    [STR_SNAKE_SCORE_FMT] = "Puntos: %d",
+    [STR_SNAKE_PAUSED] = "Pausado\nToca para Continuar",
+    [STR_SNAKE_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
 };
 
 void lang_init(void)

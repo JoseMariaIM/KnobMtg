@@ -15,6 +15,7 @@
 #include "src/ui_wifi.h"
 #include "src/wifi_ota.h"
 #include "src/attack.h"
+#include "src/snake.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -389,6 +390,9 @@ static void handle_back_navigation(lv_obj_t *screen)
         lv_scr_load(screen_tools_menu);
     } else if (screen == screen_attack) {
         back_to_main();
+    } else if (screen == screen_snake) {
+        snake_leave_screen();
+        open_minigames_menu();
     }
 }
 
@@ -475,7 +479,6 @@ void knob_gui(void)
     build_mana_screen();
     build_settings_screen();
     build_battery_screen();
-    build_rotate_screen();
     build_table_sync_screen();
     build_language_picker_screen();
     build_wifi_settings_screen();
@@ -488,6 +491,7 @@ void knob_gui(void)
     build_quad_menus();
     build_game_mode_menu_screen();
     build_custom_life_screen();
+    build_snake_screen();
     menu_facing_hook_screens();
 
     refresh_main_ui();
@@ -535,10 +539,10 @@ static void handle_knob_event(knob_event_t k)
         else if (k == KNOB_RIGHT) change_brightness(+1);
         refresh_settings_ui();
     }
-    else if (lv_scr_act() == screen_rotate)
+    else if (lv_scr_act() == screen_snake)
     {
-        if (k == KNOB_LEFT)      change_display_rotation(-1);
-        else if (k == KNOB_RIGHT) change_display_rotation(+1);
+        if (k == KNOB_LEFT)      snake_turn(-1);
+        else if (k == KNOB_RIGHT) snake_turn(+1);
     }
     else if (lv_scr_act() == screen_multiplayer)
     {

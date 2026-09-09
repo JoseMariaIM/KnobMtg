@@ -44,7 +44,7 @@ typedef enum {
     STR_SETTING_BRIGHTNESS,
     STR_SETTING_BATTERY,
     STR_SETTING_TABLE_SYNC,
-    STR_SETTING_ROTATE_SCREEN,
+    STR_SETTING_MINIGAMES,
     STR_SETTINGS_MORE,
     STR_TABLE_SYNC_JOINING,
     STR_TABLE_SYNC_INVITING,
@@ -71,8 +71,6 @@ typedef enum {
     STR_BATTERY_FMT,         /* "Battery: %d%%" */
     STR_BATTERY_NOT_CALIBRATED,
     STR_BATTERY_CALIBRATED_FMT, /* "%.2fV calibrated" */
-    STR_ROTATE_TITLE,
-    STR_ROTATE_HINT,
     STR_SETTING_WIFI,
     STR_SETTING_UPDATES,
     STR_WIFI_TITLE,
@@ -214,6 +212,14 @@ typedef enum {
     STR_ATTACK_TITLE_FMT,   /* "%s > %s" */
     STR_CANCEL,
     STR_RESOLVE,
+
+    /* snake.c */
+    STR_MINIGAME_SNAKE,
+    STR_SNAKE_TAP_START,
+    STR_SNAKE_HINT,
+    STR_SNAKE_SCORE_FMT,       /* "Score: %d" */
+    STR_SNAKE_PAUSED,
+    STR_SNAKE_GAME_OVER_FMT,   /* "Game Over\nScore: %d\nTap to Retry" */
 
     STR_COUNT,
 } string_id_t;
