@@ -329,74 +329,202 @@ static void handle_swipe_navigation(knob_swipe_direction_t direction, lv_obj_t *
     }
 }
 
-static void handle_back_navigation(lv_obj_t *screen)
+// ---------- screen registry ----------
+/* Every screen with custom knob and/or back-gesture behavior gets one row
+ * here, covering what used to be three separate hand-maintained switches
+ * (the knob dispatch below, the back-navigation chain, and
+ * menu_facing_hook_screens()) plus knob_gui()'s boot-time build sequence.
+ * Adding a screen that needs any of these is now one row instead of
+ * hunting down the right spot in four places - a forgotten back handler
+ * used to silently strand the user with no way out of that screen.
+ *
+ * Screens NOT listed here:
+ * - Settings pages and their sub-screens (screen_settings, screen_battery,
+ *   screen_table_sync, screen_minigames_menu, screen_language_picker,
+ *   screen_wifi_settings, screen_ota_update): back is handled generically
+ *   by settings_handle_back() in settings.c, checked before this table.
+ * - screen_1p / screen_multiplayer: swipe up opens the menu instead of
+ *   going through back navigation at all (see is_player_screen() in
+ *   handle_swipe_navigation()); their knob handling sits below this
+ *   table since it needs that same is_player_screen() gate.
+ * - screen_intro and the screen_quad_menu family (screen_quad_menu,
+ *   screen_tools_menu, screen_minigames_menu): built together by
+ *   build_quad_menus() rather than individually - see knob_gui().
+ */
+typedef struct {
+    lv_obj_t **screen;
+    void (*build)(void);      /* NULL: built elsewhere (batch call or lazily on open) */
+    void (*on_knob)(int dir); /* NULL: knob falls through to settings_knob_page() */
+    void (*on_back)(void);    /* takes priority over back_target when both are set */
+    lv_obj_t **back_target;   /* NULL on_back: lv_scr_load(*back_target); both NULL: no-op */
+    bool menu_facing_scoped;  /* hook menu_facing_screen_event (menu-facing setting) */
+} screen_desc_t;
+
+// --- knob wrappers (bundle the extra side effect a bare setter doesn't have) ---
+static void screen_1p_knob(int dir)
 {
-    if (screen == screen_quad_menu && previous_screen != NULL) {
+    selection_set_single(0);
+    change_player_life(dir);
+}
+
+static void settings_screen_knob(int dir)
+{
+    change_brightness(dir);
+    refresh_settings_ui();
+}
+
+static void counter_edit_knob(int dir)
+{
+    change_counter_edit(dir);
+    refresh_counter_edit_ui();
+}
+
+static void damage_log_knob(int dir)
+{
+    if (dir < 0) damage_log_select_prev();
+    else         damage_log_select_next();
+}
+
+// --- back-navigation wrappers (anything beyond a plain lv_scr_load) ---
+static void back_quad_menu(void)
+{
+    if (previous_screen != NULL) {
         refresh_multiplayer_ui();
         lv_scr_load(previous_screen);
-    } else if (screen == screen_tools_menu) {
-        lv_scr_load(screen_quad_menu);
-    } else if (settings_handle_back(screen)) {
-        /* settings pages and their sub-screens (brightness, battery) */
-    } else if (screen == screen_dice) {
-        open_dice_menu_screen();
-    } else if (screen == screen_dice_menu) {
-        lv_scr_load(screen_tools_menu);
-    } else if (screen == screen_coin) {
-        lv_scr_load(screen_tools_menu);
-    } else if (screen == screen_damage_log) {
-        lv_scr_load(screen_tools_menu);
-    } else if (screen == screen_select) {
-        back_to_main();
-    } else if (screen == screen_damage) {
-        damage_cancel();
-        open_select_screen();
-    } else if (screen == screen_game_mode_menu) {
-        lv_scr_load(screen_quad_menu);
-    } else if (screen == screen_custom_life) {
-        refresh_game_mode_menu_ui();
-        lv_scr_load(screen_game_mode_menu);
-    } else if (screen == screen_player_menu) {
-        back_to_main();
-    } else if (screen == screen_player_name) {
-        if (!name_screen_handle_back())
-            open_player_menu(menu_player);
-    } else if (screen == screen_wifi_scan_list) {
-        wifi_scan_list_handle_back();
-    } else if (screen == screen_wifi_text_entry) {
-        wifi_text_entry_handle_back();
-    } else if (screen == screen_wifi_status) {
-        wifi_status_handle_back();
-    } else if (screen == screen_ota_qr) {
-        /* Reached via the "just updated" toast (see hw.c): there's no
-           Updates screen in that history to return to, so go straight
-           to the life counter instead. */
-        if (ota_qr_consume_from_toast()) {
-            back_to_main();
-        } else {
-            load_screen_if_needed(screen_ota_update);
-        }
-    } else if (screen == screen_counter_menu) {
+    }
+}
+
+static void back_dice(void) { open_dice_menu_screen(); }
+static void back_select(void) { back_to_main(); }
+static void back_player_menu(void) { back_to_main(); }
+static void back_attack(void) { back_to_main(); }
+static void back_counter_menu(void) { open_player_menu(menu_player); }
+static void back_counter_edit(void) { open_counter_menu(); }
+static void back_player_all_damage(void) { open_player_menu(menu_player); }
+static void back_player_color_menu(void) { open_player_menu(menu_player); }
+static void back_player_color_picker(void) { load_screen_if_needed(screen_player_color_menu); }
+
+static void back_damage(void)
+{
+    damage_cancel();
+    open_select_screen();
+}
+
+static void back_custom_life(void)
+{
+    refresh_game_mode_menu_ui();
+    lv_scr_load(screen_game_mode_menu);
+}
+
+static void back_player_name(void)
+{
+    if (!name_screen_handle_back())
         open_player_menu(menu_player);
-    } else if (screen == screen_counter_edit) {
-        open_counter_menu();
-    } else if (screen == screen_player_all_damage) {
-        open_player_menu(menu_player);
-    } else if (screen == screen_player_color_menu) {
-        open_player_menu(menu_player);
-    } else if (screen == screen_player_color_picker) {
-        load_screen_if_needed(screen_player_color_menu);
-    } else if (screen == screen_mana) {
-        mana_discard_preview();
-        lv_scr_load(screen_tools_menu);
-    } else if (screen == screen_attack) {
+}
+
+static void back_mana(void)
+{
+    mana_discard_preview();
+    lv_scr_load(screen_tools_menu);
+}
+
+static void back_snake(void)
+{
+    snake_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_pong(void)
+{
+    pong_leave_screen();
+    open_minigames_menu();
+}
+
+/* wifi_*_handle_back() return bool (mirrors name_screen_handle_back's
+   contract); nothing here needs that result. */
+static void back_wifi_scan_list(void) { wifi_scan_list_handle_back(); }
+static void back_wifi_text_entry(void) { wifi_text_entry_handle_back(); }
+static void back_wifi_status(void) { wifi_status_handle_back(); }
+
+static void back_ota_qr(void)
+{
+    /* Reached via the "just updated" toast (see hw.c): there's no
+       Updates screen in that history to return to, so go straight
+       to the life counter instead. */
+    if (ota_qr_consume_from_toast()) {
         back_to_main();
-    } else if (screen == screen_snake) {
-        snake_leave_screen();
-        open_minigames_menu();
-    } else if (screen == screen_pong) {
-        pong_leave_screen();
-        open_minigames_menu();
+    } else {
+        load_screen_if_needed(screen_ota_update);
+    }
+}
+
+static const screen_desc_t screen_registry[] = {
+    /* screen                      build                              on_knob              on_back                  back_target             menu_facing */
+    { &screen_dice_menu,           build_dice_menu_screen,            change_dice_quantity, NULL,                    &screen_tools_menu,     false },
+    { &screen_dice,                build_dice_screen,                 NULL,                 back_dice,               NULL,                   false },
+    { &screen_coin,                build_coin_screen,                 NULL,                 NULL,                    &screen_tools_menu,     false },
+    { &screen_1p,                  build_main_screen,                 NULL,                 NULL,                    NULL,                   false },
+    { &screen_multiplayer,         build_multiplayer_screen,          change_player_life,   NULL,                    NULL,                   false },
+    { &screen_victory,             build_victory_screen,              NULL,                 NULL,                    NULL,                   false },
+    { &screen_attack,              build_attack_screen,               change_attack_amount, back_attack,             NULL,                   false },
+    { &screen_player_menu,         build_player_menu_screen,          NULL,                 back_player_menu,        NULL,                   true  },
+    { &screen_eliminated_player_menu, build_eliminated_player_menu_screen, NULL,             NULL,                    NULL,                   true  },
+    { &screen_player_name,         build_rename_screen,               name_screen_knob,     back_player_name,        NULL,                   true  },
+    { &screen_player_all_damage,   build_all_damage_screen,           change_all_damage,    back_player_all_damage,  NULL,                   true  },
+    { &screen_counter_menu,        build_counter_menu_screen,         NULL,                 back_counter_menu,       NULL,                   true  },
+    { &screen_counter_edit,        build_counter_edit_screen,         counter_edit_knob,    back_counter_edit,       NULL,                   true  },
+    { &screen_player_color_menu,   build_player_color_menu_screen,    NULL,                 back_player_color_menu,  NULL,                   true  },
+    { &screen_player_color_picker, build_player_color_picker_screen,  change_player_color,  back_player_color_picker, NULL,                  true  },
+    { &screen_select,              build_select_screen,               NULL,                 back_select,             NULL,                   true  },
+    { &screen_damage,              build_damage_screen,               add_damage_to_selected_enemy, back_damage,     NULL,                   true  },
+    { &screen_mana,                build_mana_screen,                 change_mana_value,    back_mana,               NULL,                   false },
+    { &screen_settings,            build_settings_screen,             settings_screen_knob, NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_battery,             build_battery_screen,              NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_table_sync,          build_table_sync_screen,           NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
+    { &screen_game_mode_menu,      build_game_mode_menu_screen,       NULL,                 NULL,                    &screen_quad_menu,      false },
+    { &screen_custom_life,         build_custom_life_screen,          change_custom_life,   back_custom_life,        NULL,                   false },
+    /* screen_quad_menu/screen_tools_menu: built by build_quad_menus(), see knob_gui() */
+    { &screen_quad_menu,           NULL,                              NULL,                 back_quad_menu,          NULL,                   false },
+    { &screen_tools_menu,          NULL,                              NULL,                 NULL,                    &screen_quad_menu,      false },
+    /* WiFi/OTA sub-screens: built lazily by ensure_wifi_ota_screens_built()
+       (ui_wifi.c) on first entry into the cluster, not here. */
+    { &screen_wifi_scan_list,      NULL,                              NULL,                 back_wifi_scan_list,     NULL,                   false },
+    { &screen_wifi_text_entry,     NULL,                              wifi_text_entry_knob, back_wifi_text_entry,    NULL,                   false },
+    { &screen_wifi_status,         NULL,                              NULL,                 back_wifi_status,        NULL,                   false },
+    { &screen_ota_qr,              NULL,                              NULL,                 back_ota_qr,             NULL,                   false },
+    /* Snake/Pong: built lazily on first open_*_screen() call, not here. */
+    { &screen_snake,               NULL,                              snake_turn,           back_snake,              NULL,                   false },
+    { &screen_pong,                NULL,                              pong_turn,            back_pong,               NULL,                   false },
+};
+#define SCREEN_REGISTRY_COUNT (sizeof(screen_registry) / sizeof(screen_registry[0]))
+
+static const screen_desc_t *find_screen_desc(lv_obj_t *screen)
+{
+    size_t i;
+    for (i = 0; i < SCREEN_REGISTRY_COUNT; i++) {
+        if (*screen_registry[i].screen == screen) return &screen_registry[i];
+    }
+    return NULL;
+}
+
+static void handle_back_navigation(lv_obj_t *screen)
+{
+    const screen_desc_t *desc;
+
+    /* Settings pages and their sub-screens own their own back targets
+       (see settings_handle_back()'s scan over settings_items[]/
+       settings_pages[]) - checked first, exactly like before this table. */
+    if (settings_handle_back(screen)) return;
+
+    desc = find_screen_desc(screen);
+    if (desc == NULL) return;
+
+    if (desc->on_back != NULL) {
+        desc->on_back();
+    } else if (desc->back_target != NULL) {
+        lv_scr_load(*desc->back_target);
     }
 }
 
@@ -435,18 +563,13 @@ static void menu_facing_screen_event(lv_event_t *e)
 
 static void menu_facing_hook_screens(void)
 {
-    lv_obj_t *scoped[] = {
-        screen_player_menu, screen_eliminated_player_menu,
-        screen_player_all_damage, screen_counter_menu, screen_counter_edit,
-        screen_player_color_menu, screen_player_color_picker,
-        screen_player_name, screen_select, screen_damage,
-    };
     size_t i;
 
-    for (i = 0; i < sizeof(scoped) / sizeof(scoped[0]); i++) {
-        lv_obj_add_event_cb(scoped[i], menu_facing_screen_event,
+    for (i = 0; i < SCREEN_REGISTRY_COUNT; i++) {
+        if (!screen_registry[i].menu_facing_scoped) continue;
+        lv_obj_add_event_cb(*screen_registry[i].screen, menu_facing_screen_event,
                             LV_EVENT_SCREEN_LOADED, NULL);
-        lv_obj_add_event_cb(scoped[i], menu_facing_screen_event,
+        lv_obj_add_event_cb(*screen_registry[i].screen, menu_facing_screen_event,
                             LV_EVENT_SCREEN_UNLOADED, NULL);
     }
 }
@@ -454,6 +577,8 @@ static void menu_facing_hook_screens(void)
 // ---------- init ----------
 void knob_gui(void)
 {
+    size_t i;
+
     knob_hw_init();
     display_apply_rotation(nvs_get_display_rotation());
     ensure_swipe_hint();
@@ -463,40 +588,23 @@ void knob_gui(void)
     lv_refr_now(NULL);
     scr_display_on();
     brightness_apply();
-    build_dice_menu_screen();
-    build_dice_screen();
-    build_coin_screen();
-    build_main_screen();
-    build_multiplayer_screen();
-    build_victory_screen();
-    build_attack_screen();
-    build_player_menu_screen();
-    build_eliminated_player_menu_screen();
-    build_rename_screen();
-    build_all_damage_screen();
-    build_counter_menu_screen();
-    build_counter_edit_screen();
-    build_player_color_menu_screen();
-    build_player_color_picker_screen();
-    build_select_screen();
-    build_damage_screen();
-    build_mana_screen();
-    build_settings_screen();
-    build_battery_screen();
-    build_table_sync_screen();
-    build_language_picker_screen();
-    build_wifi_settings_screen();
-    build_wifi_scan_list_screen();
-    build_wifi_text_entry_screen();
-    build_wifi_status_screen();
-    build_ota_update_screen();
-    build_ota_qr_screen();
-    build_damage_log_screen();
+
+    /* Every screen with a .build entry in screen_registry (everything
+       except: screen_quad_menu/screen_tools_menu, built together by
+       build_quad_menus() right below since they don't have their own
+       individual build function; and the WiFi/OTA cluster + Snake/Pong,
+       built lazily on first entry - see ensure_wifi_ota_screens_built()
+       in ui_wifi.c and the guards in snake.c/pong.c. Exact build order
+       among these doesn't matter functionally (each is an independent
+       lv_obj_t tree; nothing reads another screen's widgets until the
+       user can actually interact, by which point everything below is
+       built), so one straight pass over the table replaces what used to
+       be ~30 individual calls listed by hand. */
+    for (i = 0; i < SCREEN_REGISTRY_COUNT; i++) {
+        if (screen_registry[i].build != NULL) screen_registry[i].build();
+    }
     build_quad_menus();
-    build_game_mode_menu_screen();
-    build_custom_life_screen();
-    build_snake_screen();
-    build_pong_screen();
+
     menu_facing_hook_screens();
 
     refresh_main_ui();
@@ -513,6 +621,13 @@ void knob_gui(void)
 
     wifi_ota_init(); /* non-blocking: begins connecting if credentials are saved */
 
+    /* Wires game_state.c's game_hooks to the real UI refresh functions
+       and creates the 3 lv_timer_t objects those hooks schedule - must
+       run before any input can reach game_state.c (knob_life_init()
+       right below only resets pure state, it no longer touches LVGL -
+       see the comment at its call site in game_state.c). */
+    game_bridge_init();
+
     knob_life_init();
     knob_intro_init();
 }
@@ -520,101 +635,34 @@ void knob_gui(void)
 // ---------- knob event handler ----------
 static void handle_knob_event(knob_event_t k)
 {
+    lv_obj_t *screen;
+    const screen_desc_t *desc;
+    int dir;
+
     activity_kick();
     if (in_undim_grace()) return;
+    if (k != KNOB_LEFT && k != KNOB_RIGHT) return; /* every screen below only ever acted on these two */
+    dir = (k == KNOB_RIGHT) ? +1 : -1;
 
-    if (lv_scr_act() == screen_intro)
-    {
+    screen = lv_scr_act();
+    if (screen == screen_intro) return;
+
+    /* screen_1p needs the same is_player_screen() single-selection setup
+       as its swipe handling below, so it can't be a plain screen_registry
+       row like screen_multiplayer's identical change_player_life(). */
+    if (screen == screen_1p) {
+        screen_1p_knob(dir);
         return;
     }
-    else if (lv_scr_act() == screen_1p)
-    {
-        selection_set_single(0);
-        if (k == KNOB_LEFT)      change_player_life(-1);
-        else if (k == KNOB_RIGHT) change_player_life(+1);
+
+    desc = find_screen_desc(screen);
+    if (desc != NULL && desc->on_knob != NULL) {
+        desc->on_knob(dir);
+        return;
     }
-    else if (lv_scr_act() == screen_damage)
-    {
-        if (k == KNOB_LEFT)      add_damage_to_selected_enemy(-1);
-        else if (k == KNOB_RIGHT) add_damage_to_selected_enemy(+1);
-    }
-    else if (lv_scr_act() == screen_settings)
-    {
-        if (k == KNOB_LEFT)      change_brightness(-1);
-        else if (k == KNOB_RIGHT) change_brightness(+1);
-        refresh_settings_ui();
-    }
-    else if (lv_scr_act() == screen_snake)
-    {
-        if (k == KNOB_LEFT)      snake_turn(-1);
-        else if (k == KNOB_RIGHT) snake_turn(+1);
-    }
-    else if (lv_scr_act() == screen_pong)
-    {
-        if (k == KNOB_LEFT)      pong_turn(-1);
-        else if (k == KNOB_RIGHT) pong_turn(+1);
-    }
-    else if (lv_scr_act() == screen_multiplayer)
-    {
-        if (k == KNOB_LEFT)      change_player_life(-1);
-        else if (k == KNOB_RIGHT) change_player_life(+1);
-    }
-    else if (lv_scr_act() == screen_player_all_damage)
-    {
-        if (k == KNOB_LEFT)      change_all_damage(-1);
-        else if (k == KNOB_RIGHT) change_all_damage(+1);
-    }
-    else if (lv_scr_act() == screen_custom_life)
-    {
-        if (k == KNOB_LEFT)      change_custom_life(-1);
-        else if (k == KNOB_RIGHT) change_custom_life(+1);
-    }
-    else if (lv_scr_act() == screen_counter_edit)
-    {
-        if (k == KNOB_LEFT)      change_counter_edit(-1);
-        else if (k == KNOB_RIGHT) change_counter_edit(+1);
-        refresh_counter_edit_ui();
-    }
-    else if (lv_scr_act() == screen_damage_log)
-    {
-        if (k == KNOB_LEFT)      damage_log_select_prev();
-        else if (k == KNOB_RIGHT) damage_log_select_next();
-    }
-    else if (lv_scr_act() == screen_player_name)
-    {
-        if (k == KNOB_LEFT)      name_screen_knob(-1);
-        else if (k == KNOB_RIGHT) name_screen_knob(+1);
-    }
-    else if (lv_scr_act() == screen_wifi_text_entry)
-    {
-        if (k == KNOB_LEFT)      wifi_text_entry_knob(-1);
-        else if (k == KNOB_RIGHT) wifi_text_entry_knob(+1);
-    }
-    else if (lv_scr_act() == screen_player_color_picker)
-    {
-        if (k == KNOB_LEFT)      change_player_color(-1);
-        else if (k == KNOB_RIGHT) change_player_color(+1);
-    }
-    else if (lv_scr_act() == screen_mana)
-    {
-        if (k == KNOB_LEFT)      change_mana_value(-1);
-        else if (k == KNOB_RIGHT) change_mana_value(+1);
-    }
-    else if (lv_scr_act() == screen_dice_menu)
-    {
-        if (k == KNOB_LEFT)      change_dice_quantity(-1);
-        else if (k == KNOB_RIGHT) change_dice_quantity(+1);
-    }
-    else if (lv_scr_act() == screen_attack)
-    {
-        if (k == KNOB_LEFT)      change_attack_amount(-1);
-        else if (k == KNOB_RIGHT) change_attack_amount(+1);
-    }
-    else if (k == KNOB_LEFT || k == KNOB_RIGHT)
-    {
-        /* Settings pages: knob flips between pages (no-op elsewhere) */
-        settings_knob_page(k == KNOB_RIGHT ? +1 : -1);
-    }
+
+    /* Settings pages: knob flips between pages (no-op elsewhere) */
+    settings_knob_page(dir);
 }
 
 /* Producer: runs in the encoder esp_timer task, possibly on the other

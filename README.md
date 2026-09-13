@@ -108,6 +108,20 @@ A native application for local interactive development.
 - **Knob:** Mouse Wheel / Left & Right Arrows
 - **Swipe:** Up & Down Arrows | L & R keys
 
+## ✅ Testing
+
+Headless unit tests build against the same simulator sources (no hardware, no display) and cover game logic directly: life/preview rules, commander damage, elimination + undo, the damage log, Table Sync's state-merge rules, the battery curve, and translation-table completeness.
+
+```bash
+make -C sim test                     # game logic (life, elimination, damage log, Table Sync, ...)
+make -C sim test-mem-budget          # regression check: all screens vs. the device's 128KB LVGL pool
+make -C sim test-game-state-purity   # game_state.h compiles with zero LVGL dependency
+```
+
+See [sim/tests/test_harness.h](sim/tests/test_harness.h) for how a test boots the UI headlessly, and any existing file under `sim/tests/` for the pattern (one binary per file, plain `assert()`).
+
+The game's actual rules live in [knobby/src/game_state.h](knobby/src/game_state.h)/`.c`, with zero LVGL types in the header - `game.h`/`.c` is the LVGL-facing bridge (color math, the 3 timers that schedule follow-ups) that everything else still includes exactly as before. See the comment at the top of `game_state.h` for the split.
+
 ## 🧑‍🤝‍🧑 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)

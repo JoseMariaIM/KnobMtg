@@ -42,3 +42,46 @@ jobs:
       - name: Compile with arduino-cli
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,PartitionScheme=custom" knobby
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache arduino cores and libraries
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.arduino15/packages
+            ~/Arduino/libraries
+          key: ${{ runner.os }}-arduino-deps-${{ hashFiles('README.md') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino-deps-
+
+      - name: Install LVGL (headless sim's only dependency)
+        run: |
+          arduino-cli core update-index
+          arduino-cli lib install lvgl@8.3.11
+
+      # test-mem-budget builds a second, -m32 object tree (see sim/Makefile)
+      # so its LVGL heap measurement matches the ESP32-S3's 32-bit pointers
+      # instead of a 64-bit runner overestimating usage.
+      - name: Install 32-bit gcc multilib (for test-mem-budget)
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib
+
+      - name: Write dev version header
+        run: |
+          echo "#define FIRMWARE_VERSION \"dev-${GITHUB_SHA::7}\"" > knobby/src/version.h
+
+      - name: Run unit tests
+        run: make -C sim test
+
+      - name: Check LVGL memory budget (all screens vs. the device's 128KB pool)
+        run: make -C sim test-mem-budget
+
+      - name: Check game_state.h has zero LVGL dependency
+        run: make -C sim test-game-state-purity

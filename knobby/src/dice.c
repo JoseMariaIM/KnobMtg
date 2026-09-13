@@ -68,6 +68,8 @@ void change_dice_quantity(int delta)
     lv_label_set_text(label_dice_quantity, buf);
 }
 
+int dice_test_get_quantity(void) { return dice_quantity; } /* exposed for unit tests */
+
 static void roll_current_mode(void)
 {
     int i, sides = dice_mode_sides(dice_mode);

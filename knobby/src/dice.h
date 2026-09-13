@@ -17,6 +17,7 @@ void open_dice_menu_screen(void);
 void open_dice_screen(void);
 void open_coin_screen(void);
 void change_dice_quantity(int delta); /* knob handler, screen_dice_menu only */
+int dice_test_get_quantity(void); /* exposed for unit tests */
 
 // event callbacks used in menu builders
 void event_tool_dice(lv_event_t *e);

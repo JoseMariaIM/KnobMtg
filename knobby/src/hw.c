@@ -27,6 +27,7 @@
 // ---------- state ----------
 int brightness_percent = DEFAULT_BRIGHTNESS_PERCENT;
 bool dimmed = false;
+bool screen_blanked = false;
 float battery_voltage = 0.0f;
 int battery_percent = -1;
 
@@ -65,7 +66,9 @@ static int clamp_percent(int value)
     return value;
 }
 
-static int battery_percent_from_voltage(float voltage)
+/* Non-static so unit tests can exercise the curve directly (see hw.h);
+   nothing outside hw.c calls it in firmware, it's just no longer hidden. */
+int battery_percent_from_voltage(float voltage)
 {
     size_t i;
 
@@ -375,10 +378,24 @@ static void cpu_boost_timer_cb(lv_timer_t *timer)
 }
 #endif
 
-// ---------- auto-dim ----------
+// ---------- auto-dim / screen blank ----------
+/* Deeper power state past dim: backlight fully off and the panel told to
+ * stop driving GRAM (see BLANK_AFTER_DIM_MS in hw.h and scr_display_off()
+ * in scr_st77916.h). Only ever entered from auto_dim_timer_cb() below,
+ * once already dimmed. */
+static void screen_blank_enter(void)
+{
+    if (screen_blanked) return;
+    screen_blanked = true;
+    ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, 0);
+    ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+    scr_display_off();
+}
+
 bool activity_kick(void)
 {
     bool was_dimmed = dimmed;
+    bool was_blanked = screen_blanked;
     last_activity_tick = lv_tick_get();
 #ifndef SIMULATOR
     if (!cpu_boosted) {
@@ -389,6 +406,10 @@ bool activity_kick(void)
         lv_timer_resume(cpu_boost_timer);
     }
 #endif
+    if (was_blanked) {
+        screen_blanked = false;
+        scr_display_on();
+    }
     if (dimmed) {
         if (auto_dim_timer != NULL) {
             lv_timer_resume(auto_dim_timer);
@@ -397,7 +418,13 @@ bool activity_kick(void)
         undim_tick = last_activity_tick;
         brightness_apply();
     }
-    return was_dimmed;
+    /* Both dim and blank are "was it asleep" for the caller's swallow-
+       gesture check (see the touch read callback in scr_st77916.h and
+       handle_knob_event() in knob.c): a blanked screen is always dimmed
+       too (screen_blank_enter only runs once already dimmed), so was_dimmed
+       alone would already cover it, but spelling out the OR keeps this
+       correct even if that invariant ever changes. */
+    return was_dimmed || was_blanked;
 }
 
 bool in_undim_grace(void)
@@ -407,23 +434,44 @@ bool in_undim_grace(void)
 
 static void auto_dim_timer_cb(lv_timer_t *timer)
 {
+    int dim_setting;
+    uint32_t timeout;
+
     (void)timer;
 
     // Piggyback: poll battery and check low-voltage cutoff regardless of
-    // dim state.  update_battery_measurement() has its own 60s throttle.
+    // dim/blank state.  update_battery_measurement() has its own 60s throttle.
     update_battery_measurement(false);
 
-    int dim_setting = nvs_get_auto_dim();
-    if (dim_setting == AUTO_DIM_OFF || dimmed) return;
-    uint32_t timeout = auto_dim_ms[dim_setting];
-    if (lv_tick_elaps(last_activity_tick) >= timeout) {
-        dimmed = true;
-        uint32_t duty = (uint32_t)((AUTO_DIM_BRIGHTNESS * BACKLIGHT_DUTY_MAX) / 100);
-        ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
-        ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
-        if (auto_dim_timer != NULL) {
-            lv_timer_pause(auto_dim_timer);
+    dim_setting = nvs_get_auto_dim();
+    if (dim_setting == AUTO_DIM_OFF) return; /* also holds the blank stage off */
+    timeout = auto_dim_ms[dim_setting];
+
+    if (!dimmed) {
+        if (lv_tick_elaps(last_activity_tick) >= timeout) {
+            dimmed = true;
+            uint32_t duty = (uint32_t)((AUTO_DIM_BRIGHTNESS * BACKLIGHT_DUTY_MAX) / 100);
+            ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
+            ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+            /* Deliberately NOT paused here (unlike before this state was
+               added): this same timer now also watches for the deeper
+               blank stage below, so it needs to keep ticking. That costs
+               nothing extra while idle - the light-sleep loop's own
+               IDLE_SLEEP_MAX_MS ceiling (knobby.ino) already wakes the
+               CPU on this same ~1s cadence regardless of which app
+               timers are pending, dim or not. */
         }
+        return;
+    }
+
+    if (!screen_blanked && lv_tick_elaps(last_activity_tick) >= timeout + BLANK_AFTER_DIM_MS) {
+        screen_blank_enter();
+    }
+
+    if (screen_blanked && auto_dim_timer != NULL) {
+        /* Nothing left to watch for until activity_kick() reverses both
+           and resumes this timer. */
+        lv_timer_pause(auto_dim_timer);
     }
 }
 

@@ -10,6 +10,7 @@ extern "C" {
 // ---------- state ----------
 extern int brightness_percent;
 extern bool dimmed;
+extern bool screen_blanked;
 extern float battery_voltage;
 extern int battery_percent;
 
@@ -17,6 +18,16 @@ extern int battery_percent;
 // Auto-dim timeout is now configurable via NVS (see auto_dim_ms[] in knob_types.h).
 // Reducing AUTO_DIM_BRIGHTNESS below 5 further cuts backlight draw while dimmed.
 #define AUTO_DIM_BRIGHTNESS     5       /* % brightness while dimmed */
+// Auto-dim already cuts backlight draw to AUTO_DIM_BRIGHTNESS%, but leaves
+// the backlight rail and the panel itself driving GRAM. If the device is
+// still untouched this much longer after dimming, go one step further -
+// backlight fully off and the panel told to stop driving (see
+// screen_blank_enter() in hw.c) - the same idea as a phone's screen
+// timeout, not a power-off: the device stays fully awake and the very
+// next touch or knob turn reverses both instantly, same as undimming
+// today. The user's own physical power switch remains the only way to
+// actually turn the device off - this never puts it to sleep.
+#define BLANK_AFTER_DIM_MS      (120U * 1000U) /* ms dimmed before blanking too */
 // UNDIM_GRACE_MS suppresses input for this long after wake to avoid accidental presses.
 #define UNDIM_GRACE_MS          225     /* ms */
 #define CPU_FREQ_ACTIVE         80      /* MHz – APB bus stays 80 MHz at 80/160/240, so
@@ -50,6 +61,7 @@ void knob_hw_init(void);
 void brightness_apply(void);
 void update_battery_measurement(bool force);
 int read_battery_percent(void);
+int battery_percent_from_voltage(float voltage); /* pure curve lookup, exposed for unit tests */
 void change_brightness(int delta);
 bool in_undim_grace(void);
 void knob_enter_deep_sleep(void);

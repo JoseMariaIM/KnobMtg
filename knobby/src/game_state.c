@@ -1,0 +1,1143 @@
+/* The game's rules: life totals, commander damage, counters, selection,
+ * elimination, and Table Sync's state-merge logic. See game_state.h for
+ * why this file has no LVGL types in its public interface, and game.c
+ * for the bridge that supplies the UI-refresh/timer-scheduling hooks
+ * this file calls through (never directly) - game_hooks.h. */
+#include "game_state.h"
+#include "damage_log.h"
+#include "storage.h"
+#include "esp_random.h"
+#include "lang.h"
+#include <string.h>
+#include <stdio.h>
+
+// ---------- hook call helpers ----------
+/* Thin wrappers so a call site reads exactly like the direct call it
+   replaces (notify_refresh_player_ui() vs. the old refresh_player_ui())
+   while staying NULL-safe for anything that hasn't registered (unit
+   tests, or a boot sequence in progress before game_bridge_init()
+   runs - see knob.c). */
+static void notify_refresh_player_ui(void)
+{
+    if (game_hooks_get()->refresh_player_ui != NULL) game_hooks_get()->refresh_player_ui();
+}
+static void notify_refresh_select_ui(void)
+{
+    if (game_hooks_get()->refresh_select_ui != NULL) game_hooks_get()->refresh_select_ui();
+}
+static void notify_refresh_damage_ui(void)
+{
+    if (game_hooks_get()->refresh_damage_ui != NULL) game_hooks_get()->refresh_damage_ui();
+}
+static void notify_refresh_all_damage_ui(void)
+{
+    if (game_hooks_get()->refresh_all_damage_ui != NULL) game_hooks_get()->refresh_all_damage_ui();
+}
+static void notify_refresh_rename_ui(void)
+{
+    if (game_hooks_get()->refresh_rename_ui != NULL) game_hooks_get()->refresh_rename_ui();
+}
+static void notify_select_kick_timer(void)
+{
+    if (game_hooks_get()->select_kick_timer != NULL) game_hooks_get()->select_kick_timer();
+}
+static void notify_life_preview_schedule(bool active)
+{
+    if (game_hooks_get()->life_preview_schedule != NULL) game_hooks_get()->life_preview_schedule(active);
+}
+static void notify_all_damage_flash_schedule(void)
+{
+    if (game_hooks_get()->all_damage_flash_schedule != NULL) game_hooks_get()->all_damage_flash_schedule();
+}
+static void notify_player_select_anim_schedule(bool active)
+{
+    if (game_hooks_get()->player_select_anim_schedule != NULL) game_hooks_get()->player_select_anim_schedule(active);
+}
+
+// ---------- state ----------
+int active_enemy_count = 3;
+
+enemy_state_t enemies[MAX_ENEMY_COUNT] = {
+    {"P1", 0}, {"P2", 0}, {"P3", 0}, {"P4", 0},
+    {"P5", 0}, {"P6", 0}, {"P7", 0}
+};
+
+int selected_enemy = -1;
+int dice_result = 0;
+
+int player_life[MAX_DISPLAY_PLAYERS] = {40, 40, 40, 40};
+bool player_selected[MAX_DISPLAY_PLAYERS] = {false};
+char player_names[MAX_GAME_PLAYERS][16] = {
+    "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"
+};
+int menu_player = 0;
+int cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS] = {{0}};
+int partner_cmd_damage_totals[MAX_GAME_PLAYERS][MAX_DISPLAY_PLAYERS] = {{0}};
+int all_damage_value = 0;
+int cmd_damage_target = -1;
+int cmd_damage_slot = 0;
+static int damage_start_value = 0;
+int pending_life_delta = 0;
+bool life_preview_active = false;
+int player_counters[MAX_DISPLAY_PLAYERS][COUNTER_TYPE_COUNT] = {{0}};
+counter_type_t counter_edit_type = COUNTER_TYPE_COMMANDER_TAX;
+int counter_edit_value = 0;
+bool player_eliminated[MAX_DISPLAY_PLAYERS] = {false};
+/* Conceded players (manual elimination) tracked apart from auto-elimination,
+   so an undo that recomputes auto conditions can't revive someone who
+   manually conceded while still above 0 life. */
+static bool player_manually_eliminated[MAX_DISPLAY_PLAYERS] = {false};
+
+bool player_life_color[MAX_DISPLAY_PLAYERS] = {false, false, false, false};
+bool player_has_override[MAX_DISPLAY_PLAYERS] = {false, false, false, false};
+
+typedef struct {
+    bool valid;
+    uint8_t event_type;
+    int source;
+    int delta;
+} elimination_action_t;
+
+static elimination_action_t elimination_action[MAX_DISPLAY_PLAYERS] = {{0}};
+
+/* Per-player Lamport versions for Table Sync, scoped by a game epoch.
+   Every local commit bumps the touched player's version and broadcasts
+   a full state snapshot; adopting a remote block adopts its version.
+   The epoch dominates the comparison (see net_sync_apply_state), so
+   versions from different games are never compared against each other.
+   uint16 wrap is handled with serial arithmetic. */
+static uint16_t game_epoch = 0;
+static uint16_t player_version[MAX_DISPLAY_PLAYERS] = {0};
+static uint16_t names_version = 0;
+
+static void clear_player_elimination_action(int player);
+
+static void net_sync_commit_player(int player)
+{
+    player_version[player]++;
+    net_sync_send_state();
+}
+
+void net_sync_commit_names(void)
+{
+    names_version++;
+    net_sync_send_names();
+}
+
+void net_sync_begin_game(void)
+{
+    int i;
+    game_epoch++;
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) player_version[i] = 1;
+    /* Names outlive game resets, so a mid-session reset leaves the
+       roster version alone. A fresh host must still seed it above a
+       joiner's zero, or the joiner's leftover roster could win the
+       first tie. */
+    if (names_version == 0) names_version = 1;
+}
+
+/* ---------- test-only accessors ----------
+ * game_epoch/player_version are file-static (see the comment above
+ * them): a unit test that wants to probe Table Sync's tie-break and
+ * uint16-wrap rules directly, without spinning up two simulator
+ * processes and a fake radio, needs to read and force them. Not called
+ * from firmware code. */
+uint16_t player_version_for_test(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return 0;
+    return player_version[player];
+}
+
+void player_version_set_for_test(int player, uint16_t version)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    player_version[player] = version;
+}
+
+void net_sync_reset_versions(void)
+{
+    int i;
+    game_epoch = 0;
+    memset(player_version, 0, sizeof(player_version));
+    names_version = 0;
+    /* Joining a table: elimination-undo bookkeeping and the event log
+       refer to a game this device is leaving behind; replaying either
+       against adopted state would corrupt life and mirror the
+       corruption table-wide. */
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++)
+        clear_player_elimination_action(i);
+    damage_log_reset();
+}
+
+#define MANA_ICON_COMMANDER "\xEE\xA7\x86"
+#define MANA_ICON_PARTY     "\xEE\xA6\x87"
+#define MANA_ICON_SKULL     "\xEE\x98\x98"
+#define MANA_ICON_LEVEL     "\xEE\xA4\x80"
+
+/* menu_label/display_name are resolved through t() at call time (see
+   get_counter_definition), so this table stores string IDs there
+   instead of literals - a static const array can't call a function in
+   its own initializer. badge_text is a compact one-letter glyph, not
+   translated (matches the icon fonts' visual style). */
+static const struct {
+    string_id_t menu_label_id;
+    string_id_t display_name_id;
+    const char *badge_text;
+    const char *icon_text;
+    uint32_t accent_color;
+    bool enabled;
+} counter_definitions[COUNTER_TYPE_COUNT] = {
+    {STR_COUNTER_COMMANDER_TAX_MENU, STR_COUNTER_COMMANDER_TAX, "C", MANA_ICON_COMMANDER, 0xA84300, true},
+    {STR_COUNTER_PARTNER_TAX_MENU, STR_COUNTER_PARTNER_TAX, "P", MANA_ICON_PARTY, 0x1565C0, true},
+    {STR_COUNTER_POISON, STR_COUNTER_POISON, "!", MANA_ICON_SKULL, 0x2E7D32, true},
+    {STR_COUNTER_EXPERIENCE, STR_COUNTER_EXPERIENCE, "E", MANA_ICON_LEVEL, 0x6A1B9A, true},
+};
+
+static void clear_player_elimination_action(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    elimination_action[player].valid = false;
+}
+
+static void set_player_elimination_action(int player, uint8_t event_type, int source, int delta)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    elimination_action[player].valid = true;
+    elimination_action[player].event_type = event_type;
+    elimination_action[player].source = source;
+    elimination_action[player].delta = delta;
+}
+
+bool elimination_action_available(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return false;
+    return elimination_action[player].valid;
+}
+
+void undo_elimination_action(int player)
+{
+    if (!elimination_action_available(player)) return;
+
+    elimination_action_t action = elimination_action[player];
+    clear_player_elimination_action(player);
+
+    if (action.event_type == LOG_EVT_LIFE) {
+        undo_life_change(player, action.delta);
+    } else if (action.event_type == LOG_EVT_CMD_DAMAGE) {
+        undo_life_change(player, action.delta);
+        undo_cmd_damage(action.source, player, action.delta);
+    } else if (action.event_type == LOG_EVT_COUNTER) {
+        undo_counter_change(player, action.source, action.delta);
+    }
+
+    /* Drop the log entry that caused the elimination so the same event can't
+       be undone a second time from the Event Log. The eliminating event is
+       the newest one for this player (eliminated players accrue no more). */
+    damage_log_remove_last_for(player, action.event_type);
+}
+
+void check_player_elimination(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    bool was_eliminated = player_eliminated[player];
+    bool now_eliminated = false;
+
+    /* Elimination is a multiplayer concept: with a single tracked player
+       there is no eliminated-menu route in the 1p UI, so eliminating
+       player 0 would brick the counter until reset. */
+    if (nvs_get_auto_eliminate() && nvs_get_players_to_track() > 1) {
+        if (player_life[player] <= 0) {
+            now_eliminated = true;
+        } else {
+            for (int i = 0; i < MAX_GAME_PLAYERS; i++) {
+                if (i != player && (cmd_damage_totals[i][player] >= 21 ||
+                                     partner_cmd_damage_totals[i][player] >= 21)) {
+                    now_eliminated = true;
+                    break;
+                }
+            }
+            if (!now_eliminated && player_counters[player][COUNTER_TYPE_POISON] >= 10) {
+                now_eliminated = true;
+            }
+        }
+    }
+
+    if (player_manually_eliminated[player]) {
+        now_eliminated = true;
+    }
+
+    player_eliminated[player] = now_eliminated;
+    if (!now_eliminated) {
+        clear_player_elimination_action(player);
+    } else if (player_selected[player]) {
+        /* An eliminated player is no longer a life-change target: drop it
+           from the selection so the knob doesn't preview onto a dead panel
+           that can't be tapped to deselect. */
+        player_selected[player] = false;
+        notify_select_kick_timer();
+    }
+
+    if (was_eliminated != now_eliminated) {
+        notify_refresh_player_ui();
+    }
+}
+
+void manual_eliminate_player(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[player]) return;
+    /* Same solo-mode exemption as check_player_elimination. */
+    if (nvs_get_players_to_track() <= 1) return;
+    player_eliminated[player] = true;
+    player_manually_eliminated[player] = true;
+    clear_player_elimination_action(player);
+    if (player_selected[player]) {
+        player_selected[player] = false;
+        notify_select_kick_timer();
+    }
+    net_sync_commit_player(player);
+    notify_refresh_player_ui();
+}
+
+void manual_uneliminate_player(int player)
+{
+    int i;
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (!player_eliminated[player]) return;
+    player_eliminated[player] = false;
+    player_manually_eliminated[player] = false;
+    clear_player_elimination_action(player);
+    /* A remotely-caused elimination arrives with no local
+       elimination_action to undo, so revival must also clear whatever
+       condition would instantly re-kill the player — otherwise they
+       come back at e.g. -2 life and re-die on the next touch. Pull
+       each lethal condition just below its threshold, but only when
+       auto-elimination would actually re-fire (same gate as
+       check_player_elimination): with it off, life <= 0 or poison >=
+       10 are legitimate alive states that must not be rewritten. */
+    if (nvs_get_auto_eliminate() && nvs_get_players_to_track() > 1) {
+        if (player_life[player] < 1) player_life[player] = 1;
+        if (player_counters[player][COUNTER_TYPE_POISON] > 9)
+            player_counters[player][COUNTER_TYPE_POISON] = 9;
+        for (i = 0; i < MAX_GAME_PLAYERS; i++) {
+            if (cmd_damage_totals[i][player] > 20)
+                cmd_damage_totals[i][player] = 20;
+            if (partner_cmd_damage_totals[i][player] > 20)
+                partner_cmd_damage_totals[i][player] = 20;
+        }
+    }
+    net_sync_commit_player(player);
+    notify_refresh_player_ui();
+}
+
+int get_cmd_target_player_index(int row)
+{
+    int skip_player;
+    int num = nvs_get_num_players();
+    int count = 0;
+    int i;
+
+    if (row < 0 || row >= active_enemy_count) return row;
+
+    if (cmd_damage_target >= 0) {
+        skip_player = cmd_damage_target;
+    } else {
+        /* No explicit target — only hidden-screen repaints and the
+           sim's direct navigation reach this (every live flow sets
+           cmd_damage_target first): map as if the owner, player 0,
+           were the target, so the enemy rows show players 1..n-1. */
+        skip_player = 0;
+    }
+
+    for (i = 0; i < num; i++) {
+        if (i == skip_player) continue;
+        if (count == row) return i;
+        count++;
+    }
+
+    return row;
+}
+
+const counter_definition_t *get_counter_definition(counter_type_t type)
+{
+    static counter_definition_t resolved;
+    if (type < 0 || type >= COUNTER_TYPE_COUNT) return NULL;
+    resolved.menu_label = t(counter_definitions[type].menu_label_id);
+    resolved.display_name = t(counter_definitions[type].display_name_id);
+    resolved.badge_text = counter_definitions[type].badge_text;
+    resolved.icon_text = counter_definitions[type].icon_text;
+    resolved.accent_color = counter_definitions[type].accent_color;
+    resolved.enabled = counter_definitions[type].enabled;
+    return &resolved;
+}
+
+bool counter_type_is_enabled(counter_type_t type)
+{
+    const counter_definition_t *definition = get_counter_definition(type);
+
+    return (definition != NULL) && definition->enabled;
+}
+
+int get_counter_value(int player, counter_type_t type)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return 0;
+    if (type < 0 || type >= COUNTER_TYPE_COUNT) return 0;
+
+    return player_counters[player][type];
+}
+
+void begin_counter_edit(int player, counter_type_t type)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (type < 0 || type >= COUNTER_TYPE_COUNT) return;
+
+    menu_player = player;
+    counter_edit_type = type;
+    counter_edit_value = player_counters[player][type];
+}
+
+void change_counter_edit(int delta)
+{
+    counter_edit_value = clamp_counter(counter_edit_value + delta);
+}
+
+/* Knob turns since the editor opened, i.e. the delta apply_counter_edit()
+   will commit against the player's live counter. */
+int counter_edit_pending_delta(void)
+{
+    if (menu_player < 0 || menu_player >= MAX_DISPLAY_PLAYERS) return 0;
+    if (counter_edit_type < 0 || counter_edit_type >= COUNTER_TYPE_COUNT) return 0;
+    return counter_edit_value - player_counters[menu_player][counter_edit_type];
+}
+
+int apply_counter_edit(void)
+{
+    int player = menu_player;
+    int old_value;
+    int change_delta;
+
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return 0;
+    if (counter_edit_type < 0 || counter_edit_type >= COUNTER_TYPE_COUNT) return 0;
+    /* Same remote-elimination race guard as damage_apply. */
+    if (player_eliminated[player]) return 0;
+
+    old_value = player_counters[player][counter_edit_type];
+    counter_edit_value = clamp_counter(counter_edit_value);
+    change_delta = counter_edit_value - old_value;
+    player_counters[player][counter_edit_type] = counter_edit_value;
+
+    if (change_delta != 0) {
+        damage_log_add(player, change_delta, LOG_EVT_COUNTER, counter_edit_type);
+        if (counter_edit_type == COUNTER_TYPE_POISON &&
+            old_value < 10 && counter_edit_value >= 10) {
+            set_player_elimination_action(player, LOG_EVT_COUNTER, counter_edit_type, change_delta);
+        }
+        if (counter_edit_type == COUNTER_TYPE_POISON) {
+            check_player_elimination(player);
+        }
+        net_sync_commit_player(player);
+    }
+
+    return change_delta;
+}
+
+// ---------- player selection set ----------
+int selection_count(void)
+{
+    int i, n = 0;
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++)
+        if (player_selected[i]) n++;
+    return n;
+}
+
+bool is_player_selected(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return false;
+    return player_selected[player];
+}
+
+void selection_clear(void)
+{
+    int i;
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++)
+        player_selected[i] = false;
+}
+
+void selection_toggle(int player)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[player]) return;
+    player_selected[player] = !player_selected[player];
+}
+
+void selection_set_single(int player)
+{
+    selection_clear();
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[player]) return;
+    player_selected[player] = true;
+}
+
+/* The single entry point for committing a life change as a game event:
+   log + clamp + elimination-undo action + elimination check. Any path
+   that applies life deltas (knob commit, All Damage) must use this so
+   the elimination machinery can't be bypassed. */
+void apply_life_delta(int player, int delta)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[player]) return;
+    damage_log_add(player, delta, LOG_EVT_LIFE, -1);
+    player_life[player] = clamp_life(player_life[player] + delta);
+    if (player_life[player] <= 0) {
+        set_player_elimination_action(player, LOG_EVT_LIFE, -1, delta);
+    }
+    check_player_elimination(player);
+    net_sync_commit_player(player);
+}
+
+// ---------- life preview ----------
+/* Body of the bridge's life-preview lv_timer_t callback (see
+   game_state.h). Fires ~3s after the last knob turn that left a
+   pending delta; the bridge itself owns arming/disarming that timer
+   via the life_preview_schedule hook, this just applies (or discards)
+   whatever's pending when it's called. */
+void game_life_preview_commit(void)
+{
+    int track = nvs_get_players_to_track();
+    int i;
+
+    if (!life_preview_active || selection_count() == 0) {
+        pending_life_delta = 0;
+        life_preview_active = false;
+        notify_life_preview_schedule(false);
+        return;
+    }
+
+    for (i = 0; i < track && i < MAX_DISPLAY_PLAYERS; i++) {
+        if (!player_selected[i]) continue;
+        apply_life_delta(i, pending_life_delta);
+    }
+    pending_life_delta = 0;
+    life_preview_active = false;
+    notify_life_preview_schedule(false);
+    /* Applying a life change ends the operation: in multi-select mode clear
+       the selection so the next tap starts a fresh selection. Otherwise
+       sequential per-player damage keeps stacking players into the set. */
+    if (nvs_get_multi_select()) {
+        selection_clear();
+        notify_select_kick_timer();
+    }
+    notify_refresh_player_ui();
+}
+
+// ---------- life changes ----------
+void damage_enter(void)
+{
+    if (selected_enemy >= 0 && selected_enemy < active_enemy_count)
+        damage_start_value = enemies[selected_enemy].damage;
+    else
+        damage_start_value = 0;
+}
+
+void add_damage_to_selected_enemy(int delta)
+{
+    if (selected_enemy < 0 || selected_enemy >= active_enemy_count) return;
+
+    enemies[selected_enemy].damage += delta;
+    if (enemies[selected_enemy].damage < 0)
+        enemies[selected_enemy].damage = 0;
+
+    notify_refresh_damage_ui();
+}
+
+/* Knob turns since the editor opened, i.e. the delta damage_apply()
+   will commit. The staged value lives in enemies[].damage; this is the
+   difference against the snapshot damage_enter() took. */
+int damage_pending_delta(void)
+{
+    if (selected_enemy < 0 || selected_enemy >= active_enemy_count) return 0;
+    return enemies[selected_enemy].damage - damage_start_value;
+}
+
+void damage_apply(void)
+{
+    int delta;
+    int source;
+    int *cell;
+    int encoded_source;
+
+    if (selected_enemy < 0 || selected_enemy >= active_enemy_count) return;
+    if (cmd_damage_target < 0 || cmd_damage_target >= MAX_DISPLAY_PLAYERS) return;
+    /* Unreachable locally (the editor only opens for a live target),
+       but a remote elimination can race an open editor: eliminated
+       players accrue no more (same rule as apply_life_delta), and
+       committing here would overwrite their elimination-undo action. */
+    if (player_eliminated[cmd_damage_target]) return;
+
+    delta = enemies[selected_enemy].damage - damage_start_value;
+    if (delta == 0) return;
+
+    source = get_cmd_target_player_index(selected_enemy);
+    cell = (cmd_damage_slot == 1) ? &partner_cmd_damage_totals[source][cmd_damage_target]
+                                  : &cmd_damage_totals[source][cmd_damage_target];
+    *cell = enemies[selected_enemy].damage;
+    encoded_source = encode_cmd_source(source, cmd_damage_slot);
+    damage_log_add(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
+    player_life[cmd_damage_target] = clamp_life(player_life[cmd_damage_target] - delta);
+    if (*cell >= 21 || player_life[cmd_damage_target] <= 0) {
+        set_player_elimination_action(cmd_damage_target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
+    }
+    check_player_elimination(cmd_damage_target);
+    net_sync_commit_player(cmd_damage_target);
+
+    notify_refresh_select_ui();
+}
+
+void damage_cancel(void)
+{
+    if (selected_enemy >= 0 && selected_enemy < active_enemy_count)
+        enemies[selected_enemy].damage = damage_start_value;
+}
+
+/* Attack screen's Cmdr mode: source/target are already known (picked via
+   the drag gesture), so this applies straight to cmd_damage_totals
+   instead of going through the enemies[]-list editor damage_apply()
+   uses. Mirrors its log/elimination/sync sequence exactly. */
+void apply_attack_cmd_damage(int source, int target, int delta)
+{
+    int *cell;
+    int encoded_source;
+
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[target]) return;
+    if (delta == 0) return;
+
+    cell = &cmd_damage_totals[source][target];
+    *cell += delta;
+    encoded_source = encode_cmd_source(source, 0);
+    damage_log_add(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
+    player_life[target] = clamp_life(player_life[target] - delta);
+    if (*cell >= 21 || player_life[target] <= 0) {
+        set_player_elimination_action(target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
+    }
+    check_player_elimination(target);
+    net_sync_commit_player(target);
+}
+
+/* Attack screen's Infect mode: same poison-threshold rule as
+   apply_counter_edit(), applied as a delta against a known target
+   instead of through the counter editor's menu_player global. */
+void apply_attack_poison(int target, int delta)
+{
+    int old_value;
+
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
+    if (player_eliminated[target]) return;
+    if (delta == 0) return;
+
+    old_value = player_counters[target][COUNTER_TYPE_POISON];
+    player_counters[target][COUNTER_TYPE_POISON] = clamp_counter(old_value + delta);
+    damage_log_add(target, delta, LOG_EVT_COUNTER, COUNTER_TYPE_POISON);
+    if (old_value < 10 && player_counters[target][COUNTER_TYPE_POISON] >= 10) {
+        set_player_elimination_action(target, LOG_EVT_COUNTER, COUNTER_TYPE_POISON, delta);
+    }
+    check_player_elimination(target);
+    net_sync_commit_player(target);
+}
+
+void change_player_life(int delta)
+{
+    /* The shared delta applies to every currently-selected player. Clamp it
+       to the headroom of the selected set so the previewed totals always
+       equal what the commit will store and overshoot detents at the life
+       cap are absorbed instead of accumulating. */
+    int track = nvs_get_players_to_track();
+    int max_up = LIFE_MAX;
+    int min_down = LIFE_MIN;
+    int i;
+
+    /* The roulette walks the selection every tick, so a delta dialed
+       mid-spin would land on whichever player the wheel stops at. */
+    if (player_selection_animation_active()) return;
+
+    if (selection_count() == 0) return;
+
+    notify_select_kick_timer();
+
+    for (i = 0; i < track && i < MAX_DISPLAY_PLAYERS; i++) {
+        if (!player_selected[i] || player_eliminated[i]) continue;
+        if (LIFE_MAX - player_life[i] < max_up) max_up = LIFE_MAX - player_life[i];
+        if (LIFE_MIN - player_life[i] > min_down) min_down = LIFE_MIN - player_life[i];
+    }
+
+    pending_life_delta += delta;
+    if (pending_life_delta > max_up) pending_life_delta = max_up;
+    if (pending_life_delta < min_down) pending_life_delta = min_down;
+    life_preview_active = (pending_life_delta != 0);
+
+    notify_life_preview_schedule(life_preview_active);
+
+    notify_refresh_player_ui();
+}
+
+/* ---------- all-damage flash ---------- */
+/* All Damage applies instantly (like any other life change) and then
+   flashes the same "-N / = total" widgets the knob's live preview
+   uses, purely for a couple of seconds of read-only feedback - a first
+   version reused the knob's actual pending_life_delta/player_selected
+   preview state to get that rendering for free, but that left the
+   knob live during the flash: turning it kept piling more damage onto
+   everyone it had just hit, which is exactly the "should apply and
+   return to normal" behavior this replaces. This state is deliberately
+   separate from player_selected and never touched by change_player_life -
+   the numbers are already committed by the time this displays. */
+bool all_damage_flash_active = false;
+int all_damage_flash_delta = 0;
+bool all_damage_flash_player[MAX_DISPLAY_PLAYERS];
+
+/* Body of the bridge's all-damage-flash lv_timer_t callback (see
+   game_state.h). The bridge pauses its own timer before calling this;
+   this just clears the flash state and asks for a repaint. */
+void game_all_damage_flash_end(void)
+{
+    all_damage_flash_active = false;
+    memset(all_damage_flash_player, 0, sizeof(all_damage_flash_player));
+    notify_refresh_player_ui();
+}
+
+void start_all_damage_flash(int delta, const bool *targets)
+{
+    memcpy(all_damage_flash_player, targets, sizeof(all_damage_flash_player));
+    all_damage_flash_delta = delta;
+    all_damage_flash_active = true;
+
+    notify_all_damage_flash_schedule();
+
+    notify_refresh_player_ui();
+}
+
+void prepare_cmd_damage_for_player(int target)
+{
+    int i, row = 0;
+    int num = nvs_get_num_players();
+
+    cmd_damage_target = target;
+    cmd_damage_slot = 0; /* always open on the primary commander */
+
+    for (i = 0; i < num; i++) {
+        if (i == target) continue;
+        if (row < MAX_ENEMY_COUNT) {
+            enemies[row].damage = cmd_damage_totals[i][target];
+            row++;
+        }
+    }
+}
+
+/* Re-stages enemies[].damage from whichever matrix cmd_damage_slot now
+   points at, without touching cmd_damage_target. Used when the select
+   screen's Commander/Partner toggle flips slots. */
+void refresh_cmd_damage_slot(void)
+{
+    int i, row = 0;
+    int num = nvs_get_num_players();
+
+    if (cmd_damage_target < 0) return;
+
+    for (i = 0; i < num; i++) {
+        if (i == cmd_damage_target) continue;
+        if (row < MAX_ENEMY_COUNT) {
+            enemies[row].damage = (cmd_damage_slot == 1)
+                                       ? partner_cmd_damage_totals[i][cmd_damage_target]
+                                       : cmd_damage_totals[i][cmd_damage_target];
+            row++;
+        }
+    }
+}
+
+void change_all_damage(int delta)
+{
+    all_damage_value += delta;
+    if (all_damage_value < 0) all_damage_value = 0;
+    notify_refresh_all_damage_ui();
+}
+
+// ---------- undo ----------
+void undo_life_change(int player, int delta)
+{
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+
+    player_life[player] = clamp_life(player_life[player] - delta);
+    check_player_elimination(player);
+    net_sync_commit_player(player);
+    notify_refresh_player_ui();
+    notify_refresh_select_ui();
+}
+
+void undo_cmd_damage(int encoded_source, int target, int delta)
+{
+    int source, slot;
+    int *cell;
+
+    decode_cmd_source(encoded_source, &source, &slot);
+    if (source < 0 || source >= MAX_GAME_PLAYERS) return;
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return;
+
+    cell = (slot == 1) ? &partner_cmd_damage_totals[source][target] : &cmd_damage_totals[source][target];
+    *cell += delta;
+    if (*cell < 0) *cell = 0;
+    check_player_elimination(target);
+    net_sync_commit_player(target);
+}
+
+void undo_counter_change(int player, int counter_type, int delta)
+{
+    if (counter_type < 0 || counter_type >= COUNTER_TYPE_COUNT) return;
+    if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
+
+    player_counters[player][counter_type] = clamp_counter(
+        player_counters[player][counter_type] - delta
+    );
+    if (counter_type == COUNTER_TYPE_POISON) {
+        check_player_elimination(player);
+    }
+    net_sync_commit_player(player);
+    notify_refresh_player_ui();
+}
+
+// ---------- reset ----------
+void knob_life_reset(void)
+{
+    int starting_life = nvs_get_life_total();
+    int num = nvs_get_num_players();
+    int i;
+
+    active_enemy_count = num - 1;
+    if (active_enemy_count < 0) active_enemy_count = 0;
+    if (active_enemy_count > MAX_ENEMY_COUNT) active_enemy_count = MAX_ENEMY_COUNT;
+
+    damage_log_reset();
+
+    pending_life_delta = 0;
+    selection_clear();
+    life_preview_active = false;
+    selected_enemy = -1;
+    dice_result = 0;
+
+    for (i = 0; i < MAX_ENEMY_COUNT; i++) {
+        enemies[i].damage = 0;
+    }
+
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) {
+        player_life[i] = starting_life;
+    }
+    menu_player = 0;
+    cmd_damage_target = -1;
+    cmd_damage_slot = 0;
+    memset(cmd_damage_totals, 0, sizeof(cmd_damage_totals));
+    memset(partner_cmd_damage_totals, 0, sizeof(partner_cmd_damage_totals));
+    memset(player_counters, 0, sizeof(player_counters));
+    memset(player_eliminated, 0, sizeof(player_eliminated));
+    memset(player_manually_eliminated, 0, sizeof(player_manually_eliminated));
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) clear_player_elimination_action(i);
+    all_damage_value = 0;
+    counter_edit_type = COUNTER_TYPE_COMMANDER_TAX;
+    counter_edit_value = 0;
+
+    /* A reset starts a new game: bump the epoch (which outranks any
+       version drift a strayed device accumulated) and broadcast once. */
+    net_sync_begin_game();
+    net_sync_send_state();
+
+    notify_life_preview_schedule(false);
+}
+
+// ---------- init ----------
+void knob_life_init(void)
+{
+    int starting_life = nvs_get_life_total();
+    int num = nvs_get_num_players();
+    int i;
+
+    active_enemy_count = num - 1;
+    if (active_enemy_count < 0) active_enemy_count = 0;
+    if (active_enemy_count > MAX_ENEMY_COUNT) active_enemy_count = MAX_ENEMY_COUNT;
+
+    for (i = 0; i < MAX_DISPLAY_PLAYERS; i++) {
+        player_life[i] = starting_life;
+    }
+    memset(player_counters, 0, sizeof(player_counters));
+    counter_edit_type = COUNTER_TYPE_COMMANDER_TAX;
+    counter_edit_value = 0;
+
+    /* The life-preview/all-damage-flash/selection-roulette lv_timer_t
+       objects are created once by the bridge's own init (see
+       game_bridge_init() in game.c, called from knob.c alongside this
+       function) - this function only resets the pure state they act on. */
+}
+
+// ---------- player selection animation ----------
+static int player_select_anim_steps = 0;
+static int player_select_anim_period = 0;
+static int roulette_idx = 0;
+static bool player_select_anim_running = false;
+
+/* Body of the bridge's selection-roulette lv_timer_t callback (see
+   game_state.h). Returns the ms to reschedule the bridge's timer at, or
+   0 when the animation is done (nothing tracked, or steps ran out) and
+   the bridge should pause it instead. */
+int game_player_select_anim_step(void)
+{
+    int track = nvs_get_players_to_track();
+
+    if (track <= 1) {
+        player_select_anim_running = false;
+        return 0;
+    }
+
+    // Move to next player (clockwise logic mapping to bottom/left/top/right)
+    roulette_idx = (roulette_idx + 1) % track;
+    selection_set_single(roulette_idx);
+    /* Restart the deselect-timeout countdown like any selection change,
+       so a timer left running from before the reset can't fire mid-spin
+       and blank the selection for a tick. */
+    notify_select_kick_timer();
+    notify_refresh_player_ui();
+
+    player_select_anim_steps--;
+    if (player_select_anim_steps <= 0) {
+        player_select_anim_running = false;
+        notify_select_kick_timer();
+        return 0;
+    }
+    // Linear deceleration
+    player_select_anim_period += (200 / (player_select_anim_steps + 1));
+    if (player_select_anim_period > 600) player_select_anim_period = 600;
+    return player_select_anim_period;
+}
+
+void start_player_selection_animation(void)
+{
+    int track = nvs_get_players_to_track();
+    int random_stops;
+
+    if (track <= 1) return;
+    if (!nvs_get_random_first()) return;
+
+    // Randomize length to ensure random landing
+    random_stops = (int)(esp_random() % track) + (track * 3);
+    random_stops += esp_random() % (track * 2);
+
+    player_select_anim_steps = random_stops;
+    player_select_anim_period = 40; // start fast
+    player_select_anim_running = true;
+
+    roulette_idx = 0;
+    selection_set_single(0);
+    notify_select_kick_timer();
+
+    notify_player_select_anim_schedule(true);
+}
+
+void stop_player_selection_animation(void)
+{
+    player_select_anim_steps = 0;
+    player_select_anim_running = false;
+    notify_player_select_anim_schedule(false);
+}
+
+bool player_selection_animation_active(void)
+{
+    return player_select_anim_running && player_select_anim_steps > 0;
+}
+
+// ---------- table sync (ESP-NOW) ----------
+_Static_assert(NET_SYNC_MAX_PLAYERS == MAX_DISPLAY_PLAYERS, "packet layout");
+_Static_assert(NET_SYNC_MAX_SOURCES == MAX_GAME_PLAYERS, "packet layout");
+_Static_assert(sizeof(((net_sync_player_t *)0)->counters) / sizeof(int16_t)
+               == COUNTER_TYPE_COUNT, "packet layout");
+_Static_assert(sizeof(((net_sync_names_t *)0)->names) == sizeof(player_names),
+               "packet layout");
+
+void net_sync_fill_names(net_sync_names_t *out)
+{
+    int i;
+    /* Copy per-row through snprintf, not one memcpy: bytes past each
+       name's NUL are residue from earlier longer names and must not
+       go out on the air (also keeps roster comparison canonical). */
+    memset(out, 0, sizeof(*out));
+    out->version = names_version;
+    for (i = 0; i < MAX_GAME_PLAYERS; i++)
+        snprintf(out->names[i], NET_SYNC_NAME_LEN, "%s", player_names[i]);
+}
+
+/* Adopt a remote roster. Whole-set LWW on the roster version (serial
+   arithmetic, MAC tiebreak), like a single state block. Runs on the
+   main task, same as net_sync_apply_state. */
+void net_sync_apply_names(const net_sync_names_t *in, int wins_ties)
+{
+    int16_t newer = (int16_t)(in->version - names_version);
+    int i;
+
+    if (newer < 0) {
+        /* Same self-healing as state: answer a stale roster so the
+           sender converges without waiting for a rename or invite. */
+        net_sync_send_reply();
+        return;
+    }
+    if (newer == 0 && !wins_ties) return;
+    names_version = in->version;
+    if (memcmp(player_names, in->names, sizeof(player_names)) == 0) return;
+    memcpy(player_names, in->names, sizeof(player_names));
+    /* Wire bytes are untrusted: every name must terminate. */
+    for (i = 0; i < MAX_GAME_PLAYERS; i++)
+        player_names[i][sizeof(player_names[i]) - 1] = '\0';
+    /* Same refresh set as a local rename (rename.c). */
+    notify_refresh_player_ui();
+    notify_refresh_select_ui();
+    notify_refresh_damage_ui();
+    notify_refresh_rename_ui();
+}
+
+void net_sync_fill_state(net_sync_state_t *out)
+{
+    int p, s, c;
+
+    memset(out, 0, sizeof(*out));
+    out->epoch = game_epoch;
+    for (p = 0; p < MAX_DISPLAY_PLAYERS; p++) {
+        net_sync_player_t *rp = &out->players[p];
+        rp->version = player_version[p];
+        rp->life = (int16_t)player_life[p];
+        for (c = 0; c < COUNTER_TYPE_COUNT; c++)
+            rp->counters[c] = (int16_t)player_counters[p][c];
+        for (s = 0; s < MAX_GAME_PLAYERS; s++) {
+            int v = cmd_damage_totals[s][p];
+            rp->cmd_damage[s] = (uint8_t)((v < 0) ? 0 : (v > 255) ? 255 : v);
+        }
+        if (player_eliminated[p]) rp->eliminated |= NET_SYNC_ELIM;
+        if (player_manually_eliminated[p]) rp->eliminated |= NET_SYNC_ELIM_MANUAL;
+    }
+}
+
+/* Adopt a remote state snapshot. Runs on the main (LVGL) task — packets
+   are queued by the radio and drained from loop() — so UI refresh is
+   safe here. The game epoch dominates: a newer epoch (new game started
+   or reset elsewhere) is adopted wholesale, an older one is rejected
+   and answered with our own state (anti-entropy: the stale device
+   converges in one exchange instead of waiting out the beacon). Within
+   the same epoch, a player's block is adopted iff its version is newer
+   (serial arithmetic, so uint16 wrap is fine); equal versions defer to
+   the sender with the higher MAC so both devices pick the same winner.
+
+   State is adopted directly — never route remote state through the
+   apply/undo helpers: they bump versions and re-broadcast, and they'd
+   re-derive elimination that the sender already decided. The damage
+   log stays a per-device view of local actions. */
+void net_sync_apply_state(const net_sync_state_t *in, int wins_ties)
+{
+    bool changed = false;
+    bool remote_stale = false;
+    int16_t epoch_newer = (int16_t)(in->epoch - game_epoch);
+    int p, s, c;
+
+    if (epoch_newer < 0) {
+        net_sync_send_reply();
+        return;
+    }
+    if (epoch_newer > 0) {
+        game_epoch = in->epoch;
+        /* A new game from the table: local elimination-undo actions
+           and the event log refer to a game that no longer exists
+           (see net_sync_reset_versions). */
+        for (p = 0; p < MAX_DISPLAY_PLAYERS; p++)
+            clear_player_elimination_action(p);
+        damage_log_reset();
+    }
+
+    for (p = 0; p < MAX_DISPLAY_PLAYERS; p++) {
+        const net_sync_player_t *rp = &in->players[p];
+        int16_t newer = (int16_t)(rp->version - player_version[p]);
+        bool was_eliminated = player_eliminated[p];
+        bool now_eliminated = (rp->eliminated & NET_SYNC_ELIM) != 0;
+        bool p_changed = false;
+        int life = clamp_life(rp->life);
+
+        /* Same epoch: per-player Lamport rule. A newer epoch adopts
+           every block regardless of version drift. */
+        if (epoch_newer == 0 && (newer < 0 || (newer == 0 && !wins_ties))) {
+            if (newer < 0) remote_stale = true;
+            continue;
+        }
+
+        if (player_life[p] != life) {
+            player_life[p] = life;
+            /* A pending preview was dialed against a total that no
+               longer exists: if this player is in the current
+               selection, drop the whole group's proposal (it is one
+               shared delta) so a duplicate entry can't silently
+               double-apply — the user sees the total snap and can
+               re-dial. Changes to unselected players compose as
+               usual. The selection itself stays: the grouping is
+               still valid intent, only the number was invalidated. */
+            if (life_preview_active && player_selected[p]) {
+                pending_life_delta = 0;
+                life_preview_active = false;
+                notify_life_preview_schedule(false);
+                notify_select_kick_timer();
+            }
+            p_changed = true;
+        }
+        for (c = 0; c < COUNTER_TYPE_COUNT; c++) {
+            int v = clamp_counter(rp->counters[c]);
+            if (player_counters[p][c] != v) {
+                player_counters[p][c] = v;
+                p_changed = true;
+            }
+        }
+        for (s = 0; s < MAX_GAME_PLAYERS; s++) {
+            if (cmd_damage_totals[s][p] != rp->cmd_damage[s]) {
+                cmd_damage_totals[s][p] = rp->cmd_damage[s];
+                p_changed = true;
+            }
+        }
+        if (was_eliminated != now_eliminated) {
+            player_eliminated[p] = now_eliminated;
+            if (!now_eliminated) {
+                clear_player_elimination_action(p);
+            } else if (player_selected[p]) {
+                /* Same rule as check_player_elimination: an eliminated
+                   player leaves the selection set. */
+                player_selected[p] = false;
+                notify_select_kick_timer();
+            }
+            p_changed = true;
+        } else if (was_eliminated && p_changed) {
+            /* Still eliminated but the block changed underneath (a
+               missed revive+re-kill): the stored undo action belongs
+               to the old elimination and would restore the wrong
+               amount. Undo then falls back to the revive clamps. */
+            clear_player_elimination_action(p);
+        }
+        player_manually_eliminated[p] =
+            now_eliminated && (rp->eliminated & NET_SYNC_ELIM_MANUAL) != 0;
+        player_version[p] = rp->version;
+        changed = changed || p_changed;
+    }
+
+    if (changed) {
+        notify_refresh_player_ui();
+        notify_refresh_select_ui();
+    }
+    /* The sender is behind and we adopted nothing: answer immediately
+       so its lost-update window is one exchange, not a 5s beacon. */
+    if (remote_stale && !changed) {
+        net_sync_send_reply();
+    }
+    /* A fresh joiner can adopt the table's epoch while still awaiting
+       the roster (every invite-window names packet lost): announcing
+       its version-0 roster makes any peer see it as stale and reply
+       with the real one (see net_sync_apply_names). */
+    if (epoch_newer > 0 && names_version == 0) {
+        net_sync_send_names();
+    }
+}

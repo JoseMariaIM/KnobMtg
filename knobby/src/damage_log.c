@@ -48,6 +48,29 @@ void damage_log_reset(void)
     damage_log_head = 0;
 }
 
+/* ---------- read-only accessors (unit tests) ----------
+ * The UI never needs the raw entries - it renders through
+ * refresh_damage_log_ui() - but a test that wants to check ring
+ * ordering/capacity/undo without driving lv_obj_t widgets needs a way
+ * to look inside. index_from_newest 0 is the most recent entry. */
+int damage_log_test_count(void)
+{
+    return damage_log_count;
+}
+
+bool damage_log_test_peek(int index_from_newest, int *player, int *delta,
+                          uint8_t *event_type, int *source)
+{
+    int idx;
+    if (index_from_newest < 0 || index_from_newest >= damage_log_count) return false;
+    idx = (damage_log_head - 1 - index_from_newest + DAMAGE_LOG_MAX) % DAMAGE_LOG_MAX;
+    if (player != NULL) *player = damage_log[idx].player;
+    if (delta != NULL) *delta = damage_log[idx].delta;
+    if (event_type != NULL) *event_type = damage_log[idx].event_type;
+    if (source != NULL) *source = damage_log[idx].source;
+    return true;
+}
+
 /* Remove the newest entry matching player + event_type (used by elimination
    undo so the eliminating event can't also be undone from the log). */
 void damage_log_remove_last_for(int player, uint8_t event_type)

@@ -64,6 +64,12 @@ void knob_notify_swipe_right(void);
 void knob_remember_return_screen(lv_obj_t *screen);
 float knob_read_battery_voltage(void);
 void scr_display_on(void);
+/* Tells the panel to stop driving GRAM (MIPI DCS Display Off) - paired
+   with the backlight going to 0% for the "screen blank" power state
+   (see screen_blank_enter() in hw.c). Not a sleep-in/power-off: the
+   panel wakes instantly on the next scr_display_on(), same as today's
+   dim/undim. */
+void scr_display_off(void);
 void display_apply_rotation(int rot);
 
 

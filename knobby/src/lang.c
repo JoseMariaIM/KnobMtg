@@ -451,3 +451,13 @@ const char *t(string_id_t id)
     const char *s = (current_language == LANG_ES) ? strings_es[id] : strings_en[id];
     return s ? s : strings_en[id];
 }
+
+/* Raw table lookup, bypassing t()'s fallback-to-English - a missing ES
+ * entry silently degrades to English at runtime (by design, so a
+ * half-translated build still shows something), which is exactly why a
+ * test needs to see the hole directly instead of through the mask. */
+const char *lang_test_raw(lang_t lang, string_id_t id)
+{
+    if (id < 0 || id >= STR_COUNT) return NULL;
+    return (lang == LANG_ES) ? strings_es[id] : strings_en[id];
+}

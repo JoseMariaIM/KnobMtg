@@ -1,40 +1,13 @@
-/* Standalone regression test for independent partner-commander damage
- * tracking. Not part of the normal build; compile/run manually:
- *
- *   gcc -DLV_CONF_INCLUDE_SIMPLE -DSIMULATOR=1 -I. -Iesp_stubs \
- *       -I$LVGL_PATH -I$LVGL_PATH/src -I../knobby -I../knobby/src \
- *       test_partner_commander.c \
- *       build/UP__knobby__knob.o build/UP__knobby__board_pins.o \
- *       build/UP__knobby__src__*.o build/UP__knobby__src__fonts__*.o \
- *       build/__*lvgl*.o -o test_partner_commander -lm
- *   ./test_partner_commander
- */
-#include "board_detect.h"
-#include <lvgl.h>
-#include "knob.h"
-#include "game.h"
-#include "storage.h"
-
-#include <assert.h>
+/* Regression test for independent partner-commander damage tracking:
+ * damage from a source player's second (partner) commander is tracked
+ * apart from their primary commander in partner_cmd_damage_totals,
+ * because 21 damage from either alone is lethal - they must never sum
+ * toward one shared total (see the comment above
+ * partner_cmd_damage_totals in game.h). Originally sim/test_partner_commander.c;
+ * moved here to run under `make test` instead of by hand. */
+#include "test_harness.h"
 #include <stdio.h>
-#include <unistd.h>
-
-#define SCREEN_W 360
-#define SCREEN_H 360
-
-static lv_color_t framebuffer[SCREEN_W * SCREEN_H];
-static lv_color_t draw_buf_data[SCREEN_W * 72];
-static lv_disp_draw_buf_t draw_buf;
-static lv_disp_drv_t disp_drv;
-
-static void sim_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
-{
-    int x, y;
-    for (y = area->y1; y <= area->y2; y++)
-        for (x = area->x1; x <= area->x2; x++)
-            framebuffer[y * SCREEN_W + x] = *color_p++;
-    lv_disp_flush_ready(drv);
-}
+#include <assert.h>
 
 /* Mirrors one "pick opponent row, dial the knob, Apply" cycle on the
    already-open Commander Damage flow (screen_select -> screen_damage).
@@ -50,25 +23,13 @@ static void select_and_apply(int source_row, int amount)
 
 int main(void)
 {
-    setvbuf(stdout, NULL, _IONBF, 0);
-    board_detect();
-    lv_init();
-    lv_disp_draw_buf_init(&draw_buf, draw_buf_data, NULL, SCREEN_W * 72);
-    lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = SCREEN_W;
-    disp_drv.ver_res = SCREEN_H;
-    disp_drv.flush_cb = sim_flush_cb;
-    disp_drv.draw_buf = &draw_buf;
-    lv_disp_drv_register(&disp_drv);
-    knob_gui();
+    test_harness_init();
 
     /* 4-player game: Alice(0), Bob(1), Carol(2), Dave(3). Bob is
        tracking damage from Alice's two commanders independently.
        Auto-elimination only engages in multiplayer (see
        check_player_elimination), so players-to-track must be > 1. */
-    nvs_set_num_players(4);
-    nvs_set_players_to_track(4);
-    knob_life_reset();
+    test_harness_reset_4p();
 
     /* Enter the Commander Damage flow for Bob once, exactly as the
        player menu does. Row 0 in the enemy list is Alice

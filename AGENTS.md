@@ -63,4 +63,4 @@ Maintainers / contact
 - Use the GitHub repo issues for discussion. Mention maintainers in PRs if available.
 
 Notes
-- There are no automated tests in the repo; the primary verification is `arduino-cli compile` and manual device verification per README.
+- Headless unit tests live under `sim/tests/` and run against game logic (life rules, commander damage, elimination, Table Sync merges, etc.) plus an LVGL memory-budget regression check - see `make -C sim test` and `make -C sim test-mem-budget`, or [sim/tests/test_harness.h](sim/tests/test_harness.h) for how they boot the UI headlessly. A change touching game.c/damage_log.c/hw.c/lang.c should add or update a test there, not rely solely on `arduino-cli compile` and manual device verification.

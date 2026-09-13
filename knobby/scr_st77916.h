@@ -298,6 +298,16 @@ void scr_display_on(void)
   if (lcd != NULL) lcd->displayOn();
 }
 
+/* See the declaration in knob.h. setDisplayOnOff() wraps
+   esp_lcd_panel_disp_on_off(), which on this panel issues the standard
+   MIPI DCS Display Off command - the controller stops driving GRAM but
+   stays initialized, so scr_display_on() (displayOn() ==
+   setDisplayOnOff(true)) brings it straight back with no re-init. */
+void scr_display_off(void)
+{
+  if (lcd != NULL) lcd->setDisplayOnOff(false);
+}
+
 /* Rotate the whole display in 90-degree steps via the panel's MADCTL flags.
    The user rotation composes with the per-board base mirrors (XOR); the same
    swap/mirror triple goes to the touch controller so touch and swipe

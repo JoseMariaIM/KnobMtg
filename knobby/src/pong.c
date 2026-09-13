@@ -333,6 +333,9 @@ void pong_leave_screen(void)
 
 void open_pong_screen(void)
 {
+    /* Built on first entry rather than at boot - see the matching
+       comment in snake.c's open_snake_screen(). */
+    if (screen_pong == NULL) build_pong_screen();
     pong_player = pong_resolve_player();
     pong_reset();
     pong_refresh_score();

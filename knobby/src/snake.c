@@ -391,6 +391,11 @@ void snake_leave_screen(void)
 
 void open_snake_screen(void)
 {
+    /* Built on first entry rather than at boot (see knob_gui() in
+       knob.c) - most sessions are just tracking life totals and never
+       open Minigames, so this shouldn't cost every player a slice of
+       LVGL's fixed 128KB heap up front. */
+    if (screen_snake == NULL) build_snake_screen();
     snake_player = snake_resolve_player();
     snake_reset();
     snake_refresh_score();

@@ -15,6 +15,32 @@ lv_obj_t *screen_wifi_status = NULL;
 lv_obj_t *screen_ota_update = NULL;
 lv_obj_t *screen_ota_qr = NULL;
 
+/* This whole cluster (6 screens) is built lazily on first entry rather
+   than eagerly at boot like the rest of the app (see knob_gui() in
+   knob.c) - together they're one of the single biggest chunks of the
+   35-screen boot cost against LVGL's fixed 128KB heap
+   (LV_MEM_SIZE, knobby/lv_conf.h), for a flow most players never open
+   in a given session (WiFi/OTA setup is a one-time thing, not part of
+   playing a game). The three screens are cross-linked (wifi_settings
+   can jump to scan_list/text_entry/status; ota_update can jump to
+   ota_qr) and their event handlers write into each other's static
+   widget pointers from several entry points, so building the group as
+   one unit on first touch is far simpler - and just as safe - as
+   trying to lazily build each of the six independently. */
+static bool wifi_ota_screens_built = false;
+
+static void ensure_wifi_ota_screens_built(void)
+{
+    if (wifi_ota_screens_built) return;
+    wifi_ota_screens_built = true;
+    build_wifi_settings_screen();
+    build_wifi_scan_list_screen();
+    build_wifi_text_entry_screen();
+    build_wifi_status_screen();
+    build_ota_update_screen();
+    build_ota_qr_screen();
+}
+
 // ---------- wifi settings widgets ----------
 static lv_obj_t *wifi_tile_ssid_label = NULL;
 static lv_obj_t *wifi_tile_connect_label = NULL;
@@ -105,6 +131,7 @@ void refresh_wifi_settings_ui(void)
 
 void open_wifi_settings_screen(void)
 {
+    ensure_wifi_ota_screens_built();
     refresh_wifi_settings_ui();
     load_screen_if_needed(screen_wifi_settings);
 }
@@ -549,6 +576,7 @@ void refresh_ota_update_ui(void)
 
 void open_ota_update_screen(void)
 {
+    ensure_wifi_ota_screens_built();
     ota_needs_wifi_hint = false;
     refresh_ota_update_ui();
     load_screen_if_needed(screen_ota_update);
@@ -681,6 +709,7 @@ static bool ota_qr_from_toast = false;
 
 void open_ota_qr_screen_from_toast(void)
 {
+    ensure_wifi_ota_screens_built();
     ota_qr_from_toast = true;
     load_screen_if_needed(screen_ota_qr);
 }

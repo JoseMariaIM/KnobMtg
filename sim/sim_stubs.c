@@ -212,7 +212,14 @@ float knob_read_battery_voltage(void) { return sim_battery_voltage; }
 
 /* ---- Display ---- */
 
-void scr_display_on(void) { /* no-op in simulator */ }
+/* Observable in the simulator (unlike real GRAM/panel state) so a unit
+ * test can assert hw.c's blank/wake state machine calls the right
+ * function at the right time without real hardware - see
+ * sim_display_panel_on in sim_stubs.h. */
+bool sim_display_panel_on = true;
+
+void scr_display_on(void) { sim_display_panel_on = true; }
+void scr_display_off(void) { sim_display_panel_on = false; }
 
 /* Physical display rotation: firmware sets the panel's MADCTL flags; the
    sim records the value and the flush callbacks remap pixels to match. */

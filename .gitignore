@@ -71,7 +71,6 @@ sim/build/
 sim/knobby_sim
 sim/knobby_sim_gui.exe
 sim/screenshots/
-sim/test_partner_commander
 sim/screenshot_es
 sim/web_sources.txt
 sim/gen_web_sources.py

@@ -6,57 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
-// ---------- constants ----------
-#define MAX_GAME_PLAYERS 8
-#define MAX_DISPLAY_PLAYERS 4
-#define MAX_ENEMY_COUNT (MAX_GAME_PLAYERS - 1)
-#define LIFE_MIN -999
-#define LIFE_MAX 999
-#define COUNTER_MIN 0
-#define COUNTER_MAX 9999
-#define DEFAULT_LIFE_TOTAL 40
-#define DEFAULT_BRIGHTNESS_PERCENT 30
-#define MULTIPLAYER_COUNT 4
-#define KNOB_EVENT_QUEUE_SIZE 32
-
-// ---------- color modes ----------
-#define COLOR_MODE_PLAYER     0
-#define COLOR_MODE_LIFE       1
-#define COLOR_MODE_COUNT      2
-
-// ---------- orientation modes ----------
-#define ORIENTATION_MODE_ABSOLUTE 0
-#define ORIENTATION_MODE_CENTRIC  1
-#define ORIENTATION_MODE_TABLETOP 2
-#define ORIENTATION_MODE_COUNT    3
-
-// ---------- display rotation (physical, degrees = value * 90) ----------
-#define DISPLAY_ROTATION_COUNT 4
-
-// ---------- auto-dim timeout options ----------
-#define AUTO_DIM_OFF  0
-#define AUTO_DIM_15S  1
-#define AUTO_DIM_30S  2
-#define AUTO_DIM_60S  3
-#define AUTO_DIM_COUNT 4
-
-static const uint32_t auto_dim_ms[] = {0, 15000, 30000, 60000};
-
-// ---------- deselect timeout options ----------
-#define DESELECT_NEVER 0
-#define DESELECT_5S    1
-#define DESELECT_15S   2
-#define DESELECT_30S   3
-#define DESELECT_COUNT 4
-
-static const int deselect_ms[] = {0, 5000, 15000, 30000};
+/* Constants, plain structs and inline helpers shared with game_state.c
+ * live in game_types.h, which doesn't include LVGL - see the comment at
+ * its top. Re-included here so every existing #include "types.h" site
+ * keeps seeing exactly the same symbols it always has. */
+#include "game_types.h"
 
 // ---------- types ----------
-typedef struct {
-    const char *name;
-    int damage;
-} enemy_state_t;
-
 typedef struct {
     knob_event_t event;
 } knob_input_event_t;
@@ -71,63 +27,7 @@ typedef struct {
     void *user_data;            /* passed to cb via lv_event_get_user_data */
 } quad_item_t;
 
-// ---------- utility functions ----------
-static inline int clamp_life(int value)
-{
-    if (value < LIFE_MIN) return LIFE_MIN;
-    if (value > LIFE_MAX) return LIFE_MAX;
-    return value;
-}
-
-static inline int clamp_brightness(int value)
-{
-    if (value < 1) return 1;
-    if (value > 100) return 100;
-    return value;
-}
-
-static inline int clamp_counter(int value)
-{
-    if (value < COUNTER_MIN) return COUNTER_MIN;
-    if (value > COUNTER_MAX) return COUNTER_MAX;
-    return value;
-}
-
-static inline int get_arc_display_value(int value, int max_life)
-{
-    if (value < 0) return 0;
-    if (value > max_life) return max_life;
-    return value;
-}
-
-// ---------- life color tiers ----------
-#define LIFE_TIER_RED    0
-#define LIFE_TIER_YELLOW 1
-#define LIFE_TIER_GREEN  2
-#define LIFE_TIER_PURPLE 3
-#define LIFE_TIER_COUNT  4
-
-#define LIFE_VIB_DIM  0
-#define LIFE_VIB_MID  1
-#define LIFE_VIB_VIV  2
-#define LIFE_VIB_COUNT 3
-
-static const uint32_t life_color_table[LIFE_TIER_COUNT][LIFE_VIB_COUNT] = {
-    /* dim        mid        vivid */
-    {0x4D1C1C, 0xF44336, 0xFF0000},  /* red    */
-    {0x4D4D00, 0xFFEB3B, 0xFFFF00},  /* yellow */
-    {0x024D3A, 0x06D6A0, 0x66FFD9},  /* green  */
-    {0x2E004D, 0x7B1FA2, 0xAA00FF},  /* purple */
-};
-
-static inline int get_life_tier(int value, int max_life)
-{
-    if (value > max_life)          return LIFE_TIER_PURPLE;
-    if (value >= max_life * 3 / 4) return LIFE_TIER_GREEN;
-    if (value >= max_life / 4)     return LIFE_TIER_YELLOW;
-    return LIFE_TIER_RED;
-}
-
+// ---------- life colors (lv_color_t - see game_types.h for the pure tier math) ----------
 static inline lv_color_t get_life_color(int value, int max_life)
 {
     return lv_color_hex(life_color_table[get_life_tier(value, max_life)][LIFE_VIB_MID]);

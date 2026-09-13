@@ -241,6 +241,9 @@ lang_t lang_get(void);
 void lang_set(lang_t lang); /* persists + restarts the device to relabel every screen */
 const char *t(string_id_t id);
 
+/* Test-only: raw table lookup for one language, no fallback. See lang.c. */
+const char *lang_test_raw(lang_t lang, string_id_t id);
+
 #ifdef __cplusplus
 }
 #endif

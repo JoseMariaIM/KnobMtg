@@ -2,6 +2,7 @@
 #define _SIM_STUBS_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Controllable tick for LVGL — advance with sim_tick_advance() */
 uint32_t sim_millis(void);
@@ -22,6 +23,12 @@ extern float sim_battery_voltage;
 /* Physical display rotation (0-3, degrees = value * 90); set via
    display_apply_rotation(), consumed by the sim flush callbacks */
 extern int sim_display_rotation;
+
+/* Whether the panel is currently told to drive GRAM (true) or has had
+   Display Off sent to it (false) - see scr_display_on()/scr_display_off()
+   in hw.c's screen-blank state machine. Real hardware has no way to
+   read this back; the simulator tracks it so a test can assert on it. */
+extern bool sim_display_panel_on;
 
 /* ESP32 attribute macros — empty on desktop */
 #ifndef IRAM_ATTR
