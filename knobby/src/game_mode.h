@@ -13,6 +13,7 @@ void build_custom_life_screen(void);
 void refresh_game_mode_menu_ui(void);
 void refresh_custom_life_ui(void);
 void open_game_mode_menu(void);
-void change_custom_life(int delta);
+void change_custom_life(int delta);   /* knob handler, screen_custom_life only */
+void change_num_players(int delta);   /* knob handler, screen_game_mode_menu only */
 
 #endif // _GAME_MODE_H

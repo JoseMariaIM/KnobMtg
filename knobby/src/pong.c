@@ -31,16 +31,21 @@
 #define PONG_DEG2RAD 0.017453292f
 #define PONG_RAD2DEG 57.29577951f
 
-/* Two fixed pegs off in the upper half of the arena (away from the
-   paddle's starting position at the bottom) - the ball caroms off them
-   unpredictably, breaking up the otherwise-clean geometry a lone
-   paddle-vs-wall game settles into. */
+/* Two pegs the ball caroms off unpredictably, breaking up the
+   otherwise-clean geometry a lone paddle-vs-wall game settles into.
+   Positions are re-rolled every run (see pong_place_pegs) so the same
+   board never comes up twice - a fixed pair was learnable after a few
+   games, which is exactly what they exist to prevent.
+   The placement band keeps them clear of both the center (where the
+   ball spawns, so a run can't start already overlapping one) and the
+   rim (where the paddle travels, so they can't shadow a return). */
 #define PONG_PEG_COUNT 2
 #define PONG_PEG_RADIUS 9
-static const lv_point_t pong_pegs[PONG_PEG_COUNT] = {
-    {140, 125},
-    {220, 125},
-};
+#define PONG_PEG_MIN_CENTER_DIST 46  /* px from arena center */
+#define PONG_PEG_MIN_RIM_GAP     46  /* px of clearance inside the rim */
+#define PONG_PEG_MIN_SEPARATION  56  /* px between the two pegs */
+#define PONG_PEG_PLACE_TRIES     24
+static lv_point_t pong_pegs[PONG_PEG_COUNT];
 
 typedef enum {
     PONG_STATE_READY = 0,
@@ -114,10 +119,51 @@ static void pong_spawn_ball(void)
     pong_ball_vy = sinf(rad) * pong_ball_speed;
 }
 
+/* Re-rolls both peg positions inside the band described above. Polar
+   placement (random angle + random radius in-band) rather than random
+   x/y rejected against the circle: every draw lands inside the arena
+   by construction, so the only retry loop needed is the one keeping
+   the two pegs from overlapping each other. If the separation check
+   somehow can't be satisfied within PONG_PEG_PLACE_TRIES (it always
+   can - the band is far wider than the separation), the last draw is
+   kept rather than looping forever; worst case two pegs sit close
+   together for one run. */
+static void pong_place_pegs(void)
+{
+    const int r_min = PONG_PEG_MIN_CENTER_DIST;
+    const int r_max = PONG_ARENA_RADIUS - PONG_PEG_MIN_RIM_GAP;
+    int i;
+
+    for (i = 0; i < PONG_PEG_COUNT; i++) {
+        int tries;
+
+        for (tries = 0; tries < PONG_PEG_PLACE_TRIES; tries++) {
+            float rad = (float)(esp_random() % 360) * PONG_DEG2RAD;
+            int radius = r_min + (int)(esp_random() % (uint32_t)(r_max - r_min + 1));
+            int j;
+            bool clear = true;
+
+            pong_pegs[i].x = (lv_coord_t)lroundf(PONG_CX + cosf(rad) * radius);
+            pong_pegs[i].y = (lv_coord_t)lroundf(PONG_CY + sinf(rad) * radius);
+
+            for (j = 0; j < i; j++) {
+                int ddx = pong_pegs[i].x - pong_pegs[j].x;
+                int ddy = pong_pegs[i].y - pong_pegs[j].y;
+                if (ddx * ddx + ddy * ddy < PONG_PEG_MIN_SEPARATION * PONG_PEG_MIN_SEPARATION) {
+                    clear = false;
+                    break;
+                }
+            }
+            if (clear) break;
+        }
+    }
+}
+
 static void pong_reset(void)
 {
     pong_paddle_angle = 90; /* bottom of the circle */
     pong_score = 0;
+    pong_place_pegs();
     pong_spawn_ball();
     pong_state = PONG_STATE_READY;
 }

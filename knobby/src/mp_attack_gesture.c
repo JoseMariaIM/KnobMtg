@@ -20,44 +20,12 @@
 #define ATTACK_DRAG_THRESHOLD_PX 14
 
 static int attack_drag_source = -1;
+static int attack_drag_source_panel = -1;    /* layout index of attack_drag_source's panel */
 static int attack_drag_source_color_idx = 0; /* spec->color_index for attack_drag_source */
 static bool attack_drag_active = false;
 static bool attack_drag_suppress_click = false;
 static lv_point_t attack_drag_start;
 static lv_point_t attack_drag_current;
-
-/* Trailing points behind the current touch, oldest first, used to draw a
-   tapering comet-trail instead of one flat line (see event_attack_drag_draw).
-   Recorded roughly every ATTACK_TRAIL_MIN_STEP_PX of movement so a slow
-   drag doesn't pack them all into one spot. */
-#define ATTACK_TRAIL_MAX 40
-#define ATTACK_TRAIL_MIN_STEP_PX 4
-static lv_point_t attack_trail[ATTACK_TRAIL_MAX];
-static int attack_trail_count = 0;
-
-static void attack_trail_reset(lv_point_t pt)
-{
-    attack_trail[0] = pt;
-    attack_trail_count = 1;
-}
-
-static void attack_trail_push(lv_point_t pt)
-{
-    if (attack_trail_count > 0) {
-        lv_point_t *last = &attack_trail[attack_trail_count - 1];
-        int ddx = pt.x - last->x;
-        int ddy = pt.y - last->y;
-        if (ddx * ddx + ddy * ddy < ATTACK_TRAIL_MIN_STEP_PX * ATTACK_TRAIL_MIN_STEP_PX) {
-            *last = pt; /* still moving toward the same spot: just update the tip */
-            return;
-        }
-    }
-    if (attack_trail_count >= ATTACK_TRAIL_MAX) {
-        memmove(&attack_trail[0], &attack_trail[1], sizeof(lv_point_t) * (ATTACK_TRAIL_MAX - 1));
-        attack_trail_count = ATTACK_TRAIL_MAX - 1;
-    }
-    attack_trail[attack_trail_count++] = pt;
-}
 
 /* Gestures that start inside this band of the four edges are left alone
    for knob_classify_swipe_direction (menu-open swipe) instead of arming
@@ -124,11 +92,11 @@ static void event_wedge_drag(lv_event_t *e)
            release (see point_in_swipe_edge_zone). */
         if (point_in_swipe_edge_zone(pt.x, pt.y)) return;
         attack_drag_source = spec->player_index;
+        attack_drag_source_panel = idx;
         attack_drag_source_color_idx = spec->color_index;
         attack_drag_active = false;
         attack_drag_start = pt;
         attack_drag_current = pt;
-        attack_trail_reset(pt);
     } else if (code == LV_EVENT_PRESSING) {
         int ddx, ddy;
 
@@ -143,7 +111,6 @@ static void event_wedge_drag(lv_event_t *e)
             }
         }
         if (attack_drag_active) {
-            attack_trail_push(attack_drag_current);
             lv_obj_invalidate(screen_multiplayer);
         }
     } else if (code == LV_EVENT_RELEASED) {
@@ -160,17 +127,13 @@ static void event_wedge_drag(lv_event_t *e)
             lv_obj_invalidate(screen_multiplayer);
         }
         attack_drag_source = -1;
+        attack_drag_source_panel = -1;
     }
 }
 
-/* Live arrow from where the attack drag started to the current touch
-   point, drawn on top of everything else (registered on the same
-   full-screen overlay as the wedge separators, after them). Also glows
-   the wedge currently under the finger, when it differs from the
-   source, as a preview of who's about to be targeted. */
 /* Finds which panel (other than the source) the point currently sits
-   over, for the hover glow below. Works for both real angular wedges
-   (3p) and the plain rectangular quadrants 2p/4p actually use. */
+   over, for the target reticle below. Works for both real angular
+   wedges (3p) and the plain rectangular quadrants 2p/4p actually use. */
 static int attack_hover_panel_index(lv_point_t pt, bool layout_is_wedge)
 {
     const mp_layout_spec_t *layout = mp_current_layout();
@@ -197,114 +160,177 @@ static int attack_hover_panel_index(lv_point_t pt, bool layout_is_wedge)
     return -1;
 }
 
-/* Live comet-trail from where the attack drag started to the current
-   touch point, drawn on top of everything else (registered on the same
-   full-screen overlay as the wedge separators, after them): a tapering
-   halo, tinted with the SOURCE player's own assigned color (whatever
-   they actually see on their panel - custom override, life-color mode,
-   or the 2p color swap all included, see get_effective_player_color),
-   under a thin white core along the recent path (attack_trail, sampled
-   densely enough that the short segments read as one continuous stroke
-   rather than separate lines), ending in a small filled "head" at the
-   fingertip. Also glows the panel currently under the finger, tinted
-   with ITS OWN color, as a preview of who's about to be targeted. */
+/* Finds the on-screen center of a panel, used as both the beam's origin
+   (source panel) and the target reticle's center. Wedge layouts (3p)
+   anchor on the slice's label position rather than the panel rect,
+   which is full-screen for every wedge. */
+static void attack_panel_center(int panel_idx, bool layout_is_wedge,
+                                lv_coord_t *out_x, lv_coord_t *out_y)
+{
+    const mp_layout_spec_t *layout = mp_current_layout();
+
+    *out_x = WEDGE_CX;
+    *out_y = WEDGE_CY;
+    if (layout == NULL || panel_idx < 0 || panel_idx >= layout->panel_count) return;
+
+    if (layout_is_wedge) {
+        *out_x = WEDGE_CX + wedge_label_dx(panel_idx);
+        *out_y = WEDGE_CY + wedge_label_dy(panel_idx);
+    } else {
+        const mp_panel_spec_t *spec = &layout->panels[panel_idx];
+        *out_x = spec->x + spec->w / 2;
+        *out_y = spec->y + spec->h / 2;
+    }
+}
+
+/* The live attack indicator, drawn on top of everything else (registered
+   on the same full-screen overlay as the wedge separators, after them).
+
+   A straight beam from the SOURCE panel's center to the fingertip, in
+   that player's own assigned color (custom override, life-color mode
+   and the 2p color swap all included - see get_effective_player_color),
+   ending in a chevron arrowhead, with a thin reticle ring around
+   whichever panel is currently under the finger. Deliberately geometric:
+   an earlier version traced the finger's recent path as a tapering
+   "comet", which wobbled with every hand tremor and read as a smear
+   rather than a deliberate "this player is attacking that one" - a
+   fixed source-to-target line says the same thing far more cleanly.
+
+   Every piece is drawn with lines/rects only: this LVGL build has no
+   filled-polygon primitive, so the arrowhead is two rotated line
+   segments rather than a triangle. */
+#define ATTACK_BEAM_HALO_WIDTH   9
+#define ATTACK_BEAM_CORE_WIDTH   3
+#define ATTACK_ARROW_LENGTH     18   /* px along each chevron barb */
+#define ATTACK_ARROW_SPREAD_DEG 148  /* barb angle away from the beam heading */
+#define ATTACK_ORIGIN_RADIUS     7
+#define ATTACK_RETICLE_RADIUS   52
 static void event_attack_drag_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
     const mp_layout_spec_t *layout = mp_current_layout();
     lv_draw_line_dsc_t halo_dsc, core_dsc;
-    lv_draw_rect_dsc_t tip_dsc;
-    lv_area_t tip_area;
+    lv_draw_rect_dsc_t ring_dsc;
+    lv_area_t area;
     lv_color_t src_color;
-    lv_point_t tip;
-    int denom, i, hover_idx;
+    lv_point_t origin, tip;
+    lv_coord_t ox, oy;
+    int hover_idx, heading;
     bool layout_is_wedge;
 
-    if (!attack_drag_active || attack_trail_count == 0) return;
+    if (!attack_drag_active) return;
 
-    src_color = get_effective_player_color(attack_drag_source, attack_drag_source_color_idx, LIFE_VIB_MID);
-    tip = attack_trail[attack_trail_count - 1];
     layout_is_wedge = layout != NULL && layout->panel_count > 0 &&
                       spec_is_wedge(&layout->panels[0]);
+    src_color = get_effective_player_color(attack_drag_source, attack_drag_source_color_idx, LIFE_VIB_MID);
 
-    /* Target preview glow, tinted with the hovered player's own color -
-       drawn first so the trail/head sit on top of it. */
+    attack_panel_center(attack_drag_source_panel, layout_is_wedge, &ox, &oy);
+    origin.x = ox;
+    origin.y = oy;
+    tip = attack_drag_current;
+
+    /* Degenerate beam (finger still on the origin): nothing sensible to
+       point at yet, and lv_atan2 needs a non-zero vector. */
+    if (tip.x == origin.x && tip.y == origin.y) return;
+    heading = lv_atan2(tip.y - origin.y, tip.x - origin.x);
+
+    /* Target reticle first, so the beam and arrowhead sit on top: a thin
+       double ring in the hovered player's own color rather than the
+       filled translucent disc this used to paint over half their panel. */
     hover_idx = attack_hover_panel_index(tip, layout_is_wedge);
     if (hover_idx >= 0 && layout != NULL) {
         const mp_panel_spec_t *spec = &layout->panels[hover_idx];
-        lv_draw_rect_dsc_t glow_dsc;
-        lv_area_t glow_area;
         lv_coord_t gx, gy;
+        int r;
 
-        if (layout_is_wedge) {
-            gx = WEDGE_CX + wedge_label_dx(hover_idx);
-            gy = WEDGE_CY + wedge_label_dy(hover_idx);
-        } else {
-            gx = spec->x + spec->w / 2;
-            gy = spec->y + spec->h / 2;
-        }
+        attack_panel_center(hover_idx, layout_is_wedge, &gx, &gy);
 
-        lv_draw_rect_dsc_init(&glow_dsc);
-        glow_dsc.radius = LV_RADIUS_CIRCLE;
-        glow_dsc.bg_color = get_effective_player_color(spec->player_index, spec->color_index, LIFE_VIB_VIV);
-        glow_dsc.bg_opa = LV_OPA_50;
-        glow_dsc.border_width = 3;
-        glow_dsc.border_color = lv_color_white();
-        glow_dsc.border_opa = LV_OPA_70;
-        glow_area.x1 = gx - 48;
-        glow_area.y1 = gy - 48;
-        glow_area.x2 = gx + 48;
-        glow_area.y2 = gy + 48;
-        lv_draw_rect(draw_ctx, &glow_dsc, &glow_area);
+        lv_draw_rect_dsc_init(&ring_dsc);
+        ring_dsc.radius = LV_RADIUS_CIRCLE;
+        ring_dsc.bg_opa = LV_OPA_TRANSP;
+
+        /* The reticle sits ON the target's own panel, which is already
+           painted in that player's color - so the ring itself is white
+           (the one color that reads against every player color) and the
+           player's color goes on the outer echo, where it identifies
+           who is being targeted without fighting the panel behind it. */
+        ring_dsc.border_color = lv_color_white();
+        ring_dsc.border_width = 3;
+        ring_dsc.border_opa = LV_OPA_COVER;
+        r = ATTACK_RETICLE_RADIUS;
+        area.x1 = gx - r; area.y1 = gy - r;
+        area.x2 = gx + r; area.y2 = gy + r;
+        lv_draw_rect(draw_ctx, &ring_dsc, &area);
+
+        ring_dsc.border_color = get_effective_player_color(spec->player_index, spec->color_index, LIFE_VIB_VIV);
+        ring_dsc.border_width = 4;
+        ring_dsc.border_opa = LV_OPA_80;
+        r = ATTACK_RETICLE_RADIUS + 8;
+        area.x1 = gx - r; area.y1 = gy - r;
+        area.x2 = gx + r; area.y2 = gy + r;
+        lv_draw_rect(draw_ctx, &ring_dsc, &area);
     }
 
-    /* Tapering trail: a wide, fixed-color halo under a thin white core,
-       both growing from faint/thin at the tail to solid/thick at the
-       tip - reads as a glowing comet rather than a flat ruler line.
-       Points are recorded every ATTACK_TRAIL_MIN_STEP_PX (see
-       attack_trail_push), dense enough that consecutive round-capped
-       segments overlap into what reads as one continuous stroke instead
-       of a few visible straight pieces. */
+    /* Beam: a soft wide halo in the source color under a bright thin
+       white core, both round-capped so the ends read as a stroke rather
+       than a cut-off rectangle. */
     lv_draw_line_dsc_init(&halo_dsc);
     halo_dsc.color = src_color;
+    halo_dsc.width = ATTACK_BEAM_HALO_WIDTH;
+    halo_dsc.opa = LV_OPA_60;
     halo_dsc.round_start = 1;
     halo_dsc.round_end = 1;
+    lv_draw_line(draw_ctx, &halo_dsc, &origin, &tip);
+
     lv_draw_line_dsc_init(&core_dsc);
     core_dsc.color = lv_color_white();
+    core_dsc.width = ATTACK_BEAM_CORE_WIDTH;
+    core_dsc.opa = LV_OPA_COVER;
     core_dsc.round_start = 1;
     core_dsc.round_end = 1;
+    lv_draw_line(draw_ctx, &core_dsc, &origin, &tip);
 
-    denom = (attack_trail_count > 2) ? (attack_trail_count - 2) : 1;
-    for (i = 0; i < attack_trail_count - 1; i++) {
-        halo_dsc.width = (lv_coord_t)(3 + (i * 11) / denom);
-        halo_dsc.opa = (lv_opa_t)(70 + (i * (255 - 70)) / denom);
-        lv_draw_line(draw_ctx, &halo_dsc, &attack_trail[i], &attack_trail[i + 1]);
+    /* Chevron arrowhead at the tip: two barbs swept back from the beam
+       heading. wedge_polar() (mp_layout.h) projects an lv_trigo value
+       onto a radius with correct rounding, same helper the wedge label
+       anchors use. */
+    {
+        lv_point_t barb;
+        int a;
 
-        core_dsc.width = (lv_coord_t)(1 + (i * 3) / denom);
-        core_dsc.opa = (lv_opa_t)(90 + (i * (255 - 90)) / denom);
-        lv_draw_line(draw_ctx, &core_dsc, &attack_trail[i], &attack_trail[i + 1]);
+        a = (heading + ATTACK_ARROW_SPREAD_DEG) % 360;
+        barb.x = tip.x + wedge_polar(lv_trigo_cos((int16_t)a), ATTACK_ARROW_LENGTH);
+        barb.y = tip.y + wedge_polar(lv_trigo_sin((int16_t)a), ATTACK_ARROW_LENGTH);
+        lv_draw_line(draw_ctx, &halo_dsc, &tip, &barb);
+        lv_draw_line(draw_ctx, &core_dsc, &tip, &barb);
+
+        a = (heading - ATTACK_ARROW_SPREAD_DEG + 360) % 360;
+        barb.x = tip.x + wedge_polar(lv_trigo_cos((int16_t)a), ATTACK_ARROW_LENGTH);
+        barb.y = tip.y + wedge_polar(lv_trigo_sin((int16_t)a), ATTACK_ARROW_LENGTH);
+        lv_draw_line(draw_ctx, &halo_dsc, &tip, &barb);
+        lv_draw_line(draw_ctx, &core_dsc, &tip, &barb);
     }
 
-    /* Comet head: a small filled, ringed dot at the fingertip - stands
-       in for a directional arrowhead without needing a filled polygon
-       primitive (this LVGL build only draws lines/rects/arcs). */
-    lv_draw_rect_dsc_init(&tip_dsc);
-    tip_dsc.radius = LV_RADIUS_CIRCLE;
-    tip_dsc.bg_color = src_color;
-    tip_dsc.bg_opa = LV_OPA_COVER;
-    tip_dsc.border_width = 2;
-    tip_dsc.border_color = lv_color_white();
-    tip_dsc.border_opa = LV_OPA_COVER;
-    tip_area.x1 = tip.x - 8;
-    tip_area.y1 = tip.y - 8;
-    tip_area.x2 = tip.x + 8;
-    tip_area.y2 = tip.y + 8;
-    lv_draw_rect(draw_ctx, &tip_dsc, &tip_area);
+    /* Origin marker: a hollow ring where the beam leaves the source
+       player, so the direction of the attack is unambiguous even when
+       the beam is short. */
+    lv_draw_rect_dsc_init(&ring_dsc);
+    ring_dsc.radius = LV_RADIUS_CIRCLE;
+    ring_dsc.bg_opa = LV_OPA_TRANSP;
+    ring_dsc.border_width = 3;
+    ring_dsc.border_color = src_color;
+    ring_dsc.border_opa = LV_OPA_COVER;
+    area.x1 = origin.x - ATTACK_ORIGIN_RADIUS;
+    area.y1 = origin.y - ATTACK_ORIGIN_RADIUS;
+    area.x2 = origin.x + ATTACK_ORIGIN_RADIUS;
+    area.y2 = origin.y + ATTACK_ORIGIN_RADIUS;
+    lv_draw_rect(draw_ctx, &ring_dsc, &area);
 }
 
 void mp_attack_gesture_reset(void)
 {
     attack_drag_source = -1;
+    attack_drag_source_panel = -1;
     attack_drag_active = false;
     attack_drag_suppress_click = false;
 }

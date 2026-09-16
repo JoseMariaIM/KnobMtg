@@ -22,6 +22,7 @@
 #include "ui_wifi.h"
 #include "snake.h"
 #include "pong.h"
+#include "dino.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -130,6 +131,7 @@ static void nav_battery(void)    { open_battery_screen(); }
 static void nav_minigames(void)  { open_minigames_menu(); }
 static void nav_snake(void)      { open_snake_screen(); }
 static void nav_pong(void)       { open_pong_screen(); }
+static void nav_dino(void)       { open_dino_screen(); }
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
@@ -184,6 +186,7 @@ static const screen_entry_t all_screens[] = {
     {"minigames",     nav_minigames},
     {"snake",         nav_snake},
     {"pong",          nav_pong},
+    {"dino",          nav_dino},
     {"table-sync",    nav_table_sync},
     {"dice",          nav_dice},
     {"dice-menu",     nav_dice_menu},
@@ -289,6 +292,7 @@ static void print_usage(void)
            "\n  --help, -h             Show this message\n"
            "\nAvailable screens:\n"
            "  main 1p 2p 3p 4p intro menu tools settings-menu\n"
+           "  snake pong dino\n"
            "  settings-page<N>       Settings page N (1-based)\n"
            "  setting:<id>           Page hosting a setting (e.g. setting:autodim)\n"
            "  brightness battery rotate dice damage-log game-mode custom-life select\n"

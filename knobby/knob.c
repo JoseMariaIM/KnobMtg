@@ -17,6 +17,7 @@
 #include "src/attack.h"
 #include "src/snake.h"
 #include "src/pong.h"
+#include "src/dino.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -440,6 +441,12 @@ static void back_pong(void)
     open_minigames_menu();
 }
 
+static void back_dino(void)
+{
+    dino_leave_screen();
+    open_minigames_menu();
+}
+
 /* wifi_*_handle_back() return bool (mirrors name_screen_handle_back's
    contract); nothing here needs that result. */
 static void back_wifi_scan_list(void) { wifi_scan_list_handle_back(); }
@@ -483,7 +490,7 @@ static const screen_desc_t screen_registry[] = {
     { &screen_table_sync,          build_table_sync_screen,           NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
-    { &screen_game_mode_menu,      build_game_mode_menu_screen,       NULL,                 NULL,                    &screen_quad_menu,      false },
+    { &screen_game_mode_menu,      build_game_mode_menu_screen,       change_num_players,   NULL,                    &screen_quad_menu,      false },
     { &screen_custom_life,         build_custom_life_screen,          change_custom_life,   back_custom_life,        NULL,                   false },
     /* screen_quad_menu/screen_tools_menu: built by build_quad_menus(), see knob_gui() */
     { &screen_quad_menu,           NULL,                              NULL,                 back_quad_menu,          NULL,                   false },
@@ -497,6 +504,7 @@ static const screen_desc_t screen_registry[] = {
     /* Snake/Pong: built lazily on first open_*_screen() call, not here. */
     { &screen_snake,               NULL,                              snake_turn,           back_snake,              NULL,                   false },
     { &screen_pong,                NULL,                              pong_turn,            back_pong,               NULL,                   false },
+    { &screen_dino,                NULL,                              dino_turn,            back_dino,               NULL,                   false },
 };
 #define SCREEN_REGISTRY_COUNT (sizeof(screen_registry) / sizeof(screen_registry[0]))
 

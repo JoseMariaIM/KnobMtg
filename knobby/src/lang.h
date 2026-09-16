@@ -169,7 +169,6 @@ typedef enum {
 
     /* game_mode.c */
     STR_GAME_MODE_PLAYERS_FMT,  /* "Players\n%d" */
-    STR_GAME_MODE_TRACK_FMT,    /* "Track\n%d" */
     STR_GAME_MODE_LIFE_FMT,     /* "Life\n%d" */
     STR_GAME_MODE_APPLY_HOLD,
     STR_GAME_MODE_LIFE_TITLE,
@@ -232,6 +231,15 @@ typedef enum {
     STR_PONG_GAME_OVER_FMT,    /* "Game Over\nScore: %d\nTap to Retry" */
     STR_PONG_BEST_FMT,         /* "Best: %d" */
     STR_PONG_NEW_BEST,
+
+    /* dino.c */
+    STR_MINIGAME_DINO,
+    STR_DINO_TAP_START,
+    STR_DINO_HINT,
+    STR_DINO_SCORE_FMT,        /* "Score: %d" */
+    STR_DINO_GAME_OVER_FMT,    /* "Game Over\nScore: %d\nTap to Retry" */
+    STR_DINO_BEST_FMT,         /* "Best: %d" */
+    STR_DINO_NEW_BEST,
 
     STR_COUNT,
 } string_id_t;

@@ -86,13 +86,6 @@ static inline int clamp_counter(int value)
     return value;
 }
 
-static inline int get_arc_display_value(int value, int max_life)
-{
-    if (value < 0) return 0;
-    if (value > max_life) return max_life;
-    return value;
-}
-
 // ---------- life color tiers ----------
 /* The tiers/table are plain data (int index in, uint32_t hex out) - pure.
  * Turning a tier into an lv_color_t (get_life_color/get_life_color_vib)

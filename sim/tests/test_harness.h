@@ -14,6 +14,7 @@
 #include "game.h"
 #include "storage.h"
 #include "hw.h"
+#include "sim_stubs.h"
 
 #define TEST_SCREEN_W 360
 #define TEST_SCREEN_H 360
@@ -45,6 +46,27 @@ static void test_harness_init(void)
     test_disp_drv.draw_buf = &test_draw_buf;
     lv_disp_drv_register(&test_disp_drv);
     knob_gui();
+}
+
+/* Runs the boot intro to completion.
+ *
+ * knob_gui() leaves the intro's comics-pop animation and its follow-up
+ * timer pending; that timer calls back_to_main() (see intro.c), which
+ * loads the life-counter screen. Any test that pumps simulated time
+ * while sitting on some OTHER screen will therefore get yanked back to
+ * the life counter mid-test - and for the minigames, whose tick
+ * callbacks pause themselves the moment lv_scr_act() isn't their own
+ * screen, that shows up as the game silently freezing rather than as a
+ * failed assertion pointing at the cause. Call this once, before
+ * navigating anywhere, in any test that advances time on a non-default
+ * screen. */
+static void test_harness_settle_intro(void)
+{
+    int elapsed;
+    for (elapsed = 0; elapsed < 4000; elapsed += 20) {
+        sim_tick_advance(20);
+        lv_timer_handler();
+    }
 }
 
 /* Resets to a known 4-player multiplayer game, the shape most rules

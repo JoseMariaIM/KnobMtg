@@ -62,4 +62,7 @@ void nvs_set_snake_high_score(int player, int score);
 int nvs_get_pong_high_score(int player);
 void nvs_set_pong_high_score(int player, int score);
 
+int nvs_get_dino_high_score(int player);
+void nvs_set_dino_high_score(int player, int score);
+
 #endif // _STORAGE_H

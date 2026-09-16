@@ -154,7 +154,6 @@ static const char *strings_en[STR_COUNT] = {
     [STR_RENAME_SELECT] = "Select",
 
     [STR_GAME_MODE_PLAYERS_FMT] = "Players\n%d",
-    [STR_GAME_MODE_TRACK_FMT] = "Track\n%d",
     [STR_GAME_MODE_LIFE_FMT] = "Life\n%d",
     [STR_GAME_MODE_APPLY_HOLD] = "Apply\n(Hold)",
     [STR_GAME_MODE_LIFE_TITLE] = "Life Total",
@@ -211,6 +210,14 @@ static const char *strings_en[STR_COUNT] = {
     [STR_PONG_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
     [STR_PONG_BEST_FMT] = "Best: %d",
     [STR_PONG_NEW_BEST] = "New Best!",
+
+    [STR_MINIGAME_DINO] = "Dino",
+    [STR_DINO_TAP_START] = "Tap or Turn to Start",
+    [STR_DINO_HINT] = "Jump the cacti, not the birds",
+    [STR_DINO_SCORE_FMT] = "Score: %d",
+    [STR_DINO_GAME_OVER_FMT] = "Game Over\nScore: %d\nTap to Retry",
+    [STR_DINO_BEST_FMT] = "Best: %d",
+    [STR_DINO_NEW_BEST] = "New Best!",
 };
 
 static const char *strings_es[STR_COUNT] = {
@@ -360,7 +367,6 @@ static const char *strings_es[STR_COUNT] = {
     [STR_RENAME_SELECT] = "Elegir",
 
     [STR_GAME_MODE_PLAYERS_FMT] = "Jugadores\n%d",
-    [STR_GAME_MODE_TRACK_FMT] = "En pantalla\n%d",
     [STR_GAME_MODE_LIFE_FMT] = "Vida\n%d",
     [STR_GAME_MODE_APPLY_HOLD] = "Aplicar\n(Mantener)",
     [STR_GAME_MODE_LIFE_TITLE] = "Vida Inicial",
@@ -417,6 +423,14 @@ static const char *strings_es[STR_COUNT] = {
     [STR_PONG_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
     [STR_PONG_BEST_FMT] = "Récord: %d",
     [STR_PONG_NEW_BEST] = "¡Nuevo Récord!",
+
+    [STR_MINIGAME_DINO] = "Dino",
+    [STR_DINO_TAP_START] = "Toca o Gira para Empezar",
+    [STR_DINO_HINT] = "Salta los cactus, no los pájaros",
+    [STR_DINO_SCORE_FMT] = "Puntos: %d",
+    [STR_DINO_GAME_OVER_FMT] = "Fin del Juego\nPuntos: %d\nToca para Reintentar",
+    [STR_DINO_BEST_FMT] = "Récord: %d",
+    [STR_DINO_NEW_BEST] = "¡Nuevo Récord!",
 };
 
 void lang_init(void)

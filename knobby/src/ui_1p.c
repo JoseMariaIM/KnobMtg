@@ -12,7 +12,6 @@ lv_obj_t *screen_select = NULL;
 lv_obj_t *screen_damage = NULL;
 
 // ---------- main UI widgets ----------
-static lv_obj_t *arc_life = NULL;
 static lv_obj_t *life_hitbox = NULL;
 static lv_obj_t *label_life_total = NULL;
 static lv_obj_t *label_life_preview_total = NULL;
@@ -36,22 +35,6 @@ static lv_obj_t *label_damage_hint = NULL;
 static lv_obj_t *label_damage_delta = NULL;
 
 // ---------- refresh functions ----------
-static void refresh_ring(void)
-{
-    int max_life = nvs_get_life_total();
-    lv_color_t c = get_effective_player_color(0, 0, LIFE_VIB_MID);
-
-    lv_arc_set_range(arc_life, 0, max_life);
-    lv_arc_set_value(arc_life, get_arc_display_value(player_life[0], max_life));
-
-    lv_obj_set_style_arc_color(arc_life, lv_color_hex(0x202020), LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc_life, 20, LV_PART_MAIN);
-
-    lv_obj_set_style_arc_color(arc_life, c, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(arc_life, 20, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_rounded(arc_life, true, LV_PART_INDICATOR);
-}
-
 static void refresh_life_digits(void)
 {
     bool flash_here = all_damage_flash_active && all_damage_flash_player[0];
@@ -133,7 +116,6 @@ static void refresh_1p_counters(void)
 
 void refresh_main_ui(void)
 {
-    refresh_ring();
     refresh_life_digits();
     refresh_1p_counters();
 }
@@ -429,16 +411,6 @@ void build_main_screen(void)
     lv_obj_set_style_bg_color(screen_1p, lv_color_black(), 0);
     lv_obj_set_style_border_width(screen_1p, 0, 0);
     lv_obj_set_scrollbar_mode(screen_1p, LV_SCROLLBAR_MODE_OFF);
-
-    arc_life = lv_arc_create(screen_1p);
-    lv_obj_set_size(arc_life, 360, 360);
-    lv_obj_center(arc_life);
-    lv_arc_set_rotation(arc_life, 90);
-    lv_arc_set_bg_angles(arc_life, 0, 360);
-    lv_arc_set_range(arc_life, 0, nvs_get_life_total());
-    lv_arc_set_value(arc_life, get_arc_display_value(player_life[0], nvs_get_life_total()));
-    lv_obj_remove_style(arc_life, NULL, LV_PART_KNOB);
-    lv_obj_clear_flag(arc_life, LV_OBJ_FLAG_CLICKABLE);
 
     life_hitbox = make_plain_box(screen_1p, 360, 360);
     lv_obj_align(life_hitbox, LV_ALIGN_CENTER, 0, 0);
