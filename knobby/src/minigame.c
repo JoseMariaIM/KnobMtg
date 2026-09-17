@@ -106,6 +106,12 @@ static void event_minigame_draw(lv_event_t *e)
     g->on_draw(e);
 }
 
+static void event_minigame_tap(lv_event_t *e)
+{
+    minigame_t *g = lv_event_get_user_data(e);
+    if (g->on_tap != NULL) g->on_tap();
+}
+
 void minigame_build(minigame_t *g)
 {
     lv_obj_t *scr = lv_obj_create(NULL);
@@ -117,6 +123,7 @@ void minigame_build(minigame_t *g)
     lv_obj_set_scrollbar_mode(scr, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(scr, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(scr, event_minigame_draw, LV_EVENT_DRAW_MAIN, g);
+    lv_obj_add_event_cb(scr, event_minigame_tap, LV_EVENT_CLICKED, g);
 
     g->score_lbl = lv_label_create(scr);
     lv_label_set_text(g->score_lbl, "");

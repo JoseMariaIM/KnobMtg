@@ -72,6 +72,7 @@ static minigame_t eggs_game = {
     .on_reset = eggs_reset,
     .on_tick  = eggs_tick,
     .on_draw  = eggs_draw,
+    .on_tap   = eggs_handle_tap,
 };
 
 static void eggs_spawn(void)

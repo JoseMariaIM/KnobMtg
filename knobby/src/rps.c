@@ -47,6 +47,7 @@ static minigame_t rps_game = {
     .on_reset = rps_reset,
     .on_tick  = rps_tick,
     .on_draw  = rps_draw,
+    .on_tap   = rps_handle_tap,
     .on_build = rps_build,
     .on_free  = rps_free,
 };

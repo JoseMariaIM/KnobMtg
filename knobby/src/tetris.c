@@ -85,6 +85,7 @@ static minigame_t tetris_game = {
     .on_reset = tetris_reset,
     .on_tick  = tetris_tick,
     .on_draw  = tetris_draw,
+    .on_tap   = tetris_handle_tap,
 };
 
 static bool tet_cell_set(int piece, int rot, int r, int c)

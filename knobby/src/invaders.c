@@ -94,6 +94,7 @@ static minigame_t invaders_game = {
     .on_reset = invaders_reset,
     .on_tick  = invaders_tick,
     .on_draw  = invaders_draw,
+    .on_tap   = invaders_handle_tap,
 };
 
 static void inv_alien_rect(int idx, int *x1, int *y1, int *x2, int *y2)

@@ -63,6 +63,7 @@ static minigame_t flappy_game = {
     .on_reset = flappy_reset,
     .on_tick  = flappy_tick,
     .on_draw  = flappy_draw,
+    .on_tap   = flappy_handle_tap,
 };
 
 static int flappy_random_gap(void)

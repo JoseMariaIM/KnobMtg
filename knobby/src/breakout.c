@@ -67,6 +67,7 @@ static minigame_t breakout_game = {
     .on_reset = breakout_reset,
     .on_tick  = breakout_tick,
     .on_draw  = breakout_draw,
+    .on_tap   = breakout_handle_tap,
 };
 
 static void bo_fill_wall(void)

@@ -17,6 +17,7 @@
 #include "invaders.h"
 #include "tetris.h"
 #include "rps.h"
+#include "dino.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -360,6 +361,60 @@ static void test_rps(void)
     printf("PASS: rps - wins score, a loss ends the streak, throws lock on reveal\n");
 }
 
+/* Every game screen is CLICKABLE, but being clickable is not the same
+ * as anything listening: minigame_build() has to subscribe the game's
+ * tap handler to LV_EVENT_CLICKED, and for one release it did not. The
+ * games were entirely deaf to the touchscreen on real hardware while
+ * every test still passed, because the tests called <name>_handle_tap()
+ * directly and so jumped over the exact wiring that was missing.
+ *
+ * So this drives the screen the way the touch driver does - a real
+ * LV_EVENT_CLICKED sent to the screen object - and never calls a tap
+ * handler by name.
+ *
+ * Snake and Pong are not here: they predate minigame.c, wire their own
+ * LV_EVENT_CLICKED, and expose no state to assert on. Dino is, because
+ * it has an accessor and is a useful control - it was the one game
+ * proven to work on hardware when the six new ones did not. */
+static void test_tap_reaches_every_game(void)
+{
+    struct {
+        const char *name;
+        lv_obj_t  **screen;
+        void      (*open)(void);
+    } games[] = {
+        { "tetris",   &screen_tetris,   open_tetris_screen   },
+        { "breakout", &screen_breakout, open_breakout_screen },
+        { "flappy",   &screen_flappy,   open_flappy_screen   },
+        { "eggs",     &screen_eggs,     open_eggs_screen     },
+        { "invaders", &screen_invaders, open_invaders_screen },
+        { "rps",      &screen_rps,      open_rps_screen      },
+    };
+    unsigned i;
+
+    for (i = 0; i < sizeof(games) / sizeof(games[0]); i++) {
+        games[i].open();
+        assert(*games[i].screen != NULL);
+        assert(minigame_test_state(*games[i].screen) == MINIGAME_READY);
+
+        lv_event_send(*games[i].screen, LV_EVENT_CLICKED, NULL);
+
+        if (minigame_test_state(*games[i].screen) != MINIGAME_PLAYING) {
+            printf("FAIL: tapping %s's screen did nothing - is on_tap wired?\n",
+                   games[i].name);
+        }
+        assert(minigame_test_state(*games[i].screen) == MINIGAME_PLAYING);
+    }
+    printf("PASS: a real screen tap starts every framework game\n");
+
+    /* The control: dino, with its own hand-rolled wiring. */
+    open_dino_screen();
+    assert(dino_test_state() == DINO_TEST_READY);
+    lv_event_send(screen_dino, LV_EVENT_CLICKED, NULL);
+    assert(dino_test_state() == DINO_TEST_PLAYING);
+    printf("PASS: a real screen tap starts dino too\n");
+}
+
 int main(void)
 {
     /* Line-buffered so the PASS trail survives an assert() abort - fully
@@ -374,6 +429,7 @@ int main(void)
     test_harness_settle_intro();
     test_harness_reset_4p();
 
+    printf("---- touch wiring ----\n"); test_tap_reaches_every_game();
     printf("---- flappy ----\n");   test_flappy();
     printf("---- eggs ----\n");     test_eggs();
     printf("---- breakout ----\n"); test_breakout();

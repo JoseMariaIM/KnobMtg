@@ -39,6 +39,11 @@ struct minigame_s {
     void (*on_reset)(minigame_t *g);  /* clear the game's own state */
     void (*on_tick)(minigame_t *g);   /* advance one step */
     void (*on_draw)(lv_event_t *e);   /* LV_EVENT_DRAW_MAIN on the screen */
+    /* The game's tap handler - normally its own <name>_handle_tap().
+       minigame_build() is what subscribes it to LV_EVENT_CLICKED, so a
+       game that fills in everything else but leaves this NULL is simply
+       deaf to the touchscreen. */
+    void (*on_tap)(void);
     /* Optional, and a pair: on_build adds any widgets of the game's own
        on top of the shared screen, on_free drops the pointers to them
        just before that screen is deleted.
