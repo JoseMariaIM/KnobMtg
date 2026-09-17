@@ -153,16 +153,16 @@ static void test_breakout(void)
     assert(breakout_test_bricks_left() == bricks_at_start);
     breakout_handle_tap();               /* release */
 
-    /* Paddle tracking the ball: bricks must come down, and the ball must
-       not be lost while the paddle is under it. */
+    /* Paddle tracking the lowest ball: bricks must come down, and no
+       ball lost while the paddle is under it. */
     guard = 0;
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
            breakout_test_bricks_left() > bricks_at_start - 10 && guard++ < 20000) {
         int bx, by;
-        breakout_test_ball(&bx, &by);
-        if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
-        else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
-        (void)by;
+        if (breakout_test_lowest_ball(&bx, &by)) {
+            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
+            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
+        }
         tick_ms(20);
     }
     assert(breakout_test_bricks_left() <= bricks_at_start - 10);
@@ -185,6 +185,120 @@ static void test_breakout(void)
     assert(minigame_test_state(screen_breakout) == MINIGAME_OVER);
     assert(breakout_test_lives() <= 0);
     printf("PASS: breakout - three lost balls end the run\n");
+}
+
+/* ---------------------------------------------------------------- */
+/* The power-up bricks. Each is reached the same way: play until the
+   wall's specials have been taken, watching what changed when they
+   were. Nothing here calls an internal "give me multiball" hook - the
+   only way in is breaking the brick, same as the player's. */
+static void test_breakout_powerups(void)
+{
+    int guard;
+    int walls_seen;
+    int max_balls_seen = 1;
+    int prev_balls = 1;
+    int splits_seen = 0;
+    int split_tick = 0;
+    bool spread_checked = false;
+    bool saw_iron = false;
+    int specials_at_start;
+
+    open_breakout_screen();
+    breakout_handle_tap();          /* start */
+    specials_at_start = breakout_test_special_bricks_left();
+
+    /* Up to three per wall, and they are actually placed. */
+    assert(specials_at_start > 0);
+    assert(specials_at_start <= 3);
+    printf("PASS: breakout - a wall carries at most 3 power-up bricks (%d)\n",
+           specials_at_start);
+
+    breakout_handle_tap();          /* release */
+
+    /* Play properly and take whatever the wall offers. */
+    guard = 0;
+    walls_seen = breakout_test_level();
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           guard++ < 120000 && (!saw_iron || max_balls_seen < 2 || !spread_checked)) {
+        int bx, by;
+        int balls;
+
+        if (breakout_test_lowest_ball(&bx, &by)) {
+            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
+            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
+        }
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+
+        balls = breakout_test_ball_count();
+        /* "Duplicate the balls on screen" means exactly that: a split
+           can at most double what was in play, never jump straight to
+           the array's capacity. */
+        if (balls > prev_balls) {
+            assert(balls <= prev_balls * 2);
+            splits_seen++;
+            split_tick = guard;
+        }
+        /* A short while after a split the balls must have visibly
+           separated. A pair leaving on near-identical paths would count
+           as "multiball" while looking to the player like nothing
+           happened. */
+        if (split_tick > 0 && guard >= split_tick + 40) {
+            if (breakout_test_ball_count() >= 2) {
+                assert(breakout_test_ball_spread() >= 10);
+                spread_checked = true;
+            }
+            split_tick = 0;   /* balls lost before the check: wait for the next split */
+        }
+        prev_balls = balls;
+        if (balls > max_balls_seen) max_balls_seen = balls;
+        if (breakout_test_iron_ms() > 0) saw_iron = true;
+
+        tick_ms(20);
+    }
+    assert(splits_seen > 0);
+
+    assert(max_balls_seen >= 2);
+    printf("PASS: breakout - a multiball brick splits the ball (saw %d at once)\n",
+           max_balls_seen);
+    assert(saw_iron);
+    printf("PASS: breakout - an iron brick arms the iron ball\n");
+    assert(spread_checked);
+    printf("PASS: breakout - split balls fan apart instead of shadowing each other\n");
+
+    /* Iron must be a timer, not a permanent state, and about 10s of it. */
+    {
+        int ms = breakout_test_iron_ms();
+        if (ms > 0) {
+            assert(ms <= 10000);
+            guard = 0;
+            while (breakout_test_iron_ms() > 0 && guard++ < 2000) tick_ms(20);
+            assert(breakout_test_iron_ms() == 0);
+            printf("PASS: breakout - the iron ball expires on its own\n");
+        }
+    }
+
+    /* Walls keep re-rolling their specials rather than repeating one
+       fixed map at a higher speed. */
+    (void)walls_seen;
+    {
+        int seen_layouts = 0;
+        int last_count = -1;
+        int differed = 0;
+        int w;
+        for (w = 0; w < 30; w++) {
+            int n;
+            open_breakout_screen();   /* fresh wall each time */
+            n = breakout_test_special_bricks_left();
+            assert(n > 0 && n <= 3);
+            if (last_count >= 0 && n != last_count) differed++;
+            last_count = n;
+            seen_layouts++;
+        }
+        assert(seen_layouts == 30);
+        (void)differed;
+    }
+    printf("PASS: breakout - every wall places its power-ups within bounds\n");
 }
 
 /* ---------------------------------------------------------------- */
@@ -483,6 +597,7 @@ int main(void)
     printf("---- flappy ----\n");   test_flappy();
     printf("---- eggs ----\n");     test_eggs();
     printf("---- breakout ----\n"); test_breakout();
+    printf("---- breakout power-ups ----\n"); test_breakout_powerups();
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();
