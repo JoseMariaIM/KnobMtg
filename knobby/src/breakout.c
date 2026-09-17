@@ -78,15 +78,36 @@
 #define BO_MAX_STEER_DEG 50.0f
 
 #define BO_TICK_MS       20
-#define BO_BALL_R         5
+#define BO_BALL_R         6
+
+/* The ball is moved in hops no longer than this before collisions are
+   re-tested.
+ *
+ * Without it, a whole tick of travel happens in one go and the ball is
+ * found already buried in whatever it hit - up to 40px deep on a
+ * glancing hit against a brick's side, since a sector is 30 degrees
+ * wide and the arc length of that grows with radius. Lifting it back
+ * out then moved it further in one frame than four frames of ordinary
+ * travel, which on the device read as the ball accelerating out of
+ * every collision. Sub-stepping keeps penetration to a pixel or two,
+ * so the correction is invisible, and it also removes any chance of
+ * passing clean through a brick at speed. */
+#define BO_MAX_SUBSTEP  2.0f
 
 /* Pacier than the flat version, which played sluggishly once the wall
    thinned out: the opening serve is roughly where that one's third
    level was, and the ceiling is high enough that a long run genuinely
    gets hard to track. */
-#define BO_SPEED_START  4.10f
-#define BO_SPEED_LEVEL  0.55f  /* added per cleared wall */
-#define BO_SPEED_MAX    8.00f
+/* 2.70 px/tick at 50fps is 135 px/s, crossing the 336px arena in about
+   two and a half seconds.
+ *
+ * This was 4.10 - chosen when the device could not actually render the
+ * game at 50fps, so the ball crawled on screen however fast the physics
+ * said it was going. Once the frame got cheap enough to hit the full
+ * rate, the same numbers were suddenly far too quick to track. */
+#define BO_SPEED_START  2.70f
+#define BO_SPEED_LEVEL  0.35f  /* added per cleared wall */
+#define BO_SPEED_MAX    5.00f
 
 /* Four rings of twelve, spanning radius 60..132 of a 168 arena.
  *
@@ -683,27 +704,36 @@ static void breakout_tick(minigame_t *g)
         return;
     }
 
-    for (i = 0; i < BO_BALL_MAX; i++) {
-        bo_ball_t *b = &bo_balls[i];
+    /* One tick of travel, taken in hops of at most BO_MAX_SUBSTEP with
+       everything re-tested after each - see that constant for why.
+       Every ball advances one hop before any of them advance the next,
+       so ball-on-ball collisions do not depend on array order: resolving
+       a pair mid-sweep would have the second ball collide against the
+       first's already-updated position and the third against a
+       mixture. */
+    {
+        int sub = (int)(bo_speed / BO_MAX_SUBSTEP) + 1;
+        int k;
 
-        if (!b->active) continue;
+        for (k = 0; k < sub; k++) {
+            for (i = 0; i < BO_BALL_MAX; i++) {
+                bo_ball_t *b = &bo_balls[i];
 
-        b->x += b->vx;
-        b->y += b->vy;
+                if (!b->active) continue;
 
-        bo_hit_bricks(g, b);
+                b->x += b->vx / (float)sub;
+                b->y += b->vy / (float)sub;
 
-        if (!bo_hit_rim(b)) {
-            b->active = false;
-            if (!b->spawned) lost_served = true;
+                bo_hit_bricks(g, b);
+
+                if (!bo_hit_rim(b)) {
+                    b->active = false;
+                    if (!b->spawned) lost_served = true;
+                }
+            }
+            if (bo_active_balls() > 1) bo_collide_balls();
         }
     }
-
-    /* Balls interact only after every one of them has moved this tick:
-       resolving a pair mid-sweep would have the second ball collide
-       against the first's already-updated position and the third
-       against a mixture, making the outcome depend on array order. */
-    if (bo_active_balls() > 1) bo_collide_balls();
 
     /* Losing the served ball takes the iron with it. If copies are
        still in play one of them is promoted - it becomes your ball and
@@ -735,7 +765,22 @@ static void breakout_tick(minigame_t *g)
            Deliberately NOT a re-serve - the balls in play and whatever
            iron time is left both carry into the new wall. */
         bo_level++;
-        if (bo_speed < BO_SPEED_MAX) bo_speed += BO_SPEED_LEVEL;
+        bo_speed += BO_SPEED_LEVEL;
+        if (bo_speed > BO_SPEED_MAX) bo_speed = BO_SPEED_MAX;
+        /* Bring the balls already in play up to the new speed. Since
+           they now carry across a cleared wall, leaving their old
+           magnitudes alone meant the per-level ramp only ever reached
+           the NEXT serve - measured across four levels, the ball in
+           play never changed speed at all. */
+        for (i = 0; i < BO_BALL_MAX; i++) {
+            float mag;
+            if (!bo_balls[i].active) continue;
+            mag = sqrtf(bo_balls[i].vx * bo_balls[i].vx +
+                        bo_balls[i].vy * bo_balls[i].vy);
+            if (mag < 0.0001f) continue;
+            bo_balls[i].vx = bo_balls[i].vx / mag * bo_speed;
+            bo_balls[i].vy = bo_balls[i].vy / mag * bo_speed;
+        }
         bo_fill_wall();
     }
 

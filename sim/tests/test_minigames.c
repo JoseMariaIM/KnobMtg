@@ -471,6 +471,100 @@ static void test_breakout_multiball_is_free(void)
     printf("PASS: breakout - running out of balls still ends the run\n");
 }
 
+/* The ball must never move further in a frame than its own speed.
+ *
+ * It used to. Collisions were tested only once per tick, so a full
+ * tick of travel could bury the ball up to 40px inside a brick's side
+ * - a sector is 30 degrees wide and the arc length of that grows with
+ * radius - and lifting it back out moved it further in one frame than
+ * four frames of ordinary travel. On the device that read as the ball
+ * accelerating out of every collision.
+ *
+ * The filtering here matters as much as the assertion. A serve
+ * teleports the ball to the paddle by design, and "the outermost ball"
+ * is a DIFFERENT ball once one of several is lost - both look like
+ * jumps and neither is one. Measuring without excluding them reported
+ * 297px leaps that did not exist, which sent the first investigation
+ * chasing a bug in the wrong place entirely. */
+static void test_breakout_no_teleports(void)
+{
+    int guard;
+    float prev_x = 0.0f, prev_y = 0.0f;
+    bool have_prev = false;
+    int prev_balls = 1;
+    bool was_parked = false;
+    float worst_step = 0.0f;
+    int measured = 0;
+
+    open_breakout_screen();
+    breakout_handle_tap();
+    breakout_handle_tap();          /* release */
+
+    for (guard = 0; guard < 120000; guard++) {
+        float x, y, vx, vy;
+        int balls, lives_pre;
+        bool parked, served_mid_tick, measurable;
+
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();
+            }
+            breakout_handle_tap();
+            have_prev = false;
+            continue;
+        }
+
+        breakout_steer();
+        parked = breakout_test_ball_parked();
+        lives_pre = breakout_test_lives();
+        if (parked) breakout_handle_tap();
+
+        tick_ms(20);
+
+        balls = breakout_test_ball_count();
+        served_mid_tick = breakout_test_ball_parked() ||
+                          breakout_test_lives() != lives_pre;
+        measurable = (balls == 1) && (prev_balls == 1) &&
+                     !parked && !was_parked && !served_mid_tick;
+
+        if (breakout_test_outermost_ball_motion(&x, &y, &vx, &vy)) {
+            float speed = sqrtf(vx * vx + vy * vy);
+
+            if (have_prev && measurable && speed > 0.1f) {
+                float step = sqrtf((x - prev_x) * (x - prev_x) +
+                                   (y - prev_y) * (y - prev_y));
+
+                if (step > worst_step) worst_step = step;
+                measured++;
+                /* An absolute bound, not a multiple of the speed,
+                   because what sets it is not travel. A frame moves at
+                   most BO_SPEED_MAX (5px), a sub-step can leave a
+                   pixel or two of penetration to undo, and a ball-on-
+                   ball separation shifts each ball up to one radius
+                   (6px). Those stack to under 20. Measured worst over
+                   ~108k frames: 17.9px, twice. Anything materially
+                   above this is the old bug back - a full tick of
+                   travel burying the ball in a brick's side and the
+                   correction flinging it out. */
+                assert(step < 20.0f);
+            }
+            prev_x = x;
+            prev_y = y;
+            have_prev = true;
+        } else {
+            have_prev = false;
+        }
+
+        was_parked = parked;
+        prev_balls = balls;
+    }
+
+    assert(measured > 10000);   /* the filter must not have rejected everything */
+    printf("PASS: breakout - the ball never jumps (worst frame %.1f px over %d frames)\n",
+           worst_step, measured);
+}
+
 /* Balls are solid to each other, and iron belongs to the served ball
    alone. Both are checked continuously over a long multiball session
    rather than at one sampled instant: the failure modes here are
@@ -1014,6 +1108,7 @@ int main(void)
     printf("---- breakout multiball ----\n"); test_breakout_multiball_is_free();
     printf("---- breakout life brick ----\n"); test_breakout_life_brick();
     printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
+    printf("---- breakout motion ----\n"); test_breakout_no_teleports();
     printf("---- breakout ball interactions ----\n"); test_breakout_ball_interactions();
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
