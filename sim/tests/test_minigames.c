@@ -220,14 +220,16 @@ static void test_breakout(void)
         tick_ms(20);
     }
     assert(breakout_test_bricks_left() <= bricks_at_start - 10);
-    assert(breakout_test_lives() == 3);
+    /* Not lost any - it may have GAINED one, if the wall put a life
+       brick in the first ten bricks the paddle got to. */
+    assert(breakout_test_lives() >= 3);
     assert(minigame_test_score(screen_breakout) >= 100);
     printf("   breakout broke %d bricks without losing a ball\n",
            bricks_at_start - breakout_test_bricks_left());
     printf("PASS: breakout - a tracking paddle keeps the ball and clears bricks\n");
 
-    /* Abandon the paddle at one edge and the ball is lost, three times,
-       and then the run is over. Only a parked ball gets tapped: a tap
+    /* Abandon the paddle and let every ball go, however many lives the
+       wall handed out along the way, until the run is over. Only a parked ball gets tapped: a tap
        with the ball in flight means "pause", which would stall the loop
        rather than advance it. */
     guard = 0;
@@ -248,7 +250,7 @@ static void test_breakout(void)
     }
     assert(minigame_test_state(screen_breakout) == MINIGAME_OVER);
     assert(breakout_test_lives() <= 0);
-    printf("PASS: breakout - three lost balls end the run\n");
+    printf("PASS: breakout - draining every life ends the run\n");
 }
 
 /* ---------------------------------------------------------------- */
@@ -541,6 +543,84 @@ static void test_breakout_ball_interactions(void)
     assert(had_multiball_with_iron);
     assert(max_iron_balls == 1);
     printf("PASS: breakout - iron stays on the served ball while copies are out\n");
+}
+
+/* The life brick, and the ceiling above it. Lives start at three and
+   can be pushed past that; the surplus is what the HUD draws as blue
+   shields instead of more hearts, and it is spent first because it
+   sits on top of the same counter.
+
+   Played across runs: a life brick is the rarest of the three specials
+   (about one wall in two carries one), so a single run is not enough
+   chances to see one. */
+static void test_breakout_life_brick(void)
+{
+    int guard;
+    int max_lives_seen = 0;
+    bool saw_gain = false;
+
+    open_breakout_screen();
+    breakout_handle_tap();
+    breakout_handle_tap();          /* release */
+    assert(breakout_test_lives() == 3);
+
+    guard = 0;
+    while (guard++ < 400000 && !saw_gain) {
+        int lives_before;
+
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();
+            }
+            breakout_handle_tap();
+            continue;
+        }
+
+        lives_before = breakout_test_lives();
+        breakout_steer();
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+        tick_ms(20);
+
+        if (breakout_test_lives() > lives_before) {
+            /* Only a life brick can move this upward - nothing else in
+               the game hands lives back. */
+            saw_gain = true;
+        }
+        if (breakout_test_lives() > max_lives_seen) {
+            max_lives_seen = breakout_test_lives();
+        }
+        /* The ceiling holds at all times, not just at the end.
+           6 = BO_LIVES_MAX: three hearts plus three shields, which is
+           as much as the HUD can show and stay readable. */
+        assert(breakout_test_lives() <= 6);
+    }
+
+    assert(saw_gain);
+    printf("PASS: breakout - a life brick hands back a life\n");
+    assert(max_lives_seen > 3);
+    printf("PASS: breakout - lives go past three, into shield territory (%d)\n",
+           max_lives_seen);
+
+    /* And keep playing a good while to confirm the cap never breaks,
+       however many life bricks turn up. */
+    guard = 0;
+    while (guard++ < 200000) {
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();
+            }
+            breakout_handle_tap();
+            continue;
+        }
+        breakout_steer();
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+        tick_ms(20);
+        assert(breakout_test_lives() >= 0);
+        assert(breakout_test_lives() <= 6);
+    }
+    printf("PASS: breakout - the life ceiling holds across a long session\n");
 }
 
 /* Clearing a wall must not confiscate what got you there: balls in
@@ -932,6 +1012,7 @@ int main(void)
     printf("---- breakout ----\n"); test_breakout();
     printf("---- breakout power-ups ----\n"); test_breakout_powerups();
     printf("---- breakout multiball ----\n"); test_breakout_multiball_is_free();
+    printf("---- breakout life brick ----\n"); test_breakout_life_brick();
     printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
     printf("---- breakout ball interactions ----\n"); test_breakout_ball_interactions();
     printf("---- invaders ----\n"); test_invaders();

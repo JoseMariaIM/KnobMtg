@@ -114,7 +114,15 @@
    so reaching one is usually a deliberate detour. */
 #define BO_SPECIAL_POINTS 25
 
-#define BO_LIVES           3
+/* Lives start at three and the life brick can push past that. The
+   extras are drawn as shields rather than more hearts: a player
+   glancing down needs to see at once that they are running on borrowed
+   margin, and hearts four to six would just read as "the bar got
+   longer". They are spent first for the same reason - the shield goes,
+   then your hearts start going. */
+#define BO_LIVES_START     3
+#define BO_LIVES_MAX       6
+#define BO_LIFE_BRICK_GAIN 1
 
 /* Up to this many power-up bricks per wall, placed at random. Three in
    forty-eight is often enough to shape how a wall gets attacked
@@ -133,6 +141,7 @@ typedef enum {
     BO_BRICK_NORMAL,
     BO_BRICK_MULTI,
     BO_BRICK_IRON,
+    BO_BRICK_LIFE,
 } bo_brick_t;
 
 typedef struct {
@@ -225,7 +234,14 @@ static void bo_fill_wall(void)
         for (tries = 0; tries < 20; tries++) {
             int idx = (int)(esp_random() % BO_BRICK_COUNT);
             if (bo_bricks[idx] != BO_BRICK_NORMAL) continue;
-            bo_bricks[idx] = (esp_random() % 2U) ? BO_BRICK_MULTI : BO_BRICK_IRON;
+            /* Weighted, not uniform: a life is worth more than either of
+               the others, so it turns up about half as often. */
+            {
+                uint32_t roll = esp_random() % 100U;
+                if (roll < 40U)      bo_bricks[idx] = BO_BRICK_MULTI;
+                else if (roll < 80U) bo_bricks[idx] = BO_BRICK_IRON;
+                else                 bo_bricks[idx] = BO_BRICK_LIFE;
+            }
             break;
         }
     }
@@ -266,7 +282,7 @@ static void breakout_reset(minigame_t *g)
     bo_paddle_angle = 90;   /* bottom of the circle, as Pong opens */
     bo_speed = BO_SPEED_START;
     bo_level = 1;
-    bo_lives = BO_LIVES;
+    bo_lives = BO_LIVES_START;
     bo_flash = 0;
     bo_ball_bounces = 0;
     bo_fill_wall();
@@ -322,13 +338,25 @@ static void bo_split_balls(void)
 static void bo_collect_special(minigame_t *g, bo_brick_t kind)
 {
     bo_flash = 8;
-    if (kind == BO_BRICK_MULTI) {
+    switch (kind) {
+    case BO_BRICK_MULTI:
         bo_split_balls();
-    } else {
+        break;
+    case BO_BRICK_LIFE:
+        /* Capped rather than unbounded: past six the HUD stops being
+           readable at a glance, and a stack that deep stops the game
+           being about survival at all. Over the cap it is still worth
+           breaking for the points. */
+        if (bo_lives < BO_LIVES_MAX) bo_lives += BO_LIFE_BRICK_GAIN;
+        if (bo_lives > BO_LIVES_MAX) bo_lives = BO_LIVES_MAX;
+        break;
+    case BO_BRICK_IRON:
+    default:
         /* Re-triggering refreshes the full duration rather than adding
            to it - otherwise a lucky run of iron bricks could bank most
            of a level's worth of invulnerability. */
         bo_iron_ticks = BO_IRON_TICKS;
+        break;
     }
     minigame_add_score(g, BO_SPECIAL_POINTS - BO_BRICK_POINTS);
 }
@@ -349,7 +377,7 @@ static void bo_break_brick(minigame_t *g, int idx)
     bo_bricks[idx] = BO_BRICK_EMPTY;
     bo_bricks_left--;
     minigame_add_score(g, BO_BRICK_POINTS);
-    if (kind == BO_BRICK_MULTI || kind == BO_BRICK_IRON) {
+    if (kind != BO_BRICK_NORMAL) {
         bo_collect_special(g, kind);
     }
 }
@@ -713,7 +741,7 @@ int breakout_test_special_bricks_left(void)
 {
     int i, n = 0;
     for (i = 0; i < BO_BRICK_COUNT; i++) {
-        if (bo_bricks[i] == BO_BRICK_MULTI || bo_bricks[i] == BO_BRICK_IRON) n++;
+        if (bo_bricks[i] > BO_BRICK_NORMAL) n++;
     }
     return n;
 }
@@ -834,9 +862,89 @@ static void bo_fill(lv_draw_ctx_t *ctx, lv_draw_rect_dsc_t *dsc,
     lv_draw_rect(ctx, dsc, &a);
 }
 
+/* ---------- 8-bit icons ----------
+ * Sprites as text, one character per pixel: '#' the body colour, 'o'
+ * an accent, '.' transparent. Drawn by merging each row into runs of
+ * one colour, so a 7x7 sprite costs a handful of filled rects rather
+ * than 49 of them - the lives HUD is redrawn on every one of the 50
+ * frames a second this game runs at.
+ *
+ * Deliberately chunky and low-resolution: at this size a smooth heart
+ * reads as a blob, while a blocky one reads as a heart. */
+#define BO_ICON_W 7
+
+/* Two lobes, a body, and a point, with the shine in the top-left lobe -
+   the shape every 8-bit heart has had since Zelda. */
+#define BO_HEART_H 7
+static const char *const bo_icon_heart[BO_HEART_H] = {
+    ".##.##.",
+    "#oo####",
+    "#o#####",
+    "#######",
+    ".#####.",
+    "..###..",
+    "...#...",
+};
+
+/* A heater shield: flat top - the one thing that instantly tells it
+   apart from the heart's notch - straight sides, then narrowing to a
+   point, with a light band across it for a device.
+ *
+   The first attempt drew a dark outline around a light interior, which
+   is how you'd shade a sprite on a light background. On black the dark
+   outline is simply invisible and the shape came out as a pale blob
+   with a spike. What defines an icon against black is the bright fill,
+   so the body is solid and the accent is a highlight ON it - the same
+   way the heart's shine works. */
+#define BO_SHIELD_H 8
+static const char *const bo_icon_shield[BO_SHIELD_H] = {
+    "#######",
+    "#######",
+    "ooooooo",
+    "#######",
+    ".#####.",
+    ".#####.",
+    "..###..",
+    "...#...",
+};
+
+static void bo_draw_icon(lv_draw_ctx_t *ctx, const char *const *rows, int nrows,
+                         int cx, int cy, int scale,
+                         uint32_t body, uint32_t accent)
+{
+    lv_draw_rect_dsc_t dsc;
+    int left = cx - BO_ICON_W * scale / 2;
+    int top  = cy - nrows * scale / 2;
+    int row;
+
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_opa = LV_OPA_COVER;
+
+    for (row = 0; row < nrows; row++) {
+        const char *line = rows[row];
+        int col = 0;
+
+        while (col < BO_ICON_W) {
+            char c = line[col];
+            int run = 1;
+
+            if (c == '.') { col++; continue; }
+            while (col + run < BO_ICON_W && line[col + run] == c) run++;
+
+            dsc.bg_color = lv_color_hex((c == 'o') ? accent : body);
+            bo_fill(ctx, &dsc,
+                    left + col * scale,          top + row * scale,
+                    left + (col + run) * scale - 1, top + (row + 1) * scale - 1);
+            col += run;
+        }
+    }
+}
+
 /* Power-up bricks have to be identifiable at a glance from across a
    table, so each carries a mark rather than relying on colour alone:
-   two pips for the ball that splits in two, a bar for iron. */
+   two pips for the ball that splits in two, a bar for iron, and for
+   the life brick the same heart the HUD uses - the clearest possible
+   statement of what breaking it gives you. */
 static void bo_draw_brick_mark(lv_draw_ctx_t *ctx, bo_brick_t kind, int idx)
 {
     int inner, outer, centre;
@@ -845,7 +953,12 @@ static void bo_draw_brick_mark(lv_draw_ctx_t *ctx, bo_brick_t kind, int idx)
     bo_brick_bounds(idx, &inner, &outer, &centre);
     mid = (inner + outer) / 2;
 
-    if (kind == BO_BRICK_MULTI) {
+    if (kind == BO_BRICK_LIFE) {
+        float rad = (float)centre * BO_DEG2RAD;
+        int mx = BO_CX + (int)(cosf(rad) * (float)mid);
+        int my = BO_CY + (int)(sinf(rad) * (float)mid);
+        bo_draw_icon(ctx, bo_icon_heart, BO_HEART_H, mx, my, 2, 0xB71C1C, 0xE57373);
+    } else if (kind == BO_BRICK_MULTI) {
         bo_draw_ring_arc(ctx, 0x00303A, LV_OPA_COVER, mid, 6,
                          centre - 9, centre - 4);
         bo_draw_ring_arc(ctx, 0x00303A, LV_OPA_COVER, mid, 6,
@@ -856,10 +969,38 @@ static void bo_draw_brick_mark(lv_draw_ctx_t *ctx, bo_brick_t kind, int idx)
     }
 }
 
+/* Hearts on the top row, shields below.
+ *
+ * Three heart slots always show, dark when spent, so the player can see
+ * what they have left AND what they started with. Shields only appear
+ * when earned - empty shield slots would suggest something is missing
+ * rather than that there is a bonus to win. */
+static void bo_draw_lives(lv_draw_ctx_t *ctx)
+{
+    const int scale = 2;
+    const int pitch = BO_ICON_W * scale + 6;
+    int shields = bo_lives > BO_LIVES_START ? bo_lives - BO_LIVES_START : 0;
+    int hearts  = bo_lives < BO_LIVES_START ? bo_lives : BO_LIVES_START;
+    int i;
+
+    for (i = 0; i < BO_LIVES_START; i++) {
+        int x = BO_CX + (i - 1) * pitch;
+        int y = BO_CY - (shields > 0 ? 11 : 0);
+        if (i < hearts) bo_draw_icon(ctx, bo_icon_heart, BO_HEART_H, x, y, scale, 0xE53935, 0xFF8A80);
+        else            bo_draw_icon(ctx, bo_icon_heart, BO_HEART_H, x, y, scale, 0x33191B, 0x3E1F21);
+    }
+
+    /* Centred row, whatever the count: offset each icon from the
+       midpoint by half a pitch per step. */
+    for (i = 0; i < shields; i++) {
+        int x = BO_CX + (2 * i - (shields - 1)) * pitch / 2;
+        bo_draw_icon(ctx, bo_icon_shield, BO_SHIELD_H, x, BO_CY + 12, scale, 0x2196F3, 0xBBDEFB);
+    }
+}
+
 static void breakout_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(e);
-    lv_draw_rect_dsc_t life;
     /* Ring colour doubles as depth cue: the innermost ring is the one
        that takes work to reach, so it gets the hottest colour. */
     static const uint32_t ring_color[BO_RINGS] = {
@@ -893,6 +1034,7 @@ static void breakout_draw(lv_event_t *e)
         switch (kind) {
         case BO_BRICK_MULTI: color = 0x00E5FF; break;
         case BO_BRICK_IRON:  color = 0xB0BEC5; break;
+        case BO_BRICK_LIFE:  color = 0xF48FB1; break;
         default:             color = ring_color[i / BO_SECTORS]; break;
         }
         bo_draw_ring_arc(ctx, color, LV_OPA_COVER, (inner + outer) / 2, BO_RING_THICK,
@@ -949,13 +1091,5 @@ static void breakout_draw(lv_event_t *e)
 
     /* Lives, in the hole at the centre of the rings - the one part of
        the board no brick or paddle ever occupies. */
-    lv_draw_rect_dsc_init(&life);
-    life.bg_opa = LV_OPA_COVER;
-    life.radius = LV_RADIUS_CIRCLE;
-    for (i = 0; i < BO_LIVES; i++) {
-        int x = BO_CX - 16 + i * 16;
-        life.bg_color = (i < bo_lives) ? lv_color_hex(0xFFFFFF)
-                                       : lv_color_hex(0x3A3A3A);
-        bo_fill(ctx, &life, x - 4, BO_CY - 4, x + 4, BO_CY + 4);
-    }
+    bo_draw_lives(ctx);
 }
