@@ -212,34 +212,43 @@ typedef enum {
     STR_CANCEL,
     STR_RESOLVE,
 
-    /* snake.c */
+    /* minigame.c - the lines every game's HUD shows. These used to be
+       duplicated per game (STR_SNAKE_SCORE_FMT, STR_PONG_SCORE_FMT...),
+       which at nine games meant nine byte-identical copies of "Score:
+       %d" per language to keep in step. */
+    STR_GAME_TAP_START,
+    STR_GAME_SCORE_FMT,        /* "Score: %d" */
+    STR_GAME_PAUSED,
+    STR_GAME_OVER_FMT,         /* "Game Over\nScore: %d\nTap to Retry" */
+    STR_GAME_BEST_FMT,         /* "Best: %d" */
+    STR_GAME_NEW_BEST,
+
+    /* One name + one control hint per game; everything else is shared. */
     STR_MINIGAME_SNAKE,
-    STR_SNAKE_TAP_START,
     STR_SNAKE_HINT,
-    STR_SNAKE_SCORE_FMT,       /* "Score: %d" */
-    STR_SNAKE_PAUSED,
-    STR_SNAKE_GAME_OVER_FMT,   /* "Game Over\nScore: %d\nTap to Retry" */
-    STR_SNAKE_BEST_FMT,        /* "Best: %d" */
-    STR_SNAKE_NEW_BEST,
-
-    /* pong.c */
     STR_MINIGAME_PONG,
-    STR_PONG_TAP_START,
     STR_PONG_HINT,
-    STR_PONG_SCORE_FMT,        /* "Score: %d" */
-    STR_PONG_PAUSED,
-    STR_PONG_GAME_OVER_FMT,    /* "Game Over\nScore: %d\nTap to Retry" */
-    STR_PONG_BEST_FMT,         /* "Best: %d" */
-    STR_PONG_NEW_BEST,
-
-    /* dino.c */
     STR_MINIGAME_DINO,
-    STR_DINO_TAP_START,
     STR_DINO_HINT,
-    STR_DINO_SCORE_FMT,        /* "Score: %d" */
-    STR_DINO_GAME_OVER_FMT,    /* "Game Over\nScore: %d\nTap to Retry" */
-    STR_DINO_BEST_FMT,         /* "Best: %d" */
-    STR_DINO_NEW_BEST,
+    STR_MINIGAME_TETRIS,
+    STR_TETRIS_HINT,
+    STR_MINIGAME_BREAKOUT,
+    STR_BREAKOUT_HINT,
+    STR_MINIGAME_FLAPPY,
+    STR_FLAPPY_HINT,
+    STR_MINIGAME_EGGS,
+    STR_EGGS_HINT,
+    STR_MINIGAME_INVADERS,
+    STR_INVADERS_HINT,
+    STR_MINIGAME_RPS,
+    STR_RPS_HINT,
+    /* rps.c only: the three throws, and the round verdict banner. */
+    STR_RPS_ROCK,
+    STR_RPS_PAPER,
+    STR_RPS_SCISSORS,
+    STR_RPS_WIN,
+    STR_RPS_LOSE,
+    STR_RPS_DRAW,
 
     STR_COUNT,
 } string_id_t;

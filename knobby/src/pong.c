@@ -173,7 +173,7 @@ static size_t pong_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (pong_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_PONG_BEST_FMT), nvs_get_pong_high_score(pong_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_PONG, pong_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -186,19 +186,19 @@ static void pong_refresh_message(void)
 
     switch (pong_state) {
     case PONG_STATE_READY:
-        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_PONG_TAP_START), t(STR_PONG_HINT));
+        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_GAME_TAP_START), t(STR_PONG_HINT));
         pong_append_best_line(buf, sizeof(buf), pos);
         lv_label_set_text(pong_message_lbl, buf);
         lv_obj_clear_flag(pong_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case PONG_STATE_PAUSED:
-        lv_label_set_text(pong_message_lbl, t(STR_PONG_PAUSED));
+        lv_label_set_text(pong_message_lbl, t(STR_GAME_PAUSED));
         lv_obj_clear_flag(pong_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case PONG_STATE_GAME_OVER:
-        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_PONG_GAME_OVER_FMT), pong_score);
+        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_GAME_OVER_FMT), pong_score);
         if (pong_is_new_best) {
-            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_PONG_NEW_BEST));
+            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_GAME_NEW_BEST));
         } else {
             pong_append_best_line(buf, sizeof(buf), pos);
         }
@@ -216,7 +216,7 @@ static void pong_refresh_score(void)
 {
     char buf[32];
     if (pong_score_lbl == NULL) return;
-    snprintf(buf, sizeof(buf), t(STR_PONG_SCORE_FMT), pong_score);
+    snprintf(buf, sizeof(buf), t(STR_GAME_SCORE_FMT), pong_score);
     lv_label_set_text(pong_score_lbl, buf);
 }
 
@@ -256,9 +256,9 @@ static void pong_on_game_over(void)
     pong_state = PONG_STATE_GAME_OVER;
     lv_timer_pause(pong_timer);
     pong_is_new_best = (pong_player >= 0 && pong_score > 0 &&
-                         pong_score > nvs_get_pong_high_score(pong_player));
+                         pong_score > nvs_get_game_high_score(GAME_SCORE_PONG, pong_player));
     if (pong_is_new_best) {
-        nvs_set_pong_high_score(pong_player, pong_score);
+        nvs_set_game_high_score(GAME_SCORE_PONG, pong_player, pong_score);
         settings_save();
     }
     pong_refresh_message();

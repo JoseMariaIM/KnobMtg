@@ -28,6 +28,17 @@
  * transient UI (color wheel, QR, keyboards, damage log pages) needs at
  * runtime. */
 #include "test_harness.h"
+#include "settings.h"
+#include "ui_wifi.h"
+#include "snake.h"
+#include "pong.h"
+#include "dino.h"
+#include "tetris.h"
+#include "breakout.h"
+#include "flappy.h"
+#include "eggs.h"
+#include "invaders.h"
+#include "rps.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -37,32 +48,68 @@
  * in the same change, rather than let it drift silently. */
 #define MIN_FREE_HEADROOM_BYTES (20U * 1024U)
 
+/* The lazily-built screens, in the order a thorough user would reach
+ * them. These are NOT part of the boot baseline (that is the point of
+ * building them lazily), but nothing frees them either: once opened,
+ * they are resident for the rest of the session. So the number that
+ * actually has to stay above the headroom floor is this one - the
+ * high-water mark of somebody who tries every game and visits the WiFi
+ * screens - not the boot figure. With three games the gap between the
+ * two was small; with nine it is the whole margin. */
+static void open_every_lazy_screen(void)
+{
+    open_wifi_settings_screen();
+    open_minigames_menu();
+    open_snake_screen();
+    open_pong_screen();
+    open_dino_screen();
+    open_tetris_screen();
+    open_breakout_screen();
+    open_flappy_screen();
+    open_eggs_screen();
+    open_invaders_screen();
+    open_rps_screen();
+}
+
+static uint32_t report(const char *label, lv_mem_monitor_t *mon)
+{
+    uint32_t used_bytes;
+
+    lv_mem_monitor(mon);
+    used_bytes = (uint32_t)mon->total_size - (uint32_t)mon->free_size;
+    printf("LVGL pool %s: %u / %u bytes used (%u%%), %u bytes free, %u%% fragmentation\n",
+           label, (unsigned)used_bytes, (unsigned)mon->total_size,
+           (unsigned)(100ULL * used_bytes / mon->total_size),
+           (unsigned)mon->free_size, (unsigned)mon->frag_pct);
+    return used_bytes;
+}
+
 int main(void)
 {
     lv_mem_monitor_t mon;
-    uint32_t used_bytes;
+    uint32_t boot_used, peak_used;
 
-    test_harness_init(); /* builds all 35 screens, same as firmware boot */
+    test_harness_init(); /* builds every eager screen, same as firmware boot */
+    boot_used = report("after boot", &mon);
 
-    lv_mem_monitor(&mon);
-    used_bytes = (uint32_t)mon.total_size - (uint32_t)mon.free_size;
+    open_every_lazy_screen();
+    peak_used = report("after opening every lazy screen", &mon);
 
-    printf("LVGL pool after boot: %u / %u bytes used (%u%%), %u bytes free, %u%% fragmentation\n",
-           (unsigned)used_bytes, (unsigned)mon.total_size,
-           (unsigned)(100ULL * used_bytes / mon.total_size),
-           (unsigned)mon.free_size, (unsigned)mon.frag_pct);
+    printf("   lazy screens cost %u bytes on top of boot\n",
+           (unsigned)(peak_used - boot_used));
 
     if (mon.free_size < MIN_FREE_HEADROOM_BYTES) {
         fprintf(stderr,
-            "FAIL: only %u bytes free after boot (need >= %u) - a screen\n"
-            "      added or grown since this budget was set is eating into\n"
-            "      the margin transient UI (color wheel, QR, keyboards,\n"
-            "      damage log pages) needs to run without hitting\n"
-            "      LV_ASSERT_HANDLER's while(1) hang on the real device.\n",
+            "FAIL: only %u bytes free at the high-water mark (need >= %u) -\n"
+            "      a screen added or grown since this budget was set is\n"
+            "      eating into the margin transient UI (color wheel, QR,\n"
+            "      keyboards, damage log pages) needs to run without\n"
+            "      hitting LV_ASSERT_HANDLER's while(1) hang on the real\n"
+            "      device.\n",
             (unsigned)mon.free_size, (unsigned)MIN_FREE_HEADROOM_BYTES);
     }
     assert(mon.free_size >= MIN_FREE_HEADROOM_BYTES);
-    printf("PASS: %u bytes of headroom remain after building every screen (>= %u required)\n",
+    printf("PASS: %u bytes of headroom remain with every screen resident (>= %u required)\n",
            (unsigned)mon.free_size, (unsigned)MIN_FREE_HEADROOM_BYTES);
 
     printf("\nAll LVGL memory budget tests passed.\n");

@@ -28,9 +28,7 @@ static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
 static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
 static char cached_last_fw_version[FW_VERSION_LEN] = "";
-static int cached_snake_high_score[MAX_GAME_PLAYERS] = {0};
-static int cached_pong_high_score[MAX_GAME_PLAYERS] = {0};
-static int cached_dino_high_score[MAX_GAME_PLAYERS] = {0};
+static int cached_game_high_score[GAME_SCORE_COUNT][MAX_GAME_PLAYERS] = {{0}};
 
 // ---------- init ----------
 void knob_nvs_init(void)
@@ -116,14 +114,25 @@ void knob_nvs_init(void)
         nvs_get_blob(handle, "last_fw_ver", cached_last_fw_version, &fwv_size);
         cached_last_fw_version[FW_VERSION_LEN - 1] = '\0';
 
-        size_t shs_size = sizeof(cached_snake_high_score);
-        nvs_get_blob(handle, "snake_hi", cached_snake_high_score, &shs_size);
+        /* High scores: read the three pre-"game_hi" per-game blobs first,
+           then let the combined blob overwrite them if it exists. A
+           device upgrading from a build that only had snake/pong/dino
+           keeps its records that way, and the very next settings_save()
+           writes them back out as one blob; the legacy keys are then
+           dead weight that NVS reclaims on its own. Order matters -
+           swapping these two steps would let stale legacy values clobber
+           current ones. */
+        size_t legacy_size = sizeof(cached_game_high_score[0]);
+        nvs_get_blob(handle, "snake_hi", cached_game_high_score[GAME_SCORE_SNAKE], &legacy_size);
+        legacy_size = sizeof(cached_game_high_score[0]);
+        nvs_get_blob(handle, "pong_hi", cached_game_high_score[GAME_SCORE_PONG], &legacy_size);
+        legacy_size = sizeof(cached_game_high_score[0]);
+        nvs_get_blob(handle, "dino_hi", cached_game_high_score[GAME_SCORE_DINO], &legacy_size);
 
-        size_t phs_size = sizeof(cached_pong_high_score);
-        nvs_get_blob(handle, "pong_hi", cached_pong_high_score, &phs_size);
-
-        size_t dhs_size = sizeof(cached_dino_high_score);
-        nvs_get_blob(handle, "dino_hi", cached_dino_high_score, &dhs_size);
+        /* Short read is fine and expected: a blob saved by a build with
+           fewer games fills the leading rows and leaves the rest at 0. */
+        size_t ghs_size = sizeof(cached_game_high_score);
+        nvs_get_blob(handle, "game_hi", cached_game_high_score, &ghs_size);
 
         nvs_close(handle);
     }
@@ -337,42 +346,22 @@ void nvs_set_last_fw_version(const char *version)
     settings_dirty = true;
 }
 
-int nvs_get_snake_high_score(int player)
+static bool game_score_slot_valid(game_score_id_t game, int player)
 {
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return 0;
-    return cached_snake_high_score[player];
+    return game >= 0 && game < GAME_SCORE_COUNT &&
+           player >= 0 && player < MAX_GAME_PLAYERS;
 }
 
-void nvs_set_snake_high_score(int player, int score)
+int nvs_get_game_high_score(game_score_id_t game, int player)
 {
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return;
-    cached_snake_high_score[player] = score;
-    settings_dirty = true;
+    if (!game_score_slot_valid(game, player)) return 0;
+    return cached_game_high_score[game][player];
 }
 
-int nvs_get_pong_high_score(int player)
+void nvs_set_game_high_score(game_score_id_t game, int player, int score)
 {
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return 0;
-    return cached_pong_high_score[player];
-}
-
-void nvs_set_pong_high_score(int player, int score)
-{
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return;
-    cached_pong_high_score[player] = score;
-    settings_dirty = true;
-}
-
-int nvs_get_dino_high_score(int player)
-{
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return 0;
-    return cached_dino_high_score[player];
-}
-
-void nvs_set_dino_high_score(int player, int score)
-{
-    if (player < 0 || player >= MAX_GAME_PLAYERS) return;
-    cached_dino_high_score[player] = score;
+    if (!game_score_slot_valid(game, player)) return;
+    cached_game_high_score[game][player] = score;
     settings_dirty = true;
 }
 
@@ -400,9 +389,7 @@ void settings_save(void)
         nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));
         nvs_set_blob(handle, "last_fw_ver", cached_last_fw_version, sizeof(cached_last_fw_version));
-        nvs_set_blob(handle, "snake_hi", cached_snake_high_score, sizeof(cached_snake_high_score));
-        nvs_set_blob(handle, "pong_hi", cached_pong_high_score, sizeof(cached_pong_high_score));
-        nvs_set_blob(handle, "dino_hi", cached_dino_high_score, sizeof(cached_dino_high_score));
+        nvs_set_blob(handle, "game_hi", cached_game_high_score, sizeof(cached_game_high_score));
         esp_err_t commit_err = nvs_commit(handle);
         nvs_close(handle);
         /* Keep the dirty flag set if the commit failed (e.g. NVS full) so a

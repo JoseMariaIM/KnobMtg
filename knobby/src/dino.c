@@ -160,7 +160,7 @@ static size_t dino_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (dino_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_DINO_BEST_FMT), nvs_get_dino_high_score(dino_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_DINO, dino_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -173,15 +173,15 @@ static void dino_refresh_message(void)
 
     switch (dino_state) {
     case DINO_STATE_READY:
-        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_DINO_TAP_START), t(STR_DINO_HINT));
+        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_GAME_TAP_START), t(STR_DINO_HINT));
         dino_append_best_line(buf, sizeof(buf), pos);
         lv_label_set_text(dino_message_lbl, buf);
         lv_obj_clear_flag(dino_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case DINO_STATE_GAME_OVER:
-        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_DINO_GAME_OVER_FMT), dino_score);
+        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_GAME_OVER_FMT), dino_score);
         if (dino_is_new_best) {
-            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_DINO_NEW_BEST));
+            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_GAME_NEW_BEST));
         } else {
             dino_append_best_line(buf, sizeof(buf), pos);
         }
@@ -199,7 +199,7 @@ static void dino_refresh_score(void)
 {
     char buf[32];
     if (dino_score_lbl == NULL) return;
-    snprintf(buf, sizeof(buf), t(STR_DINO_SCORE_FMT), dino_score);
+    snprintf(buf, sizeof(buf), t(STR_GAME_SCORE_FMT), dino_score);
     lv_label_set_text(dino_score_lbl, buf);
 }
 
@@ -208,9 +208,9 @@ static void dino_on_game_over(void)
     dino_state = DINO_STATE_GAME_OVER;
     lv_timer_pause(dino_timer);
     dino_is_new_best = (dino_player >= 0 && dino_score > 0 &&
-                        dino_score > nvs_get_dino_high_score(dino_player));
+                        dino_score > nvs_get_game_high_score(GAME_SCORE_DINO, dino_player));
     if (dino_is_new_best) {
-        nvs_set_dino_high_score(dino_player, dino_score);
+        nvs_set_game_high_score(GAME_SCORE_DINO, dino_player, dino_score);
         settings_save();
     }
     dino_refresh_message();

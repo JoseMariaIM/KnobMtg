@@ -207,7 +207,7 @@ static size_t snake_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (snake_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_SNAKE_BEST_FMT), nvs_get_snake_high_score(snake_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -220,19 +220,19 @@ static void snake_refresh_message(void)
 
     switch (snake_state) {
     case SNAKE_STATE_READY:
-        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_SNAKE_TAP_START), t(STR_SNAKE_HINT));
+        pos = (size_t)snprintf(buf, sizeof(buf), "%s\n%s", t(STR_GAME_TAP_START), t(STR_SNAKE_HINT));
         snake_append_best_line(buf, sizeof(buf), pos);
         lv_label_set_text(snake_message_lbl, buf);
         lv_obj_clear_flag(snake_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case SNAKE_STATE_PAUSED:
-        lv_label_set_text(snake_message_lbl, t(STR_SNAKE_PAUSED));
+        lv_label_set_text(snake_message_lbl, t(STR_GAME_PAUSED));
         lv_obj_clear_flag(snake_message_lbl, LV_OBJ_FLAG_HIDDEN);
         break;
     case SNAKE_STATE_GAME_OVER:
-        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_SNAKE_GAME_OVER_FMT), snake_score);
+        pos = (size_t)snprintf(buf, sizeof(buf), t(STR_GAME_OVER_FMT), snake_score);
         if (snake_is_new_best) {
-            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_SNAKE_NEW_BEST));
+            pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "\n%s", t(STR_GAME_NEW_BEST));
         } else {
             snake_append_best_line(buf, sizeof(buf), pos);
         }
@@ -250,7 +250,7 @@ static void snake_refresh_score(void)
 {
     char buf[32];
     if (snake_score_lbl == NULL) return;
-    snprintf(buf, sizeof(buf), t(STR_SNAKE_SCORE_FMT), snake_score);
+    snprintf(buf, sizeof(buf), t(STR_GAME_SCORE_FMT), snake_score);
     lv_label_set_text(snake_score_lbl, buf);
 }
 
@@ -259,9 +259,9 @@ static void snake_on_game_over(void)
     snake_state = SNAKE_STATE_GAME_OVER;
     lv_timer_pause(snake_timer);
     snake_is_new_best = (snake_player >= 0 && snake_score > 0 &&
-                          snake_score > nvs_get_snake_high_score(snake_player));
+                          snake_score > nvs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
     if (snake_is_new_best) {
-        nvs_set_snake_high_score(snake_player, snake_score);
+        nvs_set_game_high_score(GAME_SCORE_SNAKE, snake_player, snake_score);
         settings_save();
     }
     snake_refresh_message();

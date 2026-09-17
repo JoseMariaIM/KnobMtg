@@ -33,6 +33,21 @@ typedef struct {
 extern lv_obj_t *settings_pages[];
 extern int settings_page_count;
 
+/* Minigames menu: one quad page per three games, plus "More". Sized for
+   comfortably more games than exist so adding one is only a row in
+   minigame_entries[] (settings.c). */
+#define MINIGAMES_PAGE_MAX 6
+extern lv_obj_t *minigames_pages[MINIGAMES_PAGE_MAX];
+extern int minigames_page_count;
+
+/* One game as the menu sees it: a name and the door into it. The game's
+   own knob/tap/back behaviour is per-screen and lives in knob.c's
+   screen_registry[]. */
+typedef struct {
+    string_id_t name;
+    void (*open)(void);
+} minigame_entry_t;
+
 // ---------- functions ----------
 void build_quad_screen(lv_obj_t **screen, quad_item_t items[4]);
 void build_quad_menus(void);
@@ -49,6 +64,8 @@ void refresh_table_sync_ui(void);
 
 bool settings_handle_back(lv_obj_t *screen);
 bool settings_knob_page(int dir);
+bool minigames_handle_back(lv_obj_t *screen);
+bool minigames_knob_page(int dir);
 int settings_item_page(const char *id);
 
 void open_quad_menu(void);

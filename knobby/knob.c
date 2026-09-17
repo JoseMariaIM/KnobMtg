@@ -18,6 +18,12 @@
 #include "src/snake.h"
 #include "src/pong.h"
 #include "src/dino.h"
+#include "src/tetris.h"
+#include "src/breakout.h"
+#include "src/flappy.h"
+#include "src/eggs.h"
+#include "src/invaders.h"
+#include "src/rps.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -447,6 +453,45 @@ static void back_dino(void)
     open_minigames_menu();
 }
 
+/* Every game's back does the same two things - freeze its loop, return
+   to the menu - but through its own leave function, because the timer
+   being paused belongs to the game, not to the navigation. */
+static void back_tetris(void)
+{
+    tetris_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_breakout(void)
+{
+    breakout_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_flappy(void)
+{
+    flappy_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_eggs(void)
+{
+    eggs_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_invaders(void)
+{
+    invaders_leave_screen();
+    open_minigames_menu();
+}
+
+static void back_rps(void)
+{
+    rps_leave_screen();
+    open_minigames_menu();
+}
+
 /* wifi_*_handle_back() return bool (mirrors name_screen_handle_back's
    contract); nothing here needs that result. */
 static void back_wifi_scan_list(void) { wifi_scan_list_handle_back(); }
@@ -505,6 +550,12 @@ static const screen_desc_t screen_registry[] = {
     { &screen_snake,               NULL,                              snake_turn,           back_snake,              NULL,                   false },
     { &screen_pong,                NULL,                              pong_turn,            back_pong,               NULL,                   false },
     { &screen_dino,                NULL,                              dino_turn,            back_dino,               NULL,                   false },
+    { &screen_tetris,              NULL,                              tetris_turn,          back_tetris,             NULL,                   false },
+    { &screen_breakout,            NULL,                              breakout_turn,        back_breakout,           NULL,                   false },
+    { &screen_flappy,              NULL,                              flappy_turn,          back_flappy,             NULL,                   false },
+    { &screen_eggs,                NULL,                              eggs_turn,            back_eggs,               NULL,                   false },
+    { &screen_invaders,            NULL,                              invaders_turn,        back_invaders,           NULL,                   false },
+    { &screen_rps,                 NULL,                              rps_turn,             back_rps,                NULL,                   false },
 };
 #define SCREEN_REGISTRY_COUNT (sizeof(screen_registry) / sizeof(screen_registry[0]))
 
@@ -520,6 +571,10 @@ static const screen_desc_t *find_screen_desc(lv_obj_t *screen)
 static void handle_back_navigation(lv_obj_t *screen)
 {
     const screen_desc_t *desc;
+
+    /* Minigames pages 1..N are not in the table (they are built as a
+       group, like settings pages); they defer to settings' own exit. */
+    if (minigames_handle_back(screen)) return;
 
     /* Settings pages and their sub-screens own their own back targets
        (see settings_handle_back()'s scan over settings_items[]/
@@ -669,7 +724,8 @@ static void handle_knob_event(knob_event_t k)
         return;
     }
 
-    /* Settings pages: knob flips between pages (no-op elsewhere) */
+    /* Paged menus: the knob flips between pages (no-op elsewhere). */
+    if (minigames_knob_page(dir)) return;
     settings_knob_page(dir);
 }
 

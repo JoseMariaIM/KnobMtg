@@ -18,6 +18,12 @@
 #include "snake.h"
 #include "pong.h"
 #include "dino.h"
+#include "tetris.h"
+#include "breakout.h"
+#include "flappy.h"
+#include "eggs.h"
+#include "invaders.h"
+#include "rps.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -29,6 +35,11 @@ lv_obj_t *screen_tools_menu = NULL;
 lv_obj_t *screen_settings = NULL;
 lv_obj_t *screen_battery = NULL;
 lv_obj_t *screen_minigames_menu = NULL;
+/* Page 0 of the minigames menu IS screen_minigames_menu, so the
+   settings item that opens it (and settings_handle_back's scan over
+   nav_screen pointers) keeps working unchanged. */
+lv_obj_t *minigames_pages[MINIGAMES_PAGE_MAX] = {NULL};
+int minigames_page_count = 0;
 
 // ---------- widgets ----------
 static lv_obj_t *arc_brightness = NULL;
@@ -720,7 +731,10 @@ void build_quad_menus(void)
     build_quad_screen(&screen_tools_menu, tools_items);
 
     build_settings_pages();
-    build_minigames_menu_screen();
+    /* The minigames menu is NOT built here: three quad pages of tiles
+       for a screen many sessions never open is ~3.5KB of the LVGL pool
+       held permanently. open_minigames_menu() builds it on first
+       entry, same as the games themselves. */
 }
 
 void build_settings_screen(void)
@@ -782,40 +796,109 @@ void build_battery_screen(void)
 }
 
 // ---------- minigames menu ----------
-static void event_open_snake(lv_event_t *e)
+/* Every game on the device, in menu order. This table is the only place
+   a game has to be listed for it to appear, paginate and open: adding
+   one is a row here plus its screen_registry[] row in knob.c (for the
+   knob/back dispatch, which is per-screen, not per-menu-entry).
+
+   Ordered oldest-first so the games people already have records in stay
+   on the first page where they have always been. */
+static const minigame_entry_t minigame_entries[] = {
+    { STR_MINIGAME_SNAKE,    open_snake_screen    },
+    { STR_MINIGAME_PONG,     open_pong_screen     },
+    { STR_MINIGAME_DINO,     open_dino_screen     },
+    { STR_MINIGAME_TETRIS,   open_tetris_screen   },
+    { STR_MINIGAME_BREAKOUT, open_breakout_screen },
+    { STR_MINIGAME_FLAPPY,   open_flappy_screen   },
+    { STR_MINIGAME_EGGS,     open_eggs_screen     },
+    { STR_MINIGAME_INVADERS, open_invaders_screen },
+    { STR_MINIGAME_RPS,      open_rps_screen      },
+};
+#define MINIGAME_ENTRY_COUNT \
+    ((int)(sizeof(minigame_entries) / sizeof(minigame_entries[0])))
+
+static void event_open_minigame(lv_event_t *e)
 {
-    (void)e;
-    open_snake_screen();
+    const minigame_entry_t *entry = lv_event_get_user_data(e);
+    if (entry != NULL && entry->open != NULL) entry->open();
 }
 
-static void event_open_pong(lv_event_t *e)
+static void event_minigames_more(lv_event_t *e)
 {
-    (void)e;
-    open_pong_screen();
-}
-
-static void event_open_dino(lv_event_t *e)
-{
-    (void)e;
-    open_dino_screen();
+    int page = (int)(intptr_t)lv_event_get_user_data(e);
+    if (page >= 0 && page < minigames_page_count)
+        lv_scr_load(minigames_pages[page]);
 }
 
 void open_minigames_menu(void)
 {
+    if (screen_minigames_menu == NULL) build_minigames_menu_screen();
     load_screen_if_needed(screen_minigames_menu);
 }
 
+/* Same 3-items-plus-"More" chunking as build_settings_pages(); see the
+   comment there for why "More" wraps rather than dead-ending. */
 void build_minigames_menu_screen(void)
 {
-    /* Three games today; the last tile is a disabled placeholder (same
-       look as an empty settings-page slot). A fourth game fills it; a
-       fifth is what would finally need this screen to grow its own
-       "More" pagination - see build_settings_pages() for that pattern. */
-    quad_item_t items[4] = {
-        {t(STR_MINIGAME_SNAKE), event_open_snake, true, LV_EVENT_CLICKED},
-        {t(STR_MINIGAME_PONG),  event_open_pong,  true, LV_EVENT_CLICKED},
-        {t(STR_MINIGAME_DINO),  event_open_dino,  true, LV_EVENT_CLICKED},
-        {"", NULL, false, LV_EVENT_CLICKED},
-    };
-    build_quad_screen(&screen_minigames_menu, items);
+    int idx = 0;
+    int page = 0;
+    int total_pages = (MINIGAME_ENTRY_COUNT + 2) / 3;
+
+    while (idx < MINIGAME_ENTRY_COUNT && page < MINIGAMES_PAGE_MAX) {
+        int remaining = MINIGAME_ENTRY_COUNT - idx;
+        int on_page = (remaining < 3) ? remaining : 3;
+        int s;
+        quad_item_t q[4];
+
+        memset(q, 0, sizeof(q));
+        for (s = 0; s < 4; s++) q[s].label = "";
+        for (s = 0; s < on_page; s++, idx++) {
+            q[s].label = t(minigame_entries[idx].name);
+            q[s].cb = event_open_minigame;
+            q[s].enabled = true;
+            q[s].event = LV_EVENT_CLICKED;
+            q[s].user_data = (void *)&minigame_entries[idx];
+        }
+        q[3].label = t(STR_SETTINGS_MORE);
+        q[3].cb = event_minigames_more;
+        q[3].enabled = true;
+        q[3].event = LV_EVENT_CLICKED;
+        q[3].user_data = (void *)(intptr_t)((page + 1) % total_pages);
+        build_quad_screen(&minigames_pages[page], q);
+        page++;
+    }
+    minigames_page_count = page;
+    /* Page 0 doubles as the menu's public screen global - see the
+       comment where it is declared. */
+    screen_minigames_menu = minigames_pages[0];
+}
+
+bool minigames_handle_back(lv_obj_t *screen)
+{
+    int i;
+
+    /* Back from any page leaves the menu entirely rather than stepping
+       back a page (the knob flips pages) - same rule settings uses.
+       Page 0 is screen_minigames_menu, which settings_handle_back()
+       already knows how to exit, so every page defers to it. */
+    for (i = 1; i < minigames_page_count; i++) {
+        if (screen == minigames_pages[i]) {
+            return settings_handle_back(screen_minigames_menu);
+        }
+    }
+    return false;
+}
+
+bool minigames_knob_page(int dir)
+{
+    int i;
+
+    for (i = 0; i < minigames_page_count; i++) {
+        if (lv_scr_act() == minigames_pages[i]) {
+            lv_scr_load(minigames_pages[(i + dir + minigames_page_count) %
+                                        minigames_page_count]);
+            return true;
+        }
+    }
+    return false;
 }
