@@ -21,7 +21,21 @@
  * Both are earned by hitting a brick you can see and choose to aim at,
  * rather than dropping as capsules that have to be caught: the knob
  * moves the paddle and nothing else, so a "go and catch it" pick-up
- * would compete with the ball for the only control the player has. */
+ * would compete with the ball for the only control the player has.
+ *
+ * The rules around them, which are what give them weight:
+ *
+ * - Split balls are drawn differently from the served one, because
+ *   they are not equivalent to it: dropping ANY ball costs a life AND
+ *   wipes every split ball still in play. Multiball is a burst of
+ *   scoring you have to actively survive, not free lives.
+ * - Balls and iron time both carry across a cleared wall. Finishing a
+ *   screen on a multiball, or with the iron ball still burning, starts
+ *   the next one that way - so the reward is not confiscated by the
+ *   thing it helped you achieve. Iron ends on its timer, or on a
+ *   re-serve.
+ * - The iron brick itself is passed straight through, keeping the
+ *   ball's trajectory. It is the one brick that never deflects you. */
 
 #define BO_TICK_MS        20
 
@@ -76,6 +90,7 @@ typedef enum {
 
 typedef struct {
     bool  active;
+    bool  spawned;   /* born from a multiball split, not served */
     float x, y;
     float vx, vy;
 } bo_ball_t;
@@ -147,6 +162,7 @@ static void bo_serve(void)
 {
     memset(bo_balls, 0, sizeof(bo_balls));
     bo_balls[0].active = true;
+    bo_balls[0].spawned = false;
     bo_balls[0].x = (float)bo_paddle_x;
     bo_balls[0].y = (float)(BO_PADDLE_Y - BO_BALL_R - 1);
     bo_balls[0].vx = ((esp_random() % 2U) ? 0.62f : -0.62f) * bo_speed;
@@ -212,6 +228,7 @@ static void bo_split_balls(void)
             if (mag < 0.35f * bo_speed) mag = 0.35f * bo_speed;
 
             bo_balls[slot] = bo_balls[i];
+            bo_balls[slot].spawned = true;
             bo_balls[i].vx    = (bo_balls[i].vx >= 0.0f) ?  mag : -mag;
             bo_balls[slot].vx = (bo_balls[i].vx >= 0.0f) ? -mag :  mag;
             /* Nudge upward as well, so a split at a shallow angle does
@@ -291,6 +308,16 @@ static void bo_hit_bricks(minigame_t *g, bo_ball_t *b)
         if (bo_bricks[i] == BO_BRICK_EMPTY) continue;
         if (!bo_ball_overlaps_brick(b, i, &overlap_x, &overlap_y)) continue;
 
+        /* The iron brick is the one brick that never deflects the ball:
+           hitting it hands you the iron ball and you carry straight on
+           through the hole you just made, on the trajectory you had.
+           Bouncing off the brick that grants pass-through would read as
+           the power-up arriving one beat late. */
+        if (bo_bricks[i] == BO_BRICK_IRON) {
+            bo_break_brick(g, i);
+            return;
+        }
+
         if (overlap_x < overlap_y) b->vx = -b->vx;
         else                       b->vy = -b->vy;
         bo_break_brick(g, i);
@@ -319,6 +346,7 @@ static void bo_bounce_off_paddle(bo_ball_t *b)
 static void breakout_tick(minigame_t *g)
 {
     int half = BO_PADDLE_W / 2;
+    bool lost = false;
     int i;
 
     if (bo_flash > 0) bo_flash--;
@@ -362,27 +390,42 @@ static void breakout_tick(minigame_t *g)
 
         if (b->y - BO_BALL_R > BO_FIELD_BOTTOM) {
             b->active = false;
+            lost = true;
         }
     }
 
-    /* A life is spent only when the LAST ball goes: during a multiball
-       the extras are free, which is the whole point of earning them. */
-    if (bo_active_balls() == 0) {
+    /* Dropping any ball costs a life AND clears every split ball still
+       in play. Extra balls are not extra lives: a multiball is a window
+       to score in that you have to actually survive, and letting one
+       slip closes it.
+       One life per tick however many balls fell together - two balls
+       crossing the line in the same frame is one mistake, not two. */
+    if (lost) {
+        for (i = 0; i < BO_BALL_MAX; i++) {
+            if (bo_balls[i].spawned) bo_balls[i].active = false;
+        }
         if (--bo_lives <= 0) {
             minigame_over(g);
             return;
         }
-        bo_serve();
-        return;
+        /* Only re-serve when nothing is left: if the served ball is
+           still up there, play simply continues without it. */
+        if (bo_active_balls() == 0) {
+            bo_serve();
+            return;
+        }
     }
 
     if (bo_bricks_left == 0) {
         /* Cleared: a fresh, faster wall rather than a win screen, so one
-           good run keeps scoring. */
+           good run keeps scoring.
+           Deliberately NOT a re-serve - the balls in play and whatever
+           iron time is left both carry into the new wall. Clearing a
+           screen on a multiball, or mid-burn, should start the next one
+           that way rather than have the reward taken back. */
         bo_level++;
         if (bo_speed < BO_SPEED_MAX) bo_speed += BO_SPEED_LEVEL;
         bo_fill_wall();
-        bo_serve();
     }
 }
 
@@ -428,6 +471,15 @@ int breakout_test_special_bricks_left(void)
     int i, n = 0;
     for (i = 0; i < BO_BRICK_COUNT; i++) {
         if (bo_bricks[i] == BO_BRICK_MULTI || bo_bricks[i] == BO_BRICK_IRON) n++;
+    }
+    return n;
+}
+
+int breakout_test_spawned_count(void)
+{
+    int i, n = 0;
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (bo_balls[i].active && bo_balls[i].spawned) n++;
     }
     return n;
 }
@@ -559,15 +611,28 @@ static void breakout_draw(lv_event_t *e)
         bx = (int)bo_balls[i].x;
         by = (int)bo_balls[i].y;
         if (iron) {
-            /* A hot halo under a white core: unmistakably a different
-               ball, and the halo is what reads at speed. */
+            /* A hot halo under the ball: unmistakably a different ball,
+               and the halo is what reads at speed. */
             ball.bg_color = lv_color_hex(0xFF7043);
             bo_fill(ctx, &ball, bx - BO_BALL_R - 3, by - BO_BALL_R - 3,
                     bx + BO_BALL_R + 3, by + BO_BALL_R + 3);
         }
-        ball.bg_color = lv_color_hex(0xFFFFFF);
-        bo_fill(ctx, &ball, bx - BO_BALL_R, by - BO_BALL_R,
-                bx + BO_BALL_R, by + BO_BALL_R);
+        if (bo_balls[i].spawned) {
+            /* Split balls wear the multiball brick's cyan, with a white
+               pip so they still read as balls. They have to be tellable
+               apart from the served one at a glance: they are the ones
+               that will be wiped out if any ball is dropped, and losing
+               track of which is which is losing track of the stake. */
+            ball.bg_color = lv_color_hex(0x00E5FF);
+            bo_fill(ctx, &ball, bx - BO_BALL_R, by - BO_BALL_R,
+                    bx + BO_BALL_R, by + BO_BALL_R);
+            ball.bg_color = lv_color_hex(0xFFFFFF);
+            bo_fill(ctx, &ball, bx - 2, by - 2, bx + 2, by + 2);
+        } else {
+            ball.bg_color = lv_color_hex(0xFFFFFF);
+            bo_fill(ctx, &ball, bx - BO_BALL_R, by - BO_BALL_R,
+                    bx + BO_BALL_R, by + BO_BALL_R);
+        }
     }
 
     /* Iron timer, as a bar that drains just inside the top of the field

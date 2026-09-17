@@ -23,6 +23,9 @@ int  breakout_test_ball_count(void);
 /* Widest horizontal gap between any two balls in play - how far a
    multiball has actually fanned out. */
 int  breakout_test_ball_spread(void);
+/* Balls in play that came from a split rather than a serve - the ones
+   drawn in cyan, and the ones a dropped ball wipes out. */
+int  breakout_test_spawned_count(void);
 /* True while the ball is riding the paddle waiting to be released - the
    state a player reads before aiming their serve. */
 bool breakout_test_ball_parked(void);

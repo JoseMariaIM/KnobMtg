@@ -265,6 +265,8 @@ static void test_breakout_powerups(void)
     printf("PASS: breakout - an iron brick arms the iron ball\n");
     assert(spread_checked);
     printf("PASS: breakout - split balls fan apart instead of shadowing each other\n");
+    assert(breakout_test_spawned_count() >= 1);
+    printf("PASS: breakout - split balls are marked apart from the served one\n");
 
     /* Iron must be a timer, not a permanent state, and about 10s of it. */
     {
@@ -299,6 +301,112 @@ static void test_breakout_powerups(void)
         (void)differed;
     }
     printf("PASS: breakout - every wall places its power-ups within bounds\n");
+}
+
+/* The stake attached to a multiball: dropping any ball costs a life
+   AND takes every split ball with it. Played, not poked - the test
+   earns a multiball, then walks the paddle away and watches what the
+   drop costs. */
+static void test_breakout_multiball_stake(void)
+{
+    int guard;
+    int lives_before;
+    int balls_before;
+
+    open_breakout_screen();
+    breakout_handle_tap();
+    breakout_handle_tap();          /* release */
+
+    /* Earn a split. */
+    guard = 0;
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           breakout_test_ball_count() < 2 && guard++ < 120000) {
+        int bx, by;
+        if (breakout_test_lowest_ball(&bx, &by)) {
+            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
+            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
+        }
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+        tick_ms(20);
+    }
+    assert(breakout_test_ball_count() >= 2);
+    assert(breakout_test_spawned_count() >= 1);
+
+    lives_before = breakout_test_lives();
+    balls_before = breakout_test_ball_count();
+
+    /* Abandon the paddle in a corner and let one go. */
+    guard = 0;
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           breakout_test_ball_count() >= balls_before && guard++ < 40000) {
+        breakout_turn(-1);
+        tick_ms(20);
+    }
+
+    if (minigame_test_state(screen_breakout) == MINIGAME_PLAYING) {
+        assert(breakout_test_lives() == lives_before - 1);
+        assert(breakout_test_spawned_count() == 0);
+        printf("PASS: breakout - dropping a ball costs a life and wipes the split balls\n");
+    } else {
+        /* Ran out of lives on the way, which proves the same rule. */
+        assert(breakout_test_lives() <= 0);
+        printf("PASS: breakout - dropping balls drains lives to game over\n");
+    }
+}
+
+/* Clearing a wall must not confiscate what got you there: balls in
+   play and iron time both carry into the next screen. */
+static void test_breakout_carry_over(void)
+{
+    int guard;
+    int level;
+    int prev_level;
+    int balls_at_clear = 0;
+    int iron_at_clear = 0;
+    bool checked_balls = false;
+    bool checked_iron = false;
+
+    open_breakout_screen();
+    breakout_handle_tap();
+    breakout_handle_tap();
+
+    prev_level = breakout_test_level();
+    guard = 0;
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           guard++ < 400000 && !(checked_balls && checked_iron)) {
+        int bx, by;
+
+        if (breakout_test_lowest_ball(&bx, &by)) {
+            if (bx < breakout_test_paddle_x() - 4) breakout_turn(-1);
+            else if (bx > breakout_test_paddle_x() + 4) breakout_turn(1);
+        }
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+
+        /* Sample just before the wall can flip. */
+        balls_at_clear = breakout_test_ball_count();
+        iron_at_clear = breakout_test_iron_ms();
+
+        tick_ms(20);
+
+        level = breakout_test_level();
+        if (level != prev_level) {
+            if (balls_at_clear > 1) {
+                assert(breakout_test_ball_count() >= balls_at_clear);
+                assert(!breakout_test_ball_parked());
+                checked_balls = true;
+            }
+            if (iron_at_clear > 40) {
+                assert(breakout_test_iron_ms() > 0);
+                checked_iron = true;
+            }
+            prev_level = level;
+        }
+    }
+
+    assert(checked_balls);
+    printf("PASS: breakout - a multiball survives into the next wall\n");
+    assert(checked_iron);
+    printf("PASS: breakout - iron time keeps running into the next wall\n");
 }
 
 /* ---------------------------------------------------------------- */
@@ -445,10 +553,22 @@ static void test_rps(void)
         printf("PASS: rps - the knob cycles the throw\n");
     }
 
-    /* Play until a loss ends the streak, checking that the score only
-       ever moves on a win and that the reveal locks the throw in. */
+    /* Play repeatedly, checking every round that the score only moves
+       on a win and that the reveal locks the throw in.
+     *
+       Across many rounds rather than one streak: the opponent is random,
+       so a single streak can end on its first throw and never show a win
+       or a draw at all. Asserting on one run's outcomes made this test
+       fail roughly a third of the time, for no reason connected to the
+       code under test. Restarting after game over is deterministic, so
+       looping until all three verdicts have been seen is not. */
     guard = 0;
-    while (minigame_test_state(screen_rps) == MINIGAME_PLAYING && guard++ < 4000) {
+    while (guard++ < 20000 && !(seen_win && seen_loss && seen_draw)) {
+        if (minigame_test_state(screen_rps) == MINIGAME_OVER) {
+            rps_handle_tap();               /* -> READY */
+            rps_handle_tap();               /* -> PLAYING */
+            assert(minigame_test_state(screen_rps) == MINIGAME_PLAYING);
+        }
         if (!rps_test_revealing()) {
             int before = minigame_test_score(screen_rps);
             rps_throw_t locked;
@@ -470,10 +590,25 @@ static void test_rps(void)
         }
         tick_ms(60);
     }
-    assert(minigame_test_state(screen_rps) == MINIGAME_OVER);
+    assert(seen_win);
     assert(seen_loss);
-    assert(seen_win || seen_draw);
+    assert(seen_draw);
     printf("PASS: rps - wins score, a loss ends the streak, throws lock on reveal\n");
+
+    /* A loss really does end that streak, whatever the score was. */
+    {
+        int rounds = 0;
+        while (minigame_test_state(screen_rps) != MINIGAME_PLAYING && rounds++ < 4) {
+            rps_handle_tap();
+        }
+        guard = 0;
+        while (minigame_test_state(screen_rps) == MINIGAME_PLAYING && guard++ < 20000) {
+            if (!rps_test_revealing()) rps_handle_tap();
+            tick_ms(60);
+        }
+        assert(minigame_test_state(screen_rps) == MINIGAME_OVER);
+        printf("PASS: rps - a streak always ends on a loss\n");
+    }
 }
 
 /* Every game screen is CLICKABLE, but being clickable is not the same
@@ -598,6 +733,8 @@ int main(void)
     printf("---- eggs ----\n");     test_eggs();
     printf("---- breakout ----\n"); test_breakout();
     printf("---- breakout power-ups ----\n"); test_breakout_powerups();
+    printf("---- breakout multiball stake ----\n"); test_breakout_multiball_stake();
+    printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();
