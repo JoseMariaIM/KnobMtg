@@ -11,6 +11,7 @@
 #include "test_harness.h"
 #include "sim_stubs.h"
 #include "minigame.h"
+#include "settings.h"
 #include "flappy.h"
 #include "eggs.h"
 #include "breakout.h"
@@ -415,6 +416,54 @@ static void test_tap_reaches_every_game(void)
     printf("PASS: a real screen tap starts dino too\n");
 }
 
+/* Leaving a game returns to the menu page it was started from. With
+ * nine games across three pages, always landing on page 1 meant paging
+ * back every single time you finished a run of anything in the second
+ * half of the list.
+ *
+ * Driven through a real tile press rather than by calling the game's
+ * open function: it is the press that records the page, so calling
+ * open_<game>_screen() directly would test nothing. */
+static void test_back_returns_to_the_launching_page(void)
+{
+    lv_obj_t *page;
+    lv_obj_t *tile;
+
+    open_minigames_menu();
+    assert(minigames_page_count == 3);
+    assert(lv_scr_act() == minigames_pages[0]);
+
+    /* Page 3 holds Catch Egg / Invaders / Rock Paper Scissors. */
+    page = minigames_pages[2];
+    lv_scr_load(page);
+    tile = lv_obj_get_child(page, 1);        /* second tile: Invaders */
+    assert(tile != NULL);
+    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    assert(lv_scr_act() == screen_invaders);
+
+    open_minigames_menu_at_launch_page();
+    assert(lv_scr_act() == minigames_pages[2]);
+    printf("PASS: leaving a game returns to the page it was started from\n");
+
+    /* A game launched from page 1 still comes back to page 1 - the
+       recorded page has to be updated per launch, not sticky. */
+    lv_scr_load(minigames_pages[0]);
+    tile = lv_obj_get_child(minigames_pages[0], 0);   /* Snake */
+    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    open_minigames_menu_at_launch_page();
+    assert(lv_scr_act() == minigames_pages[0]);
+    printf("PASS: the return page follows the most recent launch\n");
+
+    /* Entering fresh from Settings is always page 1, not wherever the
+       last game happened to live. */
+    lv_scr_load(minigames_pages[2]);
+    tile = lv_obj_get_child(minigames_pages[2], 0);
+    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    open_minigames_menu();
+    assert(lv_scr_act() == minigames_pages[0]);
+    printf("PASS: opening the menu from Settings still lands on page 1\n");
+}
+
 int main(void)
 {
     /* Line-buffered so the PASS trail survives an assert() abort - fully
@@ -430,6 +479,7 @@ int main(void)
     test_harness_reset_4p();
 
     printf("---- touch wiring ----\n"); test_tap_reaches_every_game();
+    printf("---- menu navigation ----\n"); test_back_returns_to_the_launching_page();
     printf("---- flappy ----\n");   test_flappy();
     printf("---- eggs ----\n");     test_eggs();
     printf("---- breakout ----\n"); test_breakout();

@@ -72,6 +72,7 @@ void open_quad_menu(void);
 void open_settings_screen(void);
 void open_battery_screen(void);
 void open_minigames_menu(void);
+void open_minigames_menu_at_launch_page(void);
 void menu_facing_refresh(void);
 void open_table_sync_screen(void);
 void open_language_picker_screen(void);

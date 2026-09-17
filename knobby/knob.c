@@ -438,19 +438,19 @@ static void back_mana(void)
 static void back_snake(void)
 {
     snake_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_pong(void)
 {
     pong_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_dino(void)
 {
     dino_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 /* Every game's back does the same two things - freeze its loop, return
@@ -459,37 +459,37 @@ static void back_dino(void)
 static void back_tetris(void)
 {
     tetris_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_breakout(void)
 {
     breakout_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_flappy(void)
 {
     flappy_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_eggs(void)
 {
     eggs_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_invaders(void)
 {
     invaders_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 static void back_rps(void)
 {
     rps_leave_screen();
-    open_minigames_menu();
+    open_minigames_menu_at_launch_page();
 }
 
 /* wifi_*_handle_back() return bool (mirrors name_screen_handle_back's
