@@ -29,18 +29,21 @@
  *
  * The rules around them, which are what give them weight:
  *
- * - Split balls are drawn differently from the served one, because
- *   they are not equivalent to it: dropping ANY ball costs a life AND
- *   wipes every split ball still in play. Multiball is a burst of
- *   scoring you have to actively survive, not free lives.
+ * - Split balls are drawn differently from the served one so the
+ *   player can see which ball carries the iron, but they cost nothing
+ *   to lose: a life is spent only when the LAST ball is gone. Extra
+ *   balls are extra chances, which is the only thing a multiball can
+ *   be worth on a board where the entire circumference is the gutter -
+ *   charging a life per dropped copy made the power-up a liability.
  * - Balls and iron time both carry across a cleared wall. Finishing a
  *   screen on a multiball, or with the iron ball still burning, starts
  *   the next one that way.
  * - The iron brick itself is passed straight through, keeping the
  *   ball's trajectory. It is the one brick that never deflects you.
  * - Iron is a modifier on the SERVED ball, not on the table: split
- *   balls never burn. Losing the served ball loses the iron with it
- *   and re-serves.
+ *   balls never burn. Losing the served ball loses the iron with it;
+ *   if copies are still up, one of them is promoted to be your ball
+ *   (and turns white), otherwise the run re-serves.
  * - Balls collide with each other, so a crowded table plays like a
  *   table rather than several independent games sharing a screen. */
 
@@ -590,7 +593,7 @@ static bool bo_hit_rim(bo_ball_t *b)
 // ---------- tick ----------
 static void breakout_tick(minigame_t *g)
 {
-    bool lost = false;
+    bool lost_served = false;
     int i;
 
     if (bo_flash > 0) bo_flash--;
@@ -617,7 +620,7 @@ static void breakout_tick(minigame_t *g)
 
         if (!bo_hit_rim(b)) {
             b->active = false;
-            lost = true;
+            if (!b->spawned) lost_served = true;
         }
     }
 
@@ -627,26 +630,28 @@ static void breakout_tick(minigame_t *g)
        against a mixture, making the outcome depend on array order. */
     if (bo_active_balls() > 1) bo_collide_balls();
 
-    /* Dropping any ball costs a life AND clears every split ball still
-       in play. Extra balls are not extra lives: a multiball is a window
-       to score in that you have to actually survive, and letting one
-       slip closes it.
-       One life per tick however many balls were lost together - two
-       crossing the rim in the same frame is one mistake, not two. */
-    if (lost) {
+    /* Losing the served ball takes the iron with it. If copies are
+       still in play one of them is promoted - it becomes your ball and
+       is drawn white from here on - so a multiball really does buy
+       extra chances rather than just extra things to drop. */
+    if (lost_served) {
+        bo_iron_ticks = 0;
         for (i = 0; i < BO_BALL_MAX; i++) {
-            if (bo_balls[i].spawned) bo_balls[i].active = false;
+            if (bo_balls[i].active) {
+                bo_balls[i].spawned = false;
+                break;
+            }
         }
+    }
+
+    /* A life is spent only when the LAST ball goes. */
+    if (bo_active_balls() == 0) {
         if (--bo_lives <= 0) {
             minigame_over(g);
             return;
         }
-        /* Only re-serve when nothing is left: if the served ball is
-           still up there, play simply continues without the copies. */
-        if (bo_active_balls() == 0) {
-            bo_serve();
-            return;
-        }
+        bo_serve();
+        return;
     }
 
     if (bo_bricks_left == 0) {

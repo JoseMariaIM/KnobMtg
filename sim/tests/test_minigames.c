@@ -368,24 +368,36 @@ static void test_breakout_powerups(void)
     printf("PASS: breakout - every wall places its power-ups within bounds\n");
 }
 
-/* The stake attached to a multiball: dropping any ball costs a life
-   AND takes every split ball with it. Played, not poked - the test
-   earns a multiball, then walks the paddle away and watches what the
-   drop costs. */
-static void test_breakout_multiball_stake(void)
+/* A multiball has to be worth having. Dropping a copy costs nothing:
+   a life goes only when the last ball is gone, and if the SERVED ball
+   is the one that goes while copies are still up, one of them is
+   promoted rather than the run paying for it.
+
+   This replaced the opposite rule. Charging a life per dropped copy
+   read as a penalty for collecting the power-up, which on a board
+   where the whole circumference is the gutter it effectively was. */
+static void test_breakout_multiball_is_free(void)
 {
     int guard;
     int lives_before;
     int balls_before;
+    bool saw_drop_without_life_loss = false;
 
     open_breakout_screen();
     breakout_handle_tap();
     breakout_handle_tap();          /* release */
 
-    /* Earn a split. */
+    /* Earn a split, across runs if this wall's specials don't oblige. */
     guard = 0;
-    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
-           breakout_test_ball_count() < 2 && guard++ < 120000) {
+    while (breakout_test_ball_count() < 2 && guard++ < 300000) {
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();
+            }
+            breakout_handle_tap();
+            continue;
+        }
         breakout_steer();
         if (breakout_test_ball_parked()) breakout_handle_tap();
         tick_ms(20);
@@ -396,11 +408,15 @@ static void test_breakout_multiball_stake(void)
     lives_before = breakout_test_lives();
     balls_before = breakout_test_ball_count();
 
-    /* Abandon the paddle in a corner and let one go. */
+    /* Park the paddle opposite the ball nearest the rim and let the
+       extras go, one at a time. Every drop that still leaves a ball in
+       play must be free. */
     guard = 0;
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
-           breakout_test_ball_count() >= balls_before && guard++ < 80000) {
+           guard++ < 80000) {
         int ang, rad;
+        int balls;
+
         if (breakout_test_outermost_ball(&ang, &rad)) {
             int diff = (ang + 180) - breakout_test_paddle_angle();
             while (diff > 180) diff -= 360;
@@ -409,17 +425,48 @@ static void test_breakout_multiball_stake(void)
             else if (diff > 3) breakout_turn(1);
         }
         tick_ms(20);
+
+        balls = breakout_test_ball_count();
+        if (balls < balls_before) {
+            if (balls > 0) {
+                assert(breakout_test_lives() == lives_before);
+                saw_drop_without_life_loss = true;
+            }
+            balls_before = balls;
+        }
+        if (balls == 0) break;   /* the re-serve has already happened */
+        if (saw_drop_without_life_loss && breakout_test_lives() < lives_before) break;
     }
 
-    if (minigame_test_state(screen_breakout) == MINIGAME_PLAYING) {
-        assert(breakout_test_lives() == lives_before - 1);
-        assert(breakout_test_spawned_count() == 0);
-        printf("PASS: breakout - dropping a ball costs a life and wipes the split balls\n");
-    } else {
-        /* Ran out of lives on the way, which proves the same rule. */
-        assert(breakout_test_lives() <= 0);
-        printf("PASS: breakout - dropping balls drains lives to game over\n");
+    assert(saw_drop_without_life_loss);
+    printf("PASS: breakout - dropping a copy costs no life while a ball is left\n");
+
+    /* There is always exactly one ball wearing the served colours, so
+       iron always has somewhere to live: losing the served ball
+       promotes a copy rather than leaving the table ownerless. */
+    if (breakout_test_ball_count() > 0) {
+        assert(breakout_test_spawned_count() < breakout_test_ball_count());
+        printf("PASS: breakout - a copy is promoted when the served ball goes\n");
     }
+
+    /* And the last ball still ends the run, eventually. */
+    guard = 0;
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           guard++ < 200000) {
+        int ang, rad;
+        if (breakout_test_outermost_ball(&ang, &rad)) {
+            int diff = (ang + 180) - breakout_test_paddle_angle();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -3) breakout_turn(-1);
+            else if (diff > 3) breakout_turn(1);
+        }
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+        tick_ms(20);
+    }
+    assert(minigame_test_state(screen_breakout) == MINIGAME_OVER);
+    assert(breakout_test_lives() <= 0);
+    printf("PASS: breakout - running out of balls still ends the run\n");
 }
 
 /* Balls are solid to each other, and iron belongs to the served ball
@@ -884,7 +931,7 @@ int main(void)
     printf("---- eggs ----\n");     test_eggs();
     printf("---- breakout ----\n"); test_breakout();
     printf("---- breakout power-ups ----\n"); test_breakout_powerups();
-    printf("---- breakout multiball stake ----\n"); test_breakout_multiball_stake();
+    printf("---- breakout multiball ----\n"); test_breakout_multiball_is_free();
     printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
     printf("---- breakout ball interactions ----\n"); test_breakout_ball_interactions();
     printf("---- invaders ----\n"); test_invaders();
