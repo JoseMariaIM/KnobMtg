@@ -21,6 +21,7 @@
 #include "dino.h"
 #include <stdio.h>
 #include <assert.h>
+#include <math.h>
 
 static void tick_ms(int ms)
 {
@@ -134,6 +135,63 @@ static void test_eggs(void)
 }
 
 /* ---------------------------------------------------------------- */
+/* Breakout's arena is a circle: the paddle runs round the rim and the
+   whole circumference is the gutter. "Track the ball" therefore means
+   turning the paddle toward the angle of whichever ball is closest to
+   the rim, which is what this does - the same read a player makes. */
+/* Where the outermost ball will meet the rim if it keeps going
+   straight: solve |p + t*v| = R for the positive root. Bricks it may
+   clip on the way are ignored, which is exactly what a player's eye
+   does. Returns -1 when there is nothing to predict. */
+static int breakout_predicted_rim_angle(void)
+{
+    float px, py, vx, vy;
+    float a, b, c, disc, t;
+    const float R = 168.0f;   /* BO_ARENA_R */
+
+    if (!breakout_test_outermost_ball_motion(&px, &py, &vx, &vy)) return -1;
+    px -= 180.0f;
+    py -= 180.0f;
+
+    a = vx * vx + vy * vy;
+    if (a < 0.0001f) return -1;
+    b = 2.0f * (px * vx + py * vy);
+    c = px * px + py * py - R * R;
+    disc = b * b - 4.0f * a * c;
+    if (disc < 0.0f) return -1;
+    t = (-b + sqrtf(disc)) / (2.0f * a);
+    if (t < 0.0f) return -1;
+
+    return (int)(atan2f(py + t * vy, px + t * vx) * 57.29577951f);
+}
+
+static int breakout_steer_n = 0;
+
+static void breakout_steer(void)
+{
+    int aim, diff;
+
+    aim = breakout_predicted_rim_angle();
+    if (aim < 0) {
+        int rad;
+        if (!breakout_test_outermost_ball(&aim, &rad)) return;
+    }
+
+    /* Deliberately land a little off paddle-centre, and vary by how
+       much. A paddle that centres the ball perfectly returns it
+       straight back down the same radius, forever - a fixed point no
+       human hits, and one that leaves whole sectors of the wall
+       untouched, so the test would stall rather than play. */
+    aim += (((breakout_steer_n++ / 200) * 37) % 17) - 8;
+
+    diff = aim - breakout_test_paddle_angle();
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+
+    if (diff < -3) breakout_turn(-1);
+    else if (diff > 3) breakout_turn(1);
+}
+
 static void test_breakout(void)
 {
     int guard;
@@ -144,7 +202,7 @@ static void test_breakout(void)
     assert(minigame_test_state(screen_breakout) == MINIGAME_PLAYING);
 
     bricks_at_start = breakout_test_bricks_left();
-    assert(bricks_at_start == 28);
+    assert(bricks_at_start == 48);  /* 4 rings x 12 sectors */
     assert(breakout_test_lives() == 3);
 
     /* The ball rides the paddle until released - a run can't start with
@@ -158,11 +216,7 @@ static void test_breakout(void)
     guard = 0;
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
            breakout_test_bricks_left() > bricks_at_start - 10 && guard++ < 20000) {
-        int bx, by;
-        if (breakout_test_lowest_ball(&bx, &by)) {
-            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
-            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
-        }
+        breakout_steer();
         tick_ms(20);
     }
     assert(breakout_test_bricks_left() <= bricks_at_start - 10);
@@ -177,8 +231,18 @@ static void test_breakout(void)
        with the ball in flight means "pause", which would stall the loop
        rather than advance it. */
     guard = 0;
-    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING && guard++ < 40000) {
-        breakout_turn(-1);
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING && guard++ < 80000) {
+        /* Park the paddle opposite whichever ball is nearest the rim.
+           On a circle "walk away and wait" is not enough - a paddle
+           left spinning would eventually stumble into the ball. */
+        int ang, rad;
+        if (breakout_test_outermost_ball(&ang, &rad)) {
+            int diff = (ang + 180) - breakout_test_paddle_angle();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -3) breakout_turn(-1);
+            else if (diff > 3) breakout_turn(1);
+        }
         if (breakout_test_ball_parked()) breakout_handle_tap();
         tick_ms(20);
     }
@@ -202,6 +266,7 @@ static void test_breakout_powerups(void)
     int split_tick = 0;
     bool spread_checked = false;
     bool saw_iron = false;
+    bool saw_spawned = false;
     int specials_at_start;
 
     open_breakout_screen();
@@ -221,13 +286,9 @@ static void test_breakout_powerups(void)
     walls_seen = breakout_test_level();
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
            guard++ < 120000 && (!saw_iron || max_balls_seen < 2 || !spread_checked)) {
-        int bx, by;
         int balls;
 
-        if (breakout_test_lowest_ball(&bx, &by)) {
-            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
-            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
-        }
+        breakout_steer();
         if (breakout_test_ball_parked()) breakout_handle_tap();
 
         balls = breakout_test_ball_count();
@@ -245,13 +306,14 @@ static void test_breakout_powerups(void)
            happened. */
         if (split_tick > 0 && guard >= split_tick + 40) {
             if (breakout_test_ball_count() >= 2) {
-                assert(breakout_test_ball_spread() >= 10);
+                assert(breakout_test_ball_spread() >= 8);  /* degrees apart */
                 spread_checked = true;
             }
             split_tick = 0;   /* balls lost before the check: wait for the next split */
         }
         prev_balls = balls;
         if (balls > max_balls_seen) max_balls_seen = balls;
+        if (breakout_test_spawned_count() > 0) saw_spawned = true;
         if (breakout_test_iron_ms() > 0) saw_iron = true;
 
         tick_ms(20);
@@ -265,7 +327,10 @@ static void test_breakout_powerups(void)
     printf("PASS: breakout - an iron brick arms the iron ball\n");
     assert(spread_checked);
     printf("PASS: breakout - split balls fan apart instead of shadowing each other\n");
-    assert(breakout_test_spawned_count() >= 1);
+    /* Observed while they were alive, not afterwards: dropping any ball
+       wipes the split ones, so by the time the loop exits there may be
+       none left to count. */
+    assert(saw_spawned);
     printf("PASS: breakout - split balls are marked apart from the served one\n");
 
     /* Iron must be a timer, not a permanent state, and about 10s of it. */
@@ -321,11 +386,7 @@ static void test_breakout_multiball_stake(void)
     guard = 0;
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
            breakout_test_ball_count() < 2 && guard++ < 120000) {
-        int bx, by;
-        if (breakout_test_lowest_ball(&bx, &by)) {
-            if (bx < breakout_test_paddle_x() - 5) breakout_turn(-1);
-            else if (bx > breakout_test_paddle_x() + 5) breakout_turn(1);
-        }
+        breakout_steer();
         if (breakout_test_ball_parked()) breakout_handle_tap();
         tick_ms(20);
     }
@@ -338,8 +399,15 @@ static void test_breakout_multiball_stake(void)
     /* Abandon the paddle in a corner and let one go. */
     guard = 0;
     while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
-           breakout_test_ball_count() >= balls_before && guard++ < 40000) {
-        breakout_turn(-1);
+           breakout_test_ball_count() >= balls_before && guard++ < 80000) {
+        int ang, rad;
+        if (breakout_test_outermost_ball(&ang, &rad)) {
+            int diff = (ang + 180) - breakout_test_paddle_angle();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -3) breakout_turn(-1);
+            else if (diff > 3) breakout_turn(1);
+        }
         tick_ms(20);
     }
 
@@ -371,16 +439,24 @@ static void test_breakout_ball_interactions(void)
     breakout_handle_tap();          /* release */
 
     guard = 0;
-    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
-           guard++ < 200000) {
-        int bx, by;
+    while (guard++ < 300000) {
         int gap;
         int irons;
 
-        if (breakout_test_lowest_ball(&bx, &by)) {
-            if (bx < breakout_test_paddle_x() - 4) breakout_turn(-1);
-            else if (bx > breakout_test_paddle_x() + 4) breakout_turn(1);
+        /* Across runs, for the same reason the carry-over test needs
+           them: two balls have to meet, which takes a multiball that
+           lives long enough, which takes more than one wall's worth of
+           luck now that dropping any ball wipes the copies. */
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();
+            }
+            breakout_handle_tap();
+            continue;
         }
+
+        breakout_steer();
         if (breakout_test_ball_parked()) breakout_handle_tap();
 
         tick_ms(20);
@@ -438,14 +514,23 @@ static void test_breakout_carry_over(void)
 
     prev_level = breakout_test_level();
     guard = 0;
-    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
-           guard++ < 400000 && !(checked_balls && checked_iron)) {
-        int bx, by;
-
-        if (breakout_test_lowest_ball(&bx, &by)) {
-            if (bx < breakout_test_paddle_x() - 4) breakout_turn(-1);
-            else if (bx > breakout_test_paddle_x() + 4) breakout_turn(1);
+    while (guard++ < 400000 && !(checked_balls && checked_iron)) {
+        /* Keep playing across runs. Both events being watched for -
+           clearing a wall while a multiball is out, and clearing one
+           mid-burn - depend on where the wall happened to put its
+           power-up bricks, and a multiball is short-lived now that
+           dropping any ball wipes the copies. One run is not enough
+           chances; restarting is deterministic, so many runs is. */
+        if (minigame_test_state(screen_breakout) != MINIGAME_PLAYING) {
+            breakout_handle_tap();          /* OVER -> READY */
+            if (minigame_test_state(screen_breakout) == MINIGAME_READY) {
+                breakout_handle_tap();      /* READY -> PLAYING */
+            }
+            breakout_handle_tap();          /* release the serve */
+            prev_level = breakout_test_level();
+            continue;
         }
+        breakout_steer();
         if (breakout_test_ball_parked()) breakout_handle_tap();
 
         /* Sample just before the wall can flip. */
