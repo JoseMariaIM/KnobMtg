@@ -97,7 +97,7 @@ static void minigame_tick_cb(lv_timer_t *timer)
     if (g->state != MINIGAME_PLAYING) return;
 
     g->on_tick(g);
-    lv_obj_invalidate(*g->screen);
+    if (!g->partial_redraw) lv_obj_invalidate(*g->screen);
 }
 
 static void event_minigame_draw(lv_event_t *e)

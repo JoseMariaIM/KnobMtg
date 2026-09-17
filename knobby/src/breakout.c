@@ -49,9 +49,14 @@
 
 #define BO_CX 180
 #define BO_CY 180
-#define BO_ARENA_R      168   /* the rim: returned here, or lost here */
+#define BO_ARENA_R      168   /* the rim: past this the ball is lost */
 #define BO_PADDLE_THICK   8
 #define BO_PADDLE_R     (BO_ARENA_R - BO_PADDLE_THICK / 2)
+/* The paddle's INNER face, which is the surface the ball actually
+   bounces off. Testing contact at the rim instead let the ball sink
+   the full thickness of the paddle before turning round, which looked
+   like it was passing through it. */
+#define BO_PADDLE_FACE  (BO_PADDLE_R - BO_PADDLE_THICK / 2)
 #define BO_PADDLE_HALF_DEG 24 /* generous: the whole rim is the gutter */
 #define BO_PADDLE_STEP_DEG  6 /* per knob detent */
 /* How far off straight-inward an edge-of-paddle hit sends the ball.
@@ -168,6 +173,10 @@ static int   bo_flash;         /* ticks of power-up pickup flash left */
 static void breakout_reset(minigame_t *g);
 static void breakout_tick(minigame_t *g);
 static void breakout_draw(lv_event_t *e);
+static void bo_invalidate_moving_parts(void);
+static void bo_invalidate_brick(int idx);
+static void bo_invalidate_paddle(int angle);
+static void bo_invalidate_hud(void);
 
 static minigame_t breakout_game = {
     .screen   = &screen_breakout,
@@ -175,6 +184,7 @@ static minigame_t breakout_game = {
     .hint     = STR_BREAKOUT_HINT,
     .tick_ms  = BO_TICK_MS,
     .pausable = true,
+    .partial_redraw = true,   /* see bo_invalidate_moving_parts() */
     .on_reset = breakout_reset,
     .on_tick  = breakout_tick,
     .on_draw  = breakout_draw,
@@ -274,6 +284,9 @@ static void bo_serve(void)
 
     bo_ball_stuck = true;
     bo_iron_ticks = 0;
+    /* A serve moves the ball across the board and clears the iron
+       state, so repaint the lot rather than track what changed. */
+    if (screen_breakout != NULL) lv_obj_invalidate(screen_breakout);
 }
 
 static void breakout_reset(minigame_t *g)
@@ -374,6 +387,7 @@ static void bo_break_brick(minigame_t *g, int idx)
 {
     bo_brick_t kind = (bo_brick_t)bo_bricks[idx];
 
+    bo_invalidate_brick(idx);
     bo_bricks[idx] = BO_BRICK_EMPTY;
     bo_bricks_left--;
     minigame_add_score(g, BO_BRICK_POINTS);
@@ -424,8 +438,17 @@ static bool bo_ball_overlaps_brick(const bo_ball_t *b, int idx,
 }
 
 /* Reflects the ball off a ring face (radial) or a sector side
-   (tangential) at its current position. */
-static void bo_reflect(bo_ball_t *b, bool radial)
+   (tangential) AND lifts it back out of the brick along that same
+   axis.
+ *
+ * The push-out is not cosmetic. Collision is tested after the move, so
+ * the ball is always some way inside the brick by the time it is
+ * noticed; reflecting the velocity alone leaves it sitting in there for
+ * the frame, which on the device looked exactly like the ball passing
+ * through a brick and bouncing afterwards. Worse, at 8px per tick it
+ * could still be inside on the next tick and reflect a second time,
+ * cancelling the first. */
+static void bo_reflect(bo_ball_t *b, bool radial, float penetration)
 {
     float dx = b->x - (float)BO_CX;
     float dy = b->y - (float)BO_CY;
@@ -440,6 +463,15 @@ static void bo_reflect(bo_ball_t *b, bool radial)
     dot = b->vx * nx + b->vy * ny;
     b->vx -= 2.0f * dot * nx;
     b->vy -= 2.0f * dot * ny;
+
+    /* Back out along the axis we bounced off, in the direction we are
+       now travelling, by however deep we had sunk plus a pixel. */
+    if (penetration > 0.0f) {
+        float out = penetration + 1.0f;
+        float sign = (dot > 0.0f) ? -1.0f : 1.0f;
+        b->x += nx * out * sign;
+        b->y += ny * out * sign;
+    }
 }
 
 /* Iron ball: burn through every brick touched this tick and keep going
@@ -474,7 +506,7 @@ static void bo_hit_bricks(minigame_t *g, bo_ball_t *b)
             return;
         }
 
-        bo_reflect(b, pen_r < pen_t);
+        bo_reflect(b, pen_r < pen_t, (pen_r < pen_t) ? pen_r : pen_t);
         bo_break_brick(g, i);
         return;
     }
@@ -590,12 +622,17 @@ static bool bo_hit_rim(bo_ball_t *b)
     int diff;
     float nx, ny, speed, ratio, off, ix, iy;
 
-    if (dist + (float)BO_BALL_R < (float)BO_ARENA_R) return true;
+    if (dist + (float)BO_BALL_R < (float)BO_PADDLE_FACE) return true;
     if (dist < 0.0001f) return true;
 
     contact_deg = (int)(atan2f(dy, dx) * BO_RAD2DEG);
     diff = bo_angle_diff(contact_deg, bo_paddle_angle);
-    if (diff < -BO_PADDLE_HALF_DEG || diff > BO_PADDLE_HALF_DEG) return false;
+    if (diff < -BO_PADDLE_HALF_DEG || diff > BO_PADDLE_HALF_DEG) {
+        /* Past the paddle's face but not behind the paddle: it is
+           flying through the gap either side of it. Only the rim
+           itself is fatal. */
+        return dist + (float)BO_BALL_R < (float)BO_ARENA_R;
+    }
 
     speed = sqrtf(b->vx * b->vx + b->vy * b->vy);
     nx = dx / dist; ny = dy / dist;
@@ -612,9 +649,10 @@ static bool bo_hit_rim(bo_ball_t *b)
     b->vx = (ix * cosf(off) - iy * sinf(off)) * speed;
     b->vy = (ix * sinf(off) + iy * cosf(off)) * speed;
 
-    /* Put it just inside the rim so the next tick can't re-trigger. */
-    b->x = (float)BO_CX + nx * (float)(BO_ARENA_R - BO_BALL_R - 1);
-    b->y = (float)BO_CY + ny * (float)(BO_ARENA_R - BO_BALL_R - 1);
+    /* Sit it against the paddle's face, clear of it, so the next tick
+       cannot re-trigger the same bounce. */
+    b->x = (float)BO_CX + nx * (float)(BO_PADDLE_FACE - BO_BALL_R - 1);
+    b->y = (float)BO_CY + ny * (float)(BO_PADDLE_FACE - BO_BALL_R - 1);
     return true;
 }
 
@@ -622,17 +660,26 @@ static bool bo_hit_rim(bo_ball_t *b)
 static void breakout_tick(minigame_t *g)
 {
     bool lost_served = false;
+    bool iron_was_on = bo_iron_ticks > 0;
+    int lives_before = bo_lives;
+    int level_before = bo_level;
     int i;
+
+    /* Where everything is now, before it moves. */
+    bo_invalidate_moving_parts();
+    if (bo_flash > 0) bo_invalidate_paddle(bo_paddle_angle);
 
     if (bo_flash > 0) bo_flash--;
     if (bo_iron_ticks > 0) bo_iron_ticks--;
+    if (iron_was_on) bo_invalidate_hud();   /* the countdown bar drains */
 
     if (bo_ball_stuck) {
         /* Riding the paddle: the player aims, then any tap releases. */
         float rad = (float)bo_paddle_angle * BO_DEG2RAD;
-        float r = (float)(BO_PADDLE_R - BO_PADDLE_THICK / 2 - BO_BALL_R - 1);
+        float r = (float)(BO_PADDLE_FACE - BO_BALL_R - 1);
         bo_balls[0].x = (float)BO_CX + cosf(rad) * r;
         bo_balls[0].y = (float)BO_CY + sinf(rad) * r;
+        bo_invalidate_moving_parts();
         return;
     }
 
@@ -691,6 +738,17 @@ static void breakout_tick(minigame_t *g)
         if (bo_speed < BO_SPEED_MAX) bo_speed += BO_SPEED_LEVEL;
         bo_fill_wall();
     }
+
+    /* Where everything got to. */
+    bo_invalidate_moving_parts();
+    if (bo_lives != lives_before) bo_invalidate_hud();
+    if (bo_flash > 0) bo_invalidate_paddle(bo_paddle_angle);
+    /* A fresh wall and the rim changing colour are both whole-screen
+       events, but rare ones - a cleared level, or iron starting or
+       ending - so paying for a full repaint there is fine. */
+    if (bo_level != level_before || iron_was_on != (bo_iron_ticks > 0)) {
+        lv_obj_invalidate(screen_breakout);
+    }
 }
 
 // ---------- input ----------
@@ -698,8 +756,11 @@ void breakout_turn(int dir)
 {
     if (minigame_handle_turn_start(&breakout_game)) return;
 
+    bo_invalidate_paddle(bo_paddle_angle);
     bo_paddle_angle = bo_norm_angle(bo_paddle_angle + dir * BO_PADDLE_STEP_DEG);
-    lv_obj_invalidate(screen_breakout);
+    bo_invalidate_paddle(bo_paddle_angle);
+    /* The parked serve rides the paddle, so it moved too. */
+    if (bo_ball_stuck) bo_invalidate_moving_parts();
 }
 
 void breakout_handle_tap(void)
@@ -836,6 +897,103 @@ bool breakout_test_outermost_ball(int *angle_deg, int *radius)
     if (angle_deg != NULL) *angle_deg = best_ang;
     if (radius != NULL)    *radius = (int)best;
     return true;
+}
+
+// ---------- partial redraw ----------
+/* Bounding box of an arc band, padded for anti-aliasing. Spans here are
+   small (a brick is 26 degrees, the paddle 48), so sampling every few
+   degrees is both accurate and cheap - far cheaper than the alternative
+   of working out which axis extremes the span happens to cross. */
+static void bo_arc_bbox(int start_deg, int end_deg, int r_in, int r_out,
+                        lv_area_t *out)
+{
+    int span = end_deg - start_deg;
+    int steps, i;
+    int min_x = 10000, min_y = 10000, max_x = -10000, max_y = -10000;
+
+    while (span < 0) span += 360;
+    steps = span / 4 + 2;
+
+    for (i = 0; i <= steps; i++) {
+        float a = (float)(start_deg + span * i / steps) * BO_DEG2RAD;
+        float ca = cosf(a), sa = sinf(a);
+        int k;
+        for (k = 0; k < 2; k++) {
+            int r = k ? r_out : r_in;
+            int x = BO_CX + (int)(ca * (float)r);
+            int y = BO_CY + (int)(sa * (float)r);
+            if (x < min_x) min_x = x;
+            if (x > max_x) max_x = x;
+            if (y < min_y) min_y = y;
+            if (y > max_y) max_y = y;
+        }
+    }
+
+    out->x1 = (lv_coord_t)(min_x - 3);
+    out->y1 = (lv_coord_t)(min_y - 3);
+    out->x2 = (lv_coord_t)(max_x + 3);
+    out->y2 = (lv_coord_t)(max_y + 3);
+}
+
+static void bo_invalidate_area(const lv_area_t *a)
+{
+    if (screen_breakout != NULL) lv_obj_invalidate_area(screen_breakout, a);
+}
+
+static void bo_invalidate_box(int cx, int cy, int half)
+{
+    lv_area_t a;
+    a.x1 = (lv_coord_t)(cx - half);
+    a.y1 = (lv_coord_t)(cy - half);
+    a.x2 = (lv_coord_t)(cx + half);
+    a.y2 = (lv_coord_t)(cy + half);
+    bo_invalidate_area(&a);
+}
+
+static void bo_invalidate_brick(int idx)
+{
+    int inner, outer, centre;
+    lv_area_t a;
+
+    bo_brick_bounds(idx, &inner, &outer, &centre);
+    bo_arc_bbox(centre - BO_SECTOR_DEG / 2, centre + BO_SECTOR_DEG / 2,
+                inner, outer, &a);
+    bo_invalidate_area(&a);
+}
+
+static void bo_invalidate_paddle(int angle)
+{
+    lv_area_t a;
+    bo_arc_bbox(angle - BO_PADDLE_HALF_DEG, angle + BO_PADDLE_HALF_DEG,
+                BO_PADDLE_R - BO_PADDLE_THICK, BO_PADDLE_R + BO_PADDLE_THICK, &a);
+    bo_invalidate_area(&a);
+}
+
+/* The centre hole: lives and the iron countdown. */
+static void bo_invalidate_hud(void)
+{
+    bo_invalidate_box(BO_CX, BO_CY, 40);
+}
+
+/* Everything that moved, invalidated at its CURRENT position. Called
+   once before the balls move and once after, which covers where they
+   were and where they got to without having to remember either.
+ *
+ * This replaced invalidating the whole screen every tick. With 48
+ * bricks drawn as anti-aliased arcs - and lv_draw_arc building its
+ * masks whether or not the arc is inside the clip area - a full redraw
+ * at 50fps was far more than the device could do, and the ball visibly
+ * stuttered. Now a tick repaints a few dozen pixels' worth of boxes,
+ * and breakout_draw() skips every brick outside them. */
+static void bo_invalidate_moving_parts(void)
+{
+    int i;
+
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (!bo_balls[i].active) continue;
+        /* Generous: the iron halo is 3px outside the ball. */
+        bo_invalidate_box((int)bo_balls[i].x, (int)bo_balls[i].y, BO_BALL_R + 5);
+    }
 }
 
 // ---------- drawing ----------
@@ -1014,23 +1172,26 @@ static void breakout_draw(lv_event_t *e)
     bo_draw_ring_arc(ctx, iron ? 0xFF7043 : 0x1E2A30, LV_OPA_COVER,
                      BO_ARENA_R, 2, 0, 359);
 
-    /* Iron timer: a ring that unwinds just inside the paddle track, so
-       the countdown is readable without looking away from the ball. */
-    if (iron) {
-        int sweep = 359 * bo_iron_ticks / BO_IRON_TICKS;
-        if (sweep > 0) {
-            bo_draw_ring_arc(ctx, 0xFFEB3B, LV_OPA_COVER, BO_ARENA_R - 12, 4,
-                             270, 270 + sweep);
-        }
-    }
+
 
     for (i = 0; i < BO_BRICK_COUNT; i++) {
         int inner, outer, centre;
         bo_brick_t kind = (bo_brick_t)bo_bricks[i];
         uint32_t color;
+        lv_area_t box, hit;
 
         if (kind == BO_BRICK_EMPTY) continue;
         bo_brick_bounds(i, &inner, &outer, &centre);
+
+        /* Skip bricks outside the region being repainted. This has to
+           be done here rather than left to LVGL: lv_draw_arc builds its
+           angle and radius masks before it tests the clip area, so an
+           arc that contributes nothing still costs nearly full price.
+           With 48 of them that was the difference between a smooth ball
+           and a stuttering one. */
+        bo_arc_bbox(centre - BO_SECTOR_DEG / 2, centre + BO_SECTOR_DEG / 2,
+                    inner, outer, &box);
+        if (!_lv_area_intersect(&hit, &box, ctx->clip_area)) continue;
         switch (kind) {
         case BO_BRICK_MULTI: color = 0x00E5FF; break;
         case BO_BRICK_IRON:  color = 0xB0BEC5; break;
@@ -1092,4 +1253,24 @@ static void breakout_draw(lv_event_t *e)
     /* Lives, in the hole at the centre of the rings - the one part of
        the board no brick or paddle ever occupies. */
     bo_draw_lives(ctx);
+
+    /* Iron countdown, as a bar under the lives.
+       This was a ring unwinding just inside the paddle track, which read
+       beautifully and cost far too much: it changes every single tick,
+       so it forced a whole-screen repaint every frame and defeated the
+       partial redraw entirely. In the centre hole it is a 50px box. */
+    if (iron) {
+        lv_draw_rect_dsc_t bar;
+        int w = 48 * bo_iron_ticks / BO_IRON_TICKS;
+
+        lv_draw_rect_dsc_init(&bar);
+        bar.bg_opa = LV_OPA_COVER;
+        bar.radius = 2;
+        bar.bg_color = lv_color_hex(0x3E2D18);
+        bo_fill(ctx, &bar, BO_CX - 24, BO_CY + 28, BO_CX + 24, BO_CY + 32);
+        if (w > 0) {
+            bar.bg_color = lv_color_hex(0xFFEB3B);
+            bo_fill(ctx, &bar, BO_CX - 24, BO_CY + 28, BO_CX - 24 + w, BO_CY + 32);
+        }
+    }
 }

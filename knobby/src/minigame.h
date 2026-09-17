@@ -35,6 +35,12 @@ struct minigame_s {
     string_id_t     hint;       /* one line shown under "Tap or Turn to Start" */
     uint32_t        tick_ms;
     bool            pausable;   /* false for games with no sensible pause */
+    /* Set when the game invalidates its own screen regions and does not
+       want the whole screen repainted after every tick. Worth it only
+       for a game whose frame is expensive to draw - Breakout's 48
+       anti-aliased arcs could not keep up at 50fps repainted whole.
+       Everything else leaves this false and gets the simple behaviour. */
+    bool            partial_redraw;
 
     void (*on_reset)(minigame_t *g);  /* clear the game's own state */
     void (*on_tick)(minigame_t *g);   /* advance one step */
