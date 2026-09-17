@@ -26,6 +26,13 @@ int  breakout_test_ball_spread(void);
 /* Balls in play that came from a split rather than a serve - the ones
    drawn in cyan, and the ones a dropped ball wipes out. */
 int  breakout_test_spawned_count(void);
+/* Ball-on-ball collisions resolved so far this run. */
+int  breakout_test_ball_bounces(void);
+/* Balls currently burning through bricks - one at most, by design. */
+int  breakout_test_iron_ball_count(void);
+/* Distance between the closest two ball centres, -1 with fewer than
+   two balls in play. */
+int  breakout_test_min_ball_gap(void);
 /* True while the ball is riding the paddle waiting to be released - the
    state a player reads before aiming their serve. */
 bool breakout_test_ball_parked(void);

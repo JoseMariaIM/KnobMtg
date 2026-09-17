@@ -354,6 +354,72 @@ static void test_breakout_multiball_stake(void)
     }
 }
 
+/* Balls are solid to each other, and iron belongs to the served ball
+   alone. Both are checked continuously over a long multiball session
+   rather than at one sampled instant: the failure modes here are
+   occasional (one pair sticking together, one copy inheriting the
+   burn), so a snapshot would miss them. */
+static void test_breakout_ball_interactions(void)
+{
+    int guard;
+    int min_gap_seen = 9999;
+    int max_iron_balls = 0;
+    bool had_multiball_with_iron = false;
+
+    open_breakout_screen();
+    breakout_handle_tap();
+    breakout_handle_tap();          /* release */
+
+    guard = 0;
+    while (minigame_test_state(screen_breakout) == MINIGAME_PLAYING &&
+           guard++ < 200000) {
+        int bx, by;
+        int gap;
+        int irons;
+
+        if (breakout_test_lowest_ball(&bx, &by)) {
+            if (bx < breakout_test_paddle_x() - 4) breakout_turn(-1);
+            else if (bx > breakout_test_paddle_x() + 4) breakout_turn(1);
+        }
+        if (breakout_test_ball_parked()) breakout_handle_tap();
+
+        tick_ms(20);
+
+        gap = breakout_test_min_ball_gap();
+        if (gap >= 0 && gap < min_gap_seen) min_gap_seen = gap;
+
+        irons = breakout_test_iron_ball_count();
+        if (irons > max_iron_balls) max_iron_balls = irons;
+        /* Iron must never spread to the copies, however many are out. */
+        assert(irons <= 1);
+        if (irons == 1 && breakout_test_spawned_count() > 0) {
+            had_multiball_with_iron = true;
+        }
+
+        /* Several collisions, not the first one: a separation bug that
+           only shows up when a pair meets at a shallow angle would slip
+           past a test that stops at one. */
+        if (breakout_test_ball_bounces() >= 5 && had_multiball_with_iron &&
+            min_gap_seen < 9999) {
+            break;
+        }
+    }
+
+    assert(breakout_test_ball_bounces() >= 5);
+    printf("PASS: breakout - balls bounce off each other (%d collisions)\n",
+           breakout_test_ball_bounces());
+
+    /* Solid, not overlapping: the separation step has to actually keep
+       them apart, or a pair sticks and jitters instead of bouncing. */
+    assert(min_gap_seen >= 8);   /* 2 * BO_BALL_R, minus rounding */
+    printf("PASS: breakout - balls never end a tick inside each other (min gap %d)\n",
+           min_gap_seen);
+
+    assert(had_multiball_with_iron);
+    assert(max_iron_balls == 1);
+    printf("PASS: breakout - iron stays on the served ball while copies are out\n");
+}
+
 /* Clearing a wall must not confiscate what got you there: balls in
    play and iron time both carry into the next screen. */
 static void test_breakout_carry_over(void)
@@ -735,6 +801,7 @@ int main(void)
     printf("---- breakout power-ups ----\n"); test_breakout_powerups();
     printf("---- breakout multiball stake ----\n"); test_breakout_multiball_stake();
     printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
+    printf("---- breakout ball interactions ----\n"); test_breakout_ball_interactions();
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();

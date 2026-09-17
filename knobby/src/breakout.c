@@ -35,7 +35,12 @@
  *   thing it helped you achieve. Iron ends on its timer, or on a
  *   re-serve.
  * - The iron brick itself is passed straight through, keeping the
- *   ball's trajectory. It is the one brick that never deflects you. */
+ *   ball's trajectory. It is the one brick that never deflects you.
+ * - Iron is a modifier on the SERVED ball, not on the table: split
+ *   balls never burn. Losing the served ball loses the iron with it
+ *   and re-serves.
+ * - Balls collide with each other, so a crowded table plays like a
+ *   table rather than like several independent games sharing a screen. */
 
 #define BO_TICK_MS        20
 
@@ -106,6 +111,7 @@ static int   bo_lives;
 static int   bo_level;
 static bool  bo_ball_stuck;    /* the serve rides the paddle until released */
 static int   bo_iron_ticks;    /* iron ball time left, in ticks */
+static int   bo_ball_bounces; /* ball-on-ball collisions this run (tests) */
 static int   bo_flash;         /* ticks of power-up pickup flash left */
 
 static void breakout_reset(minigame_t *g);
@@ -179,6 +185,7 @@ static void breakout_reset(minigame_t *g)
     bo_level = 1;
     bo_lives = BO_LIVES;
     bo_flash = 0;
+    bo_ball_bounces = 0;
     bo_fill_wall();
     bo_serve();
 }
@@ -289,11 +296,20 @@ static void bo_break_brick(minigame_t *g, int idx)
    axis by which way the ball has penetrated further - that is what stops
    a corner clip reversing the wrong way and appearing to pass through
    the wall. */
+/* Iron rides the served ball and nothing else. It is a modifier on
+   your ball, not a property of the table: a split ball burning through
+   the wall too would multiply the effect by however many copies happen
+   to be out, and the copies are already the cheap half of a multiball. */
+static bool bo_ball_is_iron(const bo_ball_t *b)
+{
+    return bo_iron_ticks > 0 && !b->spawned;
+}
+
 static void bo_hit_bricks(minigame_t *g, bo_ball_t *b)
 {
     int i;
 
-    if (bo_iron_ticks > 0) {
+    if (bo_ball_is_iron(b)) {
         for (i = 0; i < BO_BRICK_COUNT; i++) {
             if (bo_bricks[i] == BO_BRICK_EMPTY) continue;
             if (!bo_ball_overlaps_brick(b, i, NULL, NULL)) continue;
@@ -322,6 +338,102 @@ static void bo_hit_bricks(minigame_t *g, bo_ball_t *b)
         else                       b->vy = -b->vy;
         bo_break_brick(g, i);
         return;
+    }
+}
+
+/* Elastic bounce between two balls of equal mass: exchange the part of
+   their relative velocity that lies along the line joining them, leave
+   the perpendicular part alone.
+ *
+   Each ball is then rescaled back to the speed it arrived with. A
+   textbook exchange conserves the pair's energy but not each ball's
+   own, so without this a glancing hit can leave one ball crawling and
+   another screaming - and a crawling ball on a 20ms tick is a ball the
+   player has to wait for. */
+static void bo_bounce_pair(bo_ball_t *a, bo_ball_t *b)
+{
+    float dx = b->x - a->x;
+    float dy = b->y - a->y;
+    float dist = sqrtf(dx * dx + dy * dy);
+    float nx, ny;
+    float rel;
+    float mag_a, mag_b, mag;
+    float overlap;
+
+    /* Exactly concentric: no line to bounce along, so nudge them apart
+       on an arbitrary axis and let the next tick sort it out. */
+    if (dist < 0.0001f) {
+        a->x -= (float)BO_BALL_R;
+        b->x += (float)BO_BALL_R;
+        return;
+    }
+
+    nx = dx / dist;
+    ny = dy / dist;
+
+    rel = (a->vx - b->vx) * nx + (a->vy - b->vy) * ny;
+    if (rel > 0.0f) {
+        /* Approaching: exchange the along-the-normal component. */
+        mag_a = sqrtf(a->vx * a->vx + a->vy * a->vy);
+        mag_b = sqrtf(b->vx * b->vx + b->vy * b->vy);
+
+        a->vx -= rel * nx;
+        a->vy -= rel * ny;
+        b->vx += rel * nx;
+        b->vy += rel * ny;
+
+        mag = sqrtf(a->vx * a->vx + a->vy * a->vy);
+        if (mag > 0.0001f) { a->vx = a->vx / mag * mag_a; a->vy = a->vy / mag * mag_a; }
+        mag = sqrtf(b->vx * b->vx + b->vy * b->vy);
+        if (mag > 0.0001f) { b->vx = b->vx / mag * mag_b; b->vy = b->vy / mag * mag_b; }
+    }
+
+    /* Separate them whether or not they were approaching: two balls
+       left overlapping would re-trigger this every tick and stick
+       together instead of bouncing apart. */
+    overlap = (float)(2 * BO_BALL_R) - dist;
+    if (overlap > 0.0f) {
+        a->x -= nx * overlap * 0.5f;
+        a->y -= ny * overlap * 0.5f;
+        b->x += nx * overlap * 0.5f;
+        b->y += ny * overlap * 0.5f;
+    }
+}
+
+static void bo_clamp_to_field(bo_ball_t *b)
+{
+    if (b->x < (float)(BO_FIELD_LEFT + BO_BALL_R))
+        b->x = (float)(BO_FIELD_LEFT + BO_BALL_R);
+    if (b->x > (float)(BO_FIELD_RIGHT - BO_BALL_R))
+        b->x = (float)(BO_FIELD_RIGHT - BO_BALL_R);
+    if (b->y < (float)(BO_FIELD_TOP + BO_BALL_R))
+        b->y = (float)(BO_FIELD_TOP + BO_BALL_R);
+}
+
+/* All pairs, which at six balls is fifteen checks - not worth being
+   clever about on a table this small. */
+static void bo_collide_balls(void)
+{
+    int i, j;
+
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (!bo_balls[i].active) continue;
+        for (j = i + 1; j < BO_BALL_MAX; j++) {
+            float dx, dy;
+            if (!bo_balls[j].active) continue;
+            dx = bo_balls[j].x - bo_balls[i].x;
+            dy = bo_balls[j].y - bo_balls[i].y;
+            if (dx * dx + dy * dy > (float)(4 * BO_BALL_R * BO_BALL_R)) continue;
+            bo_bounce_pair(&bo_balls[i], &bo_balls[j]);
+            bo_ball_bounces++;
+        }
+    }
+
+    /* The separation above can shove a ball through a wall; putting it
+       back is cheaper and steadier than solving the two constraints
+       together. */
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (bo_balls[i].active) bo_clamp_to_field(&bo_balls[i]);
     }
 }
 
@@ -393,6 +505,12 @@ static void breakout_tick(minigame_t *g)
             lost = true;
         }
     }
+
+    /* Balls interact only after every one of them has moved this tick:
+       resolving a pair mid-sweep would have the second ball collide
+       against the first's already-updated position and the third
+       against a mixture, making the outcome depend on array order. */
+    if (bo_active_balls() > 1) bo_collide_balls();
 
     /* Dropping any ball costs a life AND clears every split ball still
        in play. Extra balls are not extra lives: a multiball is a window
@@ -473,6 +591,40 @@ int breakout_test_special_bricks_left(void)
         if (bo_bricks[i] == BO_BRICK_MULTI || bo_bricks[i] == BO_BRICK_IRON) n++;
     }
     return n;
+}
+
+int breakout_test_ball_bounces(void) { return bo_ball_bounces; }
+
+/* How many balls in play are actually burning through bricks. By
+   design this is never more than one. */
+int breakout_test_iron_ball_count(void)
+{
+    int i, n = 0;
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (bo_balls[i].active && bo_ball_is_iron(&bo_balls[i])) n++;
+    }
+    return n;
+}
+
+/* Closest two ball centres in play, or -1 with fewer than two balls.
+   Never meaningfully below 2*BO_BALL_R once collisions have run. */
+int breakout_test_min_ball_gap(void)
+{
+    int i, j;
+    float best = -1.0f;
+
+    for (i = 0; i < BO_BALL_MAX; i++) {
+        if (!bo_balls[i].active) continue;
+        for (j = i + 1; j < BO_BALL_MAX; j++) {
+            float dx, dy, d;
+            if (!bo_balls[j].active) continue;
+            dx = bo_balls[j].x - bo_balls[i].x;
+            dy = bo_balls[j].y - bo_balls[i].y;
+            d = sqrtf(dx * dx + dy * dy);
+            if (best < 0.0f || d < best) best = d;
+        }
+    }
+    return (best < 0.0f) ? -1 : (int)best;
 }
 
 int breakout_test_spawned_count(void)
@@ -610,9 +762,11 @@ static void breakout_draw(lv_event_t *e)
         if (!bo_balls[i].active) continue;
         bx = (int)bo_balls[i].x;
         by = (int)bo_balls[i].y;
-        if (iron) {
-            /* A hot halo under the ball: unmistakably a different ball,
-               and the halo is what reads at speed. */
+        if (iron && !bo_balls[i].spawned) {
+            /* The halo marks the one ball that is actually burning -
+               only the served ball carries iron, so putting the halo on
+               every ball would promise pass-through the copies do not
+               have. */
             ball.bg_color = lv_color_hex(0xFF7043);
             bo_fill(ctx, &ball, bx - BO_BALL_R - 3, by - BO_BALL_R - 3,
                     bx + BO_BALL_R + 3, by + BO_BALL_R + 3);
