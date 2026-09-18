@@ -16,7 +16,9 @@ int  invaders_test_ship_x(void);
 int  invaders_test_aliens_left(void);
 int  invaders_test_lives(void);
 int  invaders_test_wave(void);
-bool invaders_test_shot_in_flight(void);
+int  invaders_test_shots_in_flight(void);
+/* True while a slot is free - the question a player actually asks. */
+bool invaders_test_can_fire(void);
 /* Centre of the lowest surviving alien - what a test aims at. */
 bool invaders_test_lowest_alien(int *x, int *y);
 

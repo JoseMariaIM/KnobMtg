@@ -801,7 +801,7 @@ static void test_invaders(void)
             int ship = invaders_test_ship_x();
             if (ax < ship - 6) invaders_turn(-1);
             else if (ax > ship + 6) invaders_turn(1);
-            else if (!invaders_test_shot_in_flight()) invaders_handle_tap();
+            else if (invaders_test_can_fire()) invaders_handle_tap();
         }
         tick_ms(26);
     }
@@ -809,6 +809,33 @@ static void test_invaders(void)
     assert(minigame_test_score(screen_invaders) >= 80);
     printf("   invaders shot down %d aliens\n", 18 - invaders_test_aliens_left());
     printf("PASS: invaders - aiming and firing kills aliens and scores\n");
+
+    /* A wave has to be clearable, and by a player who does not lead the
+       target - aim at where the lowest alien IS, fire when lined up.
+     *
+       This is the regression guard for the game having been
+       arithmetically unwinnable: one shot in flight, a 0.45s flight
+       time and a formation that reached the ship in eleven seconds
+       meant eighteen aliens did not fit in the budget at all. A
+       simulated player that aimed perfectly and fired the instant it
+       was allowed killed 15 of 18 and lost. Reaching wave 2 is the
+       proof that the sums now work. */
+    open_invaders_screen();
+    invaders_handle_tap();
+    guard = 0;
+    while (minigame_test_state(screen_invaders) == MINIGAME_PLAYING &&
+           invaders_test_wave() < 2 && guard++ < 40000) {
+        int ax, ay;
+        if (invaders_test_lowest_alien(&ax, &ay)) {
+            int ship = invaders_test_ship_x();
+            if (ax < ship - 5) invaders_turn(-1);
+            else if (ax > ship + 5) invaders_turn(1);
+            else if (invaders_test_can_fire()) invaders_handle_tap();
+        }
+        tick_ms(26);
+    }
+    assert(invaders_test_wave() >= 2);
+    printf("PASS: invaders - a wave can actually be cleared without leading the target\n");
 
     /* Never firing, the formation eventually lands: the march really
        does descend rather than sliding sideways forever. */

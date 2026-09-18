@@ -5,10 +5,15 @@
 
 /* Space Invaders, knob to traverse and tap to fire.
  *
- * One shot in flight at a time, as in the original: it is what turns
- * the game into "pick your moment" rather than "hold the button", and
- * on this hardware it also means a tap is never ambiguous - there is
- * exactly one thing it can do while a run is live.
+ * Up to three shots in flight. The original allowed exactly one, which
+ * works there because its formation descends over a minute or more;
+ * here it made the first wave arithmetically unwinnable. A shot takes
+ * ~0.4s to cross the field, the formation reaches the ship in about
+ * eleven seconds, and eighteen aliens simply do not fit in that budget:
+ * a simulated player that aimed perfectly and fired the instant it was
+ * allowed to killed 15 of 18 and lost. Three in flight, plus a faster
+ * shot and a shallower descent step, turns it into a wave you can
+ * clear with room to breathe.
  *
  * The formation marches within a field inset to stay under the round
  * glass, steps DOWN when either edge is reached, and speeds up as its
@@ -33,14 +38,20 @@
 #define INV_ALIEN_H        16
 #define INV_COL_PITCH      38
 #define INV_ROW_PITCH      32
-#define INV_STEP_DOWN      14
+/* How far the formation drops each time it reaches an edge. Shallower
+   than it was: the descent, not the aliens' numbers, is what sets how
+   long you have. */
+#define INV_STEP_DOWN       9
 /* Reaching this line is an instant loss regardless of lives: the
    formation has landed. */
 #define INV_INVASION_Y    (INV_SHIP_Y - INV_ALIEN_H)
 
 #define INV_SHOT_W          3
 #define INV_SHOT_H         12
-#define INV_SHOT_SPEED      9
+/* Faster than the original's, because the lead a player must estimate
+   is proportional to how long the shot is in the air. */
+#define INV_SHOT_SPEED     16
+#define INV_SHOT_MAX        3
 
 #define INV_BOMB_MAX        3
 #define INV_BOMB_W          4
@@ -56,12 +67,24 @@
    march accelerates as aliens die: ticks_per_move falls toward 2. */
 #define INV_MARCH_PX        6
 #define INV_MARCH_TICKS_MAX 9
-#define INV_MARCH_TICKS_MIN 2
+/* The floor on how often the formation may step, and the single number
+   that decides whether the last few aliens are catchable. At 2 the
+   survivors slid at 115px/s while a shot took 0.45s to arrive, so
+   hitting one meant leading it by 50px on a 236px field with a knob
+   that moves 11px per detent - a simulated player that fired only when
+   perfectly aligned missed 85% of its shots. At 4 the lead needed is
+   about a ship's width, which is a judgement you can actually make. */
+#define INV_MARCH_TICKS_MIN 4
 
 typedef struct {
     bool active;
     float x, y;
 } inv_bomb_t;
+
+typedef struct {
+    bool active;
+    float x, y;
+} inv_shot_t;
 
 lv_obj_t *screen_invaders = NULL;
 
@@ -77,8 +100,7 @@ static int  inv_lives;
 static int  inv_anim_tick;
 static int  inv_hit_flash;
 
-static bool  inv_shot_active;
-static float inv_shot_x, inv_shot_y;
+static inv_shot_t inv_shots[INV_SHOT_MAX];
 static inv_bomb_t inv_bombs[INV_BOMB_MAX];
 
 static void invaders_reset(minigame_t *g);
@@ -128,7 +150,7 @@ static void inv_start_wave(void)
     inv_form_y = INV_FIELD_TOP;
     inv_form_dir = 1;
     inv_march_countdown = inv_march_ticks();
-    inv_shot_active = false;
+    memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
 }
 
@@ -205,7 +227,7 @@ static void inv_drop_bomb(void)
 static void inv_lose_life(minigame_t *g)
 {
     inv_hit_flash = 8;
-    inv_shot_active = false;
+    memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
     if (--inv_lives <= 0) minigame_over(g);
 }
@@ -237,21 +259,26 @@ static void invaders_tick(minigame_t *g)
         }
     }
 
-    /* ---- player shot ---- */
-    if (inv_shot_active) {
-        inv_shot_y -= INV_SHOT_SPEED;
-        if (inv_shot_y < INV_FIELD_TOP - INV_SHOT_H) {
-            inv_shot_active = false;
-        } else {
+    /* ---- player shots ---- */
+    {
+        int sh;
+        for (sh = 0; sh < INV_SHOT_MAX; sh++) {
+            if (!inv_shots[sh].active) continue;
+
+            inv_shots[sh].y -= INV_SHOT_SPEED;
+            if (inv_shots[sh].y < INV_FIELD_TOP - INV_SHOT_H) {
+                inv_shots[sh].active = false;
+                continue;
+            }
             for (i = 0; i < INV_ALIEN_COUNT; i++) {
                 int x1, y1, x2, y2;
                 if (!inv_alive[i]) continue;
                 inv_alien_rect(i, &x1, &y1, &x2, &y2);
-                if (inv_shot_x + INV_SHOT_W < x1 || inv_shot_x > x2) continue;
-                if (inv_shot_y > y2 || inv_shot_y + INV_SHOT_H < y1) continue;
+                if (inv_shots[sh].x + INV_SHOT_W < x1 || inv_shots[sh].x > x2) continue;
+                if (inv_shots[sh].y > y2 || inv_shots[sh].y + INV_SHOT_H < y1) continue;
                 inv_alive[i] = false;
                 inv_aliens_left--;
-                inv_shot_active = false;
+                inv_shots[sh].active = false;
                 minigame_add_score(g, INV_ALIEN_POINTS);
                 break;
             }
@@ -299,11 +326,18 @@ void invaders_turn(int dir)
 
 void invaders_handle_tap(void)
 {
+    int sh;
+
     if (minigame_handle_tap(&invaders_game)) return;
-    if (inv_shot_active) return;   /* one shot in flight, see the file comment */
-    inv_shot_active = true;
-    inv_shot_x = (float)(inv_ship_x - INV_SHOT_W / 2);
-    inv_shot_y = (float)(INV_SHIP_Y - INV_SHOT_H);
+
+    for (sh = 0; sh < INV_SHOT_MAX; sh++) {
+        if (inv_shots[sh].active) continue;
+        inv_shots[sh].active = true;
+        inv_shots[sh].x = (float)(inv_ship_x - INV_SHOT_W / 2);
+        inv_shots[sh].y = (float)(INV_SHIP_Y - INV_SHOT_H);
+        return;
+    }
+    /* All three already up: the tap is simply spent. */
 }
 
 void invaders_leave_screen(void) { minigame_leave(&invaders_game); }
@@ -315,7 +349,17 @@ int  invaders_test_ship_x(void)      { return inv_ship_x; }
 int  invaders_test_aliens_left(void) { return inv_aliens_left; }
 int  invaders_test_lives(void)       { return inv_lives; }
 int  invaders_test_wave(void)        { return inv_wave; }
-bool invaders_test_shot_in_flight(void) { return inv_shot_active; }
+int invaders_test_shots_in_flight(void)
+{
+    int i, n = 0;
+    for (i = 0; i < INV_SHOT_MAX; i++) if (inv_shots[i].active) n++;
+    return n;
+}
+
+bool invaders_test_can_fire(void)
+{
+    return invaders_test_shots_in_flight() < INV_SHOT_MAX;
+}
 
 bool invaders_test_lowest_alien(int *x, int *y)
 {
@@ -392,9 +436,11 @@ static void invaders_draw(lv_event_t *e)
     lv_draw_rect_dsc_init(&shot);
     shot.bg_color = lv_color_hex(0xFFEB3B);
     shot.bg_opa = LV_OPA_COVER;
-    if (inv_shot_active) {
-        inv_fill(ctx, &shot, (int)inv_shot_x, (int)inv_shot_y,
-                 (int)inv_shot_x + INV_SHOT_W, (int)inv_shot_y + INV_SHOT_H);
+    for (i = 0; i < INV_SHOT_MAX; i++) {
+        if (!inv_shots[i].active) continue;
+        inv_fill(ctx, &shot, (int)inv_shots[i].x, (int)inv_shots[i].y,
+                 (int)inv_shots[i].x + INV_SHOT_W,
+                 (int)inv_shots[i].y + INV_SHOT_H);
     }
 
     lv_draw_rect_dsc_init(&bomb);
