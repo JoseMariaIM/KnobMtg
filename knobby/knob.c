@@ -25,7 +25,6 @@
 #include "src/invaders.h"
 #include "src/rps.h"
 #include "src/asteroids.h"
-#include "src/tempest.h"
 
 // ---------- swipe state ----------
 static lv_obj_t *previous_screen = NULL;
@@ -500,12 +499,6 @@ static void back_asteroids(void)
     open_minigames_menu_at_launch_page();
 }
 
-static void back_tempest(void)
-{
-    tempest_leave_screen();
-    open_minigames_menu_at_launch_page();
-}
-
 /* wifi_*_handle_back() return bool (mirrors name_screen_handle_back's
    contract); nothing here needs that result. */
 static void back_wifi_scan_list(void) { wifi_scan_list_handle_back(); }
@@ -571,7 +564,6 @@ static const screen_desc_t screen_registry[] = {
     { &screen_invaders,            NULL,                              invaders_turn,        back_invaders,           NULL,                   false },
     { &screen_rps,                 NULL,                              rps_turn,             back_rps,                NULL,                   false },
     { &screen_asteroids,           NULL,                              asteroids_turn,       back_asteroids,          NULL,                   false },
-    { &screen_tempest,             NULL,                              tempest_turn,         back_tempest,            NULL,                   false },
 };
 #define SCREEN_REGISTRY_COUNT (sizeof(screen_registry) / sizeof(screen_registry[0]))
 

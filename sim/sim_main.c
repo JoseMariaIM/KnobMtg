@@ -30,7 +30,6 @@
 #include "invaders.h"
 #include "rps.h"
 #include "asteroids.h"
-#include "tempest.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,7 +146,6 @@ static void nav_eggs(void)       { open_eggs_screen(); }
 static void nav_invaders(void)   { open_invaders_screen(); }
 static void nav_rps(void)        { open_rps_screen(); }
 static void nav_asteroids(void)  { open_asteroids_screen(); }
-static void nav_tempest(void)    { open_tempest_screen(); }
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
@@ -210,7 +208,6 @@ static const screen_entry_t all_screens[] = {
     {"invaders",      nav_invaders},
     {"rps",           nav_rps},
     {"asteroids",     nav_asteroids},
-    {"tempest",       nav_tempest},
     {"table-sync",    nav_table_sync},
     {"dice",          nav_dice},
     {"dice-menu",     nav_dice_menu},
@@ -317,7 +314,7 @@ static void print_usage(void)
            "\nAvailable screens:\n"
            "  main 1p 2p 3p 4p intro menu tools settings-menu\n"
            "  snake pong dino tetris breakout flappy eggs invaders rps\n"
-           "  asteroids tempest\n"
+           "  asteroids\n"
            "  settings-page<N>       Settings page N (1-based)\n"
            "  setting:<id>           Page hosting a setting (e.g. setting:autodim)\n"
            "  brightness battery rotate dice damage-log game-mode custom-life select\n"

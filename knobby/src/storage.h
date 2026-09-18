@@ -76,8 +76,12 @@ typedef enum {
     GAME_SCORE_INVADERS,
     GAME_SCORE_RPS,
     GAME_SCORE_ASTEROIDS,
-    GAME_SCORE_TEMPEST,
     GAME_SCORE_COUNT,
+    /* GAME_SCORE_TEMPEST removed 2026-09: Tempest was pulled from the
+       device. Its column stays retired rather than reused - the saved
+       "game_hi" blob is indexed by these values, so recycling the slot
+       for a different game would hand new players someone else's old
+       Tempest high score under a new game's name. */
 } game_score_id_t;
 
 int nvs_get_game_high_score(game_score_id_t game, int player);

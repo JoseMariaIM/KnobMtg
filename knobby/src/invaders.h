@@ -19,8 +19,6 @@ int  invaders_test_wave(void);
 int  invaders_test_shots_in_flight(void);
 /* True while a slot is free - the question a player actually asks. */
 bool invaders_test_can_fire(void);
-/* Ticks until the next shot is allowed, 0 when ready. */
-int  invaders_test_shot_cooldown(void);
 /* Centre of the lowest surviving alien - what a test aims at. */
 bool invaders_test_lowest_alien(int *x, int *y);
 

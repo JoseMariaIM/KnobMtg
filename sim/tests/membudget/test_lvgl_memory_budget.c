@@ -40,7 +40,6 @@
 #include "invaders.h"
 #include "rps.h"
 #include "asteroids.h"
-#include "tempest.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -72,7 +71,6 @@ static void open_every_lazy_screen(void)
     open_invaders_screen();
     open_rps_screen();
     open_asteroids_screen();
-    open_tempest_screen();
 }
 
 static uint32_t report(const char *label, lv_mem_monitor_t *mon)

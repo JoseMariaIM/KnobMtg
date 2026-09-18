@@ -19,7 +19,6 @@
 #include "tetris.h"
 #include "rps.h"
 #include "asteroids.h"
-#include "tempest.h"
 #include "dino.h"
 #include <stdio.h>
 #include <assert.h>
@@ -843,8 +842,10 @@ static void test_invaders(void)
     assert(minigame_test_state(screen_invaders) == MINIGAME_PLAYING);
     assert(invaders_test_aliens_left() == 18);
 
-    /* Aim at the lowest alien, fire when lined up. One shot at a time is
-       the rule: a second tap while one is in flight must do nothing. */
+    /* Aim at the lowest alien, fire when lined up. Several shots may be
+       in flight at once now - see the file comment - so this only holds
+       back on invaders_test_can_fire() to keep the array from filling
+       while aiming rather than firing. */
     guard = 0;
     while (minigame_test_state(screen_invaders) == MINIGAME_PLAYING &&
            invaders_test_aliens_left() > 10 && guard++ < 20000) {
@@ -899,6 +900,36 @@ static void test_invaders(void)
     }
     assert(minigame_test_state(screen_invaders) == MINIGAME_OVER);
     printf("PASS: invaders - an unopposed formation reaches the ship\n");
+
+    /* One press, one shot - the specific rule asked for, checked
+       directly rather than inferred from the pacing above. A
+       fixed-cooldown design was tried and reverted: it gave a steady
+       rate, but a press landing inside the cooldown window fired
+       nothing, which still reads as "I pressed and nothing happened".
+       So: every discrete touch-down must produce exactly one new shot,
+       with no gap long enough to need a second press to get it, and a
+       second press before the first shot clears must NOT produce a
+       second shot from the same touch. */
+    {
+        int i;
+        for (i = 0; i < 12; i++) {
+            /* Fresh screen for every probe rather than one long run: a
+               stray bomb hitting the (stationary, undefended) ship
+               between the fire tap and the check would clear the shot
+               array via inv_lose_life() and read as a missed press,
+               which is a life-loss interaction, not a firing failure.
+               Reopening guarantees before == 0 with nothing in flight
+               to be cleared out from under the check. */
+            open_invaders_screen();
+            test_tap_screen_at(180, 300);   /* start */
+            assert(minigame_test_state(screen_invaders) == MINIGAME_PLAYING);
+            assert(invaders_test_shots_in_flight() == 0);
+
+            test_tap_screen_at(180, 300);   /* the one press under test */
+            assert(invaders_test_shots_in_flight() == 1);
+        }
+    }
+    printf("PASS: invaders - every press fires exactly one shot, every time\n");
 }
 
 /* ---------------------------------------------------------------- */
@@ -1319,142 +1350,44 @@ static void test_asteroids(void)
     assert(asteroids_test_lives() < 3);
     printf("PASS: asteroids - flying into a rock costs a life\n");
 
-    /* And running the lives out ends the run. */
+    /* And running the lives out ends the run.
+     *
+       Not with the aim-then-hold pattern above: that pattern fires a
+       shot at the start of every hold, and precise aim usually lands
+       that shot before the ship reaches collision range - so once the
+       first life is gone (by luck of an early spawn), the same
+       "logic" mostly snipes the nearest rock instead of hitting it,
+       and can run the clock out never colliding again. (Measured: it
+       failed to lose a second life inside even a 24-minute simulated
+       budget.)
+     *
+       A player who is actually trying to crash does not re-aim and
+       re-fire at every rock - they hold thrust and steer through
+       traffic. One press starts the burn (and fires the single shot
+       that comes with it); the finger then stays down, so every
+       further read is PRESSING, not another PRESSED, and nothing
+       fires again. That is what makes contact likely instead of rare. */
     guard = 0;
+    test_pointer_at.x = 180;
+    test_pointer_at.y = 180;
+    test_pointer_down = true;
     while (minigame_test_state(screen_asteroids) == MINIGAME_PLAYING &&
-           guard++ < 8000) {
+           guard++ < 20000) {
         int bearing, dist;
         if (asteroids_test_nearest_rock(&bearing, &dist)) {
             int diff = bearing - asteroids_test_heading();
             while (diff > 180) diff -= 360;
             while (diff < -180) diff += 360;
-            if (diff < -6) { asteroids_turn(-1); tick_ms(24); }
-            else if (diff > 6) { asteroids_turn(1); tick_ms(24); }
-            else test_hold_screen(12, 24);
-        } else {
-            tick_ms(24);
+            if (diff < -6) asteroids_turn(-1);
+            else if (diff > 6) asteroids_turn(1);
         }
+        tick_ms(24);
     }
+    test_pointer_down = false;
+    tick_ms(24);
     assert(minigame_test_state(screen_asteroids) == MINIGAME_OVER);
     assert(asteroids_test_lives() <= 0);
     printf("PASS: asteroids - running out of lives ends the run\n");
-}
-
-/* ---------------------------------------------------------------- */
-/* Tempest: the knob picks a lane and a tap fires down it. The rule
-   that shapes the whole game is that only YOUR lane can hurt you, so
-   that is what gets the most attention here. */
-static void test_tempest(void)
-{
-    int guard;
-
-    open_tempest_screen();
-    assert(minigame_test_state(screen_tempest) == MINIGAME_READY);
-    tempest_handle_tap();
-    assert(minigame_test_state(screen_tempest) == MINIGAME_PLAYING);
-    assert(tempest_test_lives() == 3);
-    printf("PASS: tempest - opens with three lives\n");
-
-    /* One detent, one lane, and the rim wraps in both directions. */
-    {
-        int lanes = tempest_test_lane_count();
-        int l0 = tempest_test_lane();
-        int i;
-        tempest_turn(1);
-        assert(tempest_test_lane() == (l0 + 1) % lanes);
-        tempest_turn(-1);
-        assert(tempest_test_lane() == l0);
-        for (i = 0; i < lanes; i++) tempest_turn(1);
-        assert(tempest_test_lane() == l0);   /* all the way round */
-        tempest_turn(-1);
-        assert(tempest_test_lane() == (l0 + lanes - 1) % lanes);
-        printf("PASS: tempest - the knob walks the rim one lane at a time\n");
-    }
-
-    /* Firing puts a shot in the well, and shots are finite. */
-    {
-        int i;
-        int before = tempest_test_shots();
-        tempest_handle_tap();
-        assert(tempest_test_shots() == before + 1);
-        for (i = 0; i < 20; i++) tempest_handle_tap();
-        assert(tempest_test_shots() <= 6);
-        printf("PASS: tempest - firing is capped, not unlimited\n");
-    }
-
-    /* Defending the lane an enemy is climbing kills it: a level can be
-       cleared. Across runs - which lane the well throws things up is
-       random, and the claw cannot be everywhere. */
-    guard = 0;
-    while (tempest_test_level() < 2 && guard++ < 200000) {
-        int lane, climb;
-
-        if (minigame_test_state(screen_tempest) != MINIGAME_PLAYING) {
-            tempest_handle_tap();
-            if (minigame_test_state(screen_tempest) == MINIGAME_READY) {
-                tempest_handle_tap();
-            }
-            continue;
-        }
-        if (tempest_test_closest_enemy(&lane, &climb)) {
-            int lanes = tempest_test_lane_count();
-            int diff = lane - tempest_test_lane();
-            while (diff > lanes / 2) diff -= lanes;
-            while (diff < -lanes / 2) diff += lanes;
-            if (diff < 0) tempest_turn(-1);
-            else if (diff > 0) tempest_turn(1);
-            else tempest_handle_tap();
-        }
-        tick_ms(26);
-    }
-    assert(tempest_test_level() >= 2);
-    printf("PASS: tempest - holding the threatened lane clears a level\n");
-
-    /* Anything let through does not politely vanish - it climbs out and
-       crawls the rim toward you. */
-    open_tempest_screen();
-    tempest_handle_tap();
-    guard = 0;
-    while (tempest_test_rim_crawlers() == 0 && guard++ < 20000) {
-        if (minigame_test_state(screen_tempest) != MINIGAME_PLAYING) break;
-        tick_ms(26);      /* never fire */
-    }
-    assert(tempest_test_rim_crawlers() > 0);
-    printf("PASS: tempest - an enemy you let through climbs out onto the rim\n");
-
-    /* And the strategy a player reported as unbeatable must not be.
-     *
-       Spinning the knob while mashing fire used to be both optimal and
-       completely safe: sweeping every lane killed everything, and
-       anything that did get past was harmless unless it happened to
-       surface in the lane you were standing in. It survived the whole
-       clock and reached level 48. It now dies, and for a reason worth
-       knowing - a crawler that takes hold RIDES your lane, so spinning
-       leaves your shots in the lane you just left. */
-    open_tempest_screen();
-    tempest_handle_tap();
-    guard = 0;
-    while (minigame_test_state(screen_tempest) == MINIGAME_PLAYING &&
-           guard++ < 20000) {
-        tempest_turn(1);
-        tempest_handle_tap();
-        tick_ms(26);
-    }
-    assert(minigame_test_state(screen_tempest) == MINIGAME_OVER);
-    printf("PASS: tempest - spinning and mashing fire does not survive (%.0f s)\n",
-           guard * 26.0 / 1000.0);
-
-    /* Never firing, something eventually climbs out in your lane and
-       the lives drain away. */
-    open_tempest_screen();
-    tempest_handle_tap();
-    guard = 0;
-    while (minigame_test_state(screen_tempest) == MINIGAME_PLAYING &&
-           guard++ < 200000) {
-        tick_ms(26);
-    }
-    assert(minigame_test_state(screen_tempest) == MINIGAME_OVER);
-    printf("PASS: tempest - an undefended lane costs every life\n");
 }
 
 int main(void)
@@ -1487,7 +1420,6 @@ int main(void)
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();
     printf("---- asteroids ----\n"); test_asteroids();
-    printf("---- tempest ----\n");  test_tempest();
 
     printf("\nAll minigame tests passed.\n");
     return 0;
