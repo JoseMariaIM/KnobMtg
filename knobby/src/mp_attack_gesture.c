@@ -122,7 +122,8 @@ static void event_wedge_drag(lv_event_t *e)
             attack_drag_suppress_click = true;
             if (target != attack_drag_source && !player_eliminated[target] &&
                 !player_eliminated[attack_drag_source]) {
-                open_attack_screen(attack_drag_source, target);
+                open_attack_screen(attack_drag_source, attack_drag_source_color_idx,
+                                   target, spec->color_index);
             }
             lv_obj_invalidate(screen_multiplayer);
         }

@@ -182,7 +182,7 @@ static void nav_mana(void) { open_mana_screen(); }
 static void nav_attack(void) {
     nvs_set_players_to_track(4);
     reset_all_values();
-    open_attack_screen(0, 1);
+    open_attack_screen(0, 0, 1, 1);
 }
 
 static const screen_entry_t all_screens[] = {

@@ -204,7 +204,6 @@ typedef enum {
 
     /* attack.c */
     STR_ATTACK_MODE_DAMAGE,
-    STR_ATTACK_MODE_HEAL,
     STR_ATTACK_MODE_CMDR,
     STR_ATTACK_MODE_INFECT,
     STR_ATTACK_LIFELINK,
