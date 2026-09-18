@@ -18,6 +18,8 @@
 #include "invaders.h"
 #include "tetris.h"
 #include "rps.h"
+#include "asteroids.h"
+#include "tempest.h"
 #include "dino.h"
 #include <stdio.h>
 #include <assert.h>
@@ -1078,7 +1080,10 @@ static void test_back_returns_to_the_launching_page(void)
     lv_obj_t *tile;
 
     open_minigames_menu();
-    assert(minigames_page_count == 3);
+    /* Not a fixed number: the menu paginates whatever minigame_entries[]
+       holds, and this test is about where BACK lands, not how many
+       pages there happen to be. It only needs a page past the first. */
+    assert(minigames_page_count >= 3);
     assert(lv_scr_act() == minigames_pages[0]);
 
     /* Page 3 holds Catch Egg / Invaders / Rock Paper Scissors. */
@@ -1112,6 +1117,210 @@ static void test_back_returns_to_the_launching_page(void)
     printf("PASS: opening the menu from Settings still lands on page 1\n");
 }
 
+/* ---------------------------------------------------------------- */
+/* Asteroids exists because a rotary control driving a rotation is the
+   most direct mapping this hardware has. So the test flies it that
+   way: read the bearing to the nearest rock, turn until the nose is on
+   it, fire. */
+static void test_asteroids(void)
+{
+    int guard;
+    int rocks_at_start;
+
+    open_asteroids_screen();
+    assert(minigame_test_state(screen_asteroids) == MINIGAME_READY);
+    asteroids_handle_tap();
+    assert(minigame_test_state(screen_asteroids) == MINIGAME_PLAYING);
+    assert(asteroids_test_lives() == 3);
+    rocks_at_start = asteroids_test_rocks();
+    assert(rocks_at_start == 4);
+    printf("PASS: asteroids - opens with a wave of four rocks\n");
+
+    /* The knob turns the ship, degree for degree, both ways. */
+    {
+        int h0 = asteroids_test_heading();
+        asteroids_turn(1);
+        asteroids_turn(1);
+        assert(asteroids_test_heading() == (h0 + 18) % 360);
+        asteroids_turn(-1);
+        assert(asteroids_test_heading() == (h0 + 9) % 360);
+        printf("PASS: asteroids - the knob steers the ship both ways\n");
+    }
+
+    /* A big rock breaks into two smaller ones, so the count goes UP
+       before it goes down - that split is the game's whole rhythm. */
+    guard = 0;
+    while (minigame_test_state(screen_asteroids) == MINIGAME_PLAYING &&
+           asteroids_test_rocks() <= rocks_at_start && guard++ < 20000) {
+        int bearing, dist;
+        if (asteroids_test_nearest_rock(&bearing, &dist)) {
+            int diff = bearing - asteroids_test_heading();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -6) asteroids_turn(-1);
+            else if (diff > 6) asteroids_turn(1);
+            else asteroids_handle_tap();
+        }
+        tick_ms(24);
+    }
+    assert(asteroids_test_rocks() > rocks_at_start);
+    printf("PASS: asteroids - shooting a big rock splits it in two\n");
+
+    /* Played properly the wave can be cleared. Across runs, because a
+       rock can drift into the ship while it is lining up a shot. */
+    guard = 0;
+    while (asteroids_test_wave() < 2 && guard++ < 120000) {
+        int bearing, dist;
+
+        if (minigame_test_state(screen_asteroids) != MINIGAME_PLAYING) {
+            asteroids_handle_tap();
+            if (minigame_test_state(screen_asteroids) == MINIGAME_READY) {
+                asteroids_handle_tap();
+            }
+            continue;
+        }
+        if (asteroids_test_nearest_rock(&bearing, &dist)) {
+            int diff = bearing - asteroids_test_heading();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -6) asteroids_turn(-1);
+            else if (diff > 6) asteroids_turn(1);
+            else asteroids_handle_tap();
+        }
+        tick_ms(24);
+    }
+    assert(asteroids_test_wave() >= 2);
+    printf("PASS: asteroids - a wave can be cleared, and the next one starts\n");
+
+    /* Rocks hurt. Flown INTO rather than waited for: wrapping a circle
+       by reflecting through the centre makes every path a closed
+       polygon, so a rock that misses a stationary ship at the middle
+       misses it forever - sitting still for 24 minutes of simulated
+       time cost no lives at all. That is fine for the game (a player
+       moves) but useless as a test of the collision rule. */
+    open_asteroids_screen();
+    asteroids_handle_tap();
+    guard = 0;
+    while (asteroids_test_lives() == 3 && guard++ < 120000) {
+        int bearing, dist;
+
+        if (minigame_test_state(screen_asteroids) != MINIGAME_PLAYING) break;
+        if (asteroids_test_nearest_rock(&bearing, &dist)) {
+            int diff = bearing - asteroids_test_heading();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -6) asteroids_turn(-1);
+            else if (diff > 6) asteroids_turn(1);
+            else if ((guard % 6) == 0) asteroids_handle_tap();  /* thrust at it */
+        }
+        tick_ms(24);
+    }
+    assert(asteroids_test_lives() < 3);
+    printf("PASS: asteroids - flying into a rock costs a life\n");
+
+    /* And running the lives out ends the run. */
+    guard = 0;
+    while (minigame_test_state(screen_asteroids) == MINIGAME_PLAYING &&
+           guard++ < 200000) {
+        int bearing, dist;
+        if (asteroids_test_nearest_rock(&bearing, &dist)) {
+            int diff = bearing - asteroids_test_heading();
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+            if (diff < -6) asteroids_turn(-1);
+            else if (diff > 6) asteroids_turn(1);
+            else if ((guard % 6) == 0) asteroids_handle_tap();
+        }
+        tick_ms(24);
+    }
+    assert(minigame_test_state(screen_asteroids) == MINIGAME_OVER);
+    assert(asteroids_test_lives() <= 0);
+    printf("PASS: asteroids - running out of lives ends the run\n");
+}
+
+/* ---------------------------------------------------------------- */
+/* Tempest: the knob picks a lane and a tap fires down it. The rule
+   that shapes the whole game is that only YOUR lane can hurt you, so
+   that is what gets the most attention here. */
+static void test_tempest(void)
+{
+    int guard;
+
+    open_tempest_screen();
+    assert(minigame_test_state(screen_tempest) == MINIGAME_READY);
+    tempest_handle_tap();
+    assert(minigame_test_state(screen_tempest) == MINIGAME_PLAYING);
+    assert(tempest_test_lives() == 3);
+    printf("PASS: tempest - opens with three lives\n");
+
+    /* One detent, one lane, and the rim wraps in both directions. */
+    {
+        int lanes = tempest_test_lane_count();
+        int l0 = tempest_test_lane();
+        int i;
+        tempest_turn(1);
+        assert(tempest_test_lane() == (l0 + 1) % lanes);
+        tempest_turn(-1);
+        assert(tempest_test_lane() == l0);
+        for (i = 0; i < lanes; i++) tempest_turn(1);
+        assert(tempest_test_lane() == l0);   /* all the way round */
+        tempest_turn(-1);
+        assert(tempest_test_lane() == (l0 + lanes - 1) % lanes);
+        printf("PASS: tempest - the knob walks the rim one lane at a time\n");
+    }
+
+    /* Firing puts a shot in the well, and shots are finite. */
+    {
+        int i;
+        int before = tempest_test_shots();
+        tempest_handle_tap();
+        assert(tempest_test_shots() == before + 1);
+        for (i = 0; i < 20; i++) tempest_handle_tap();
+        assert(tempest_test_shots() <= 6);
+        printf("PASS: tempest - firing is capped, not unlimited\n");
+    }
+
+    /* Defending the lane an enemy is climbing kills it: a level can be
+       cleared. Across runs - which lane the well throws things up is
+       random, and the claw cannot be everywhere. */
+    guard = 0;
+    while (tempest_test_level() < 2 && guard++ < 200000) {
+        int lane, climb;
+
+        if (minigame_test_state(screen_tempest) != MINIGAME_PLAYING) {
+            tempest_handle_tap();
+            if (minigame_test_state(screen_tempest) == MINIGAME_READY) {
+                tempest_handle_tap();
+            }
+            continue;
+        }
+        if (tempest_test_closest_enemy(&lane, &climb)) {
+            int lanes = tempest_test_lane_count();
+            int diff = lane - tempest_test_lane();
+            while (diff > lanes / 2) diff -= lanes;
+            while (diff < -lanes / 2) diff += lanes;
+            if (diff < 0) tempest_turn(-1);
+            else if (diff > 0) tempest_turn(1);
+            else tempest_handle_tap();
+        }
+        tick_ms(26);
+    }
+    assert(tempest_test_level() >= 2);
+    printf("PASS: tempest - holding the threatened lane clears a level\n");
+
+    /* Never firing, something eventually climbs out in your lane and
+       the lives drain away. */
+    open_tempest_screen();
+    tempest_handle_tap();
+    guard = 0;
+    while (minigame_test_state(screen_tempest) == MINIGAME_PLAYING &&
+           guard++ < 200000) {
+        tick_ms(26);
+    }
+    assert(minigame_test_state(screen_tempest) == MINIGAME_OVER);
+    printf("PASS: tempest - an undefended lane costs every life\n");
+}
+
 int main(void)
 {
     /* Line-buffered so the PASS trail survives an assert() abort - fully
@@ -1140,6 +1349,8 @@ int main(void)
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();
+    printf("---- asteroids ----\n"); test_asteroids();
+    printf("---- tempest ----\n");  test_tempest();
 
     printf("\nAll minigame tests passed.\n");
     return 0;

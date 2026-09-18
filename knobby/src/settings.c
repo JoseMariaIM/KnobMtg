@@ -24,6 +24,8 @@
 #include "eggs.h"
 #include "invaders.h"
 #include "rps.h"
+#include "asteroids.h"
+#include "tempest.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -813,6 +815,8 @@ static const minigame_entry_t minigame_entries[] = {
     { STR_MINIGAME_EGGS,     open_eggs_screen     },
     { STR_MINIGAME_INVADERS, open_invaders_screen },
     { STR_MINIGAME_RPS,      open_rps_screen      },
+    { STR_MINIGAME_ASTEROIDS, open_asteroids_screen },
+    { STR_MINIGAME_TEMPEST,  open_tempest_screen  },
 };
 #define MINIGAME_ENTRY_COUNT \
     ((int)(sizeof(minigame_entries) / sizeof(minigame_entries[0])))

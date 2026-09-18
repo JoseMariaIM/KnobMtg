@@ -242,6 +242,10 @@ typedef enum {
     STR_INVADERS_HINT,
     STR_MINIGAME_RPS,
     STR_RPS_HINT,
+    STR_MINIGAME_ASTEROIDS,
+    STR_ASTEROIDS_HINT,
+    STR_MINIGAME_TEMPEST,
+    STR_TEMPEST_HINT,
     /* rps.c only: the three throws, and the round verdict banner. */
     STR_RPS_ROCK,
     STR_RPS_PAPER,

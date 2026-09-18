@@ -75,6 +75,8 @@ typedef enum {
     GAME_SCORE_EGGS,
     GAME_SCORE_INVADERS,
     GAME_SCORE_RPS,
+    GAME_SCORE_ASTEROIDS,
+    GAME_SCORE_TEMPEST,
     GAME_SCORE_COUNT,
 } game_score_id_t;
 
