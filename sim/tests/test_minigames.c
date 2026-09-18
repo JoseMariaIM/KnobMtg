@@ -23,6 +23,7 @@
 #include "dino.h"
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
 #include <math.h>
 
 static void tick_ms(int ms)
@@ -54,6 +55,19 @@ static void test_pointer_init(void)
     test_pointer_drv.type = LV_INDEV_TYPE_POINTER;
     test_pointer_drv.read_cb = test_pointer_read;
     lv_indev_drv_register(&test_pointer_drv);
+}
+
+/* Holds the finger down for a while, then lifts it. Asteroids' engine
+   is a held press, so this is the only way to actually thrust. */
+static void test_hold_screen(int ticks, int ms)
+{
+    int i;
+    test_pointer_at.x = 180;
+    test_pointer_at.y = 180;
+    test_pointer_down = true;
+    for (i = 0; i < ticks; i++) tick_ms(ms);
+    test_pointer_down = false;
+    for (i = 0; i < 3; i++) tick_ms(ms);
 }
 
 static void test_tap_screen_at(int x, int y)
@@ -1195,17 +1209,41 @@ static void test_asteroids(void)
     assert(minigame_test_state(screen_asteroids) == MINIGAME_PLAYING);
     assert(asteroids_test_lives() == 3);
     rocks_at_start = asteroids_test_rocks();
-    assert(rocks_at_start == 4);
-    printf("PASS: asteroids - opens with a wave of four rocks\n");
+    assert(rocks_at_start == 3);
+    printf("PASS: asteroids - opens with a wave of three rocks\n");
+
+    /* Firing must NOT move the ship, and holding must.
+     *
+       This is the whole reason the game was unplayable at first: a tap
+       did both, so anyone shooting at a normal rate was pinned at top
+       speed and careening into rocks - a perfect-aim player survived
+       five seconds and never cleared a wave. */
+    {
+        int x0, y0, x1, y1, x2, y2;
+        int i;
+
+        asteroids_test_ship(&x0, &y0);
+        for (i = 0; i < 10; i++) {
+            asteroids_handle_tap();
+            tick_ms(24);
+        }
+        asteroids_test_ship(&x1, &y1);
+        assert(abs(x1 - x0) < 8 && abs(y1 - y0) < 8);
+
+        test_hold_screen(30, 24);
+        asteroids_test_ship(&x2, &y2);
+        assert(abs(x2 - x1) > 20 || abs(y2 - y1) > 20);
+        printf("PASS: asteroids - tapping fires without thrusting, holding thrusts\n");
+    }
 
     /* The knob turns the ship, degree for degree, both ways. */
     {
         int h0 = asteroids_test_heading();
         asteroids_turn(1);
         asteroids_turn(1);
-        assert(asteroids_test_heading() == (h0 + 18) % 360);
+        assert(asteroids_test_heading() == (h0 + 2 * 12) % 360);
         asteroids_turn(-1);
-        assert(asteroids_test_heading() == (h0 + 9) % 360);
+        assert(asteroids_test_heading() == (h0 + 12) % 360);
         printf("PASS: asteroids - the knob steers the ship both ways\n");
     }
 
@@ -1263,7 +1301,7 @@ static void test_asteroids(void)
     open_asteroids_screen();
     asteroids_handle_tap();
     guard = 0;
-    while (asteroids_test_lives() == 3 && guard++ < 120000) {
+    while (asteroids_test_lives() == 3 && guard++ < 4000) {
         int bearing, dist;
 
         if (minigame_test_state(screen_asteroids) != MINIGAME_PLAYING) break;
@@ -1271,11 +1309,12 @@ static void test_asteroids(void)
             int diff = bearing - asteroids_test_heading();
             while (diff > 180) diff -= 360;
             while (diff < -180) diff += 360;
-            if (diff < -6) asteroids_turn(-1);
-            else if (diff > 6) asteroids_turn(1);
-            else if ((guard % 6) == 0) asteroids_handle_tap();  /* thrust at it */
+            if (diff < -6) { asteroids_turn(-1); tick_ms(24); }
+            else if (diff > 6) { asteroids_turn(1); tick_ms(24); }
+            else test_hold_screen(12, 24);   /* fly straight at it */
+        } else {
+            tick_ms(24);
         }
-        tick_ms(24);
     }
     assert(asteroids_test_lives() < 3);
     printf("PASS: asteroids - flying into a rock costs a life\n");
@@ -1283,17 +1322,18 @@ static void test_asteroids(void)
     /* And running the lives out ends the run. */
     guard = 0;
     while (minigame_test_state(screen_asteroids) == MINIGAME_PLAYING &&
-           guard++ < 200000) {
+           guard++ < 8000) {
         int bearing, dist;
         if (asteroids_test_nearest_rock(&bearing, &dist)) {
             int diff = bearing - asteroids_test_heading();
             while (diff > 180) diff -= 360;
             while (diff < -180) diff += 360;
-            if (diff < -6) asteroids_turn(-1);
-            else if (diff > 6) asteroids_turn(1);
-            else if ((guard % 6) == 0) asteroids_handle_tap();
+            if (diff < -6) { asteroids_turn(-1); tick_ms(24); }
+            else if (diff > 6) { asteroids_turn(1); tick_ms(24); }
+            else test_hold_screen(12, 24);
+        } else {
+            tick_ms(24);
         }
-        tick_ms(24);
     }
     assert(minigame_test_state(screen_asteroids) == MINIGAME_OVER);
     assert(asteroids_test_lives() <= 0);
@@ -1369,6 +1409,40 @@ static void test_tempest(void)
     }
     assert(tempest_test_level() >= 2);
     printf("PASS: tempest - holding the threatened lane clears a level\n");
+
+    /* Anything let through does not politely vanish - it climbs out and
+       crawls the rim toward you. */
+    open_tempest_screen();
+    tempest_handle_tap();
+    guard = 0;
+    while (tempest_test_rim_crawlers() == 0 && guard++ < 20000) {
+        if (minigame_test_state(screen_tempest) != MINIGAME_PLAYING) break;
+        tick_ms(26);      /* never fire */
+    }
+    assert(tempest_test_rim_crawlers() > 0);
+    printf("PASS: tempest - an enemy you let through climbs out onto the rim\n");
+
+    /* And the strategy a player reported as unbeatable must not be.
+     *
+       Spinning the knob while mashing fire used to be both optimal and
+       completely safe: sweeping every lane killed everything, and
+       anything that did get past was harmless unless it happened to
+       surface in the lane you were standing in. It survived the whole
+       clock and reached level 48. It now dies, and for a reason worth
+       knowing - a crawler that takes hold RIDES your lane, so spinning
+       leaves your shots in the lane you just left. */
+    open_tempest_screen();
+    tempest_handle_tap();
+    guard = 0;
+    while (minigame_test_state(screen_tempest) == MINIGAME_PLAYING &&
+           guard++ < 20000) {
+        tempest_turn(1);
+        tempest_handle_tap();
+        tick_ms(26);
+    }
+    assert(minigame_test_state(screen_tempest) == MINIGAME_OVER);
+    printf("PASS: tempest - spinning and mashing fire does not survive (%.0f s)\n",
+           guard * 26.0 / 1000.0);
 
     /* Never firing, something eventually climbs out in your lane and
        the lives drain away. */

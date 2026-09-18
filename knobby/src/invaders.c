@@ -5,15 +5,23 @@
 
 /* Space Invaders, knob to traverse and tap to fire.
  *
- * Up to three shots in flight. The original allowed exactly one, which
- * works there because its formation descends over a minute or more;
- * here it made the first wave arithmetically unwinnable. A shot takes
- * ~0.4s to cross the field, the formation reaches the ship in about
- * eleven seconds, and eighteen aliens simply do not fit in that budget:
- * a simulated player that aimed perfectly and fired the instant it was
- * allowed to killed 15 of 18 and lost. Three in flight, plus a faster
- * shot and a shallower descent step, turns it into a wave you can
- * clear with room to breathe.
+ * Firing is paced by a fixed cooldown, not by how many shots happen to
+ * be in the air.
+ *
+ * Capping the shots in flight seemed equivalent and is not. A slot
+ * frees when its shot hits something OR when it leaves the top of the
+ * field, so the wait for the next shot depended on whether the last
+ * one connected - a burst while the aliens were close, then a dead
+ * patch where tapping did nothing while three shots crossed the whole
+ * field. The player has no way to see that and reads it as the button
+ * failing. A cooldown gives the same rate with a rhythm you can learn.
+ *
+ * The rate matters because the original's single shot made the first
+ * wave arithmetically unwinnable here: a shot takes ~0.4s to cross,
+ * the formation reaches the ship in about eleven seconds, and eighteen
+ * aliens do not fit in that budget. A simulated player that aimed
+ * perfectly and fired the instant it was allowed killed 15 of 18 and
+ * lost.
  *
  * The formation marches within a field inset to stay under the round
  * glass, steps DOWN when either edge is reached, and speeds up as its
@@ -51,7 +59,13 @@
 /* Faster than the original's, because the lead a player must estimate
    is proportional to how long the shot is in the air. */
 #define INV_SHOT_SPEED     16
-#define INV_SHOT_MAX        3
+/* One shot every this many ticks - ~5 a second, and the same five
+   whatever is happening on screen. */
+#define INV_SHOT_COOLDOWN   7
+/* A ceiling, not the pacing mechanism: at one shot per 7 ticks and ~14
+   ticks of flight, two are typically up and this is never reached. It
+   exists so a wave of stray shots cannot outgrow the array. */
+#define INV_SHOT_MAX        5
 
 #define INV_BOMB_MAX        3
 #define INV_BOMB_W          4
@@ -101,6 +115,7 @@ static int  inv_anim_tick;
 static int  inv_hit_flash;
 
 static inv_shot_t inv_shots[INV_SHOT_MAX];
+static int inv_shot_cooldown;
 static inv_bomb_t inv_bombs[INV_BOMB_MAX];
 
 static void invaders_reset(minigame_t *g);
@@ -153,6 +168,7 @@ static void inv_start_wave(void)
     inv_march_countdown = inv_march_ticks();
     memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
+    inv_shot_cooldown = 0;
 }
 
 static void invaders_reset(minigame_t *g)
@@ -230,6 +246,7 @@ static void inv_lose_life(minigame_t *g)
     inv_hit_flash = 8;
     memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
+    inv_shot_cooldown = 0;
     if (--inv_lives <= 0) minigame_over(g);
 }
 
@@ -240,6 +257,7 @@ static void invaders_tick(minigame_t *g)
 
     inv_anim_tick++;
     if (inv_hit_flash > 0) inv_hit_flash--;
+    if (inv_shot_cooldown > 0) inv_shot_cooldown--;
 
     /* ---- formation march ---- */
     if (--inv_march_countdown <= 0) {
@@ -330,15 +348,16 @@ void invaders_handle_tap(void)
     int sh;
 
     if (minigame_handle_tap(&invaders_game)) return;
+    if (inv_shot_cooldown > 0) return;
 
     for (sh = 0; sh < INV_SHOT_MAX; sh++) {
         if (inv_shots[sh].active) continue;
         inv_shots[sh].active = true;
         inv_shots[sh].x = (float)(inv_ship_x - INV_SHOT_W / 2);
         inv_shots[sh].y = (float)(INV_SHIP_Y - INV_SHOT_H);
+        inv_shot_cooldown = INV_SHOT_COOLDOWN;
         return;
     }
-    /* All three already up: the tap is simply spent. */
 }
 
 void invaders_leave_screen(void) { minigame_leave(&invaders_game); }
@@ -359,8 +378,11 @@ int invaders_test_shots_in_flight(void)
 
 bool invaders_test_can_fire(void)
 {
-    return invaders_test_shots_in_flight() < INV_SHOT_MAX;
+    return inv_shot_cooldown == 0 &&
+           invaders_test_shots_in_flight() < INV_SHOT_MAX;
 }
+
+int invaders_test_shot_cooldown(void) { return inv_shot_cooldown; }
 
 bool invaders_test_lowest_alien(int *x, int *y)
 {

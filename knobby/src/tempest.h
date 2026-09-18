@@ -18,6 +18,11 @@ int  tempest_test_enemies(void);
 int  tempest_test_lives(void);
 int  tempest_test_level(void);
 int  tempest_test_shots(void);
+/* Enemies that got past you and are crawling the rim. */
+int  tempest_test_rim_crawlers(void);
+/* Crawlers that have hold of you and are riding your lane. */
+int  tempest_test_grabbers(void);
+int  tempest_test_shot_cooldown(void);
 /* Lane of the enemy nearest the rim, and how far up the well it has
    climbed as a percentage (100 = at the rim). */
 bool tempest_test_closest_enemy(int *lane, int *climb_pct);

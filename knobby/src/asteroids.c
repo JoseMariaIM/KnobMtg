@@ -9,10 +9,14 @@
  * and the ship turns, degree for degree. No other game here maps its
  * input that directly.
  *
- * Tap to fire. A tap also fires the engine for a moment - one control
- * doing both is a compromise, but a device with one button and a dial
- * has to make it, and thrusting when you shoot is what you mostly want
- * anyway: it is the shot that commits you to a direction.
+ * Tap to fire, HOLD to thrust. The first cut had a tap do both, which
+ * sounded like a reasonable compromise for a device with one button
+ * and turned out to be the thing that made the game unplayable: every
+ * shot was also an acceleration, so anyone shooting at a normal rate
+ * was pinned at maximum speed and careening. A simulated player with
+ * perfect aim survived five seconds and never once cleared the first
+ * wave. Separating them costs nothing - a press fires, and only a
+ * press held past AST_HOLD_TO_THRUST reads as the engine.
  *
  * The playfield wraps, and on a round panel that is more than a
  * convenience - the visible area is a disc, so a ship leaving at any
@@ -27,10 +31,13 @@
 #define AST_R  172            /* wrap radius: just outside the glass */
 
 #define AST_TICK_MS      24
-#define AST_TURN_DEG      9   /* per knob detent */
+#define AST_TURN_DEG     12   /* per knob detent */
 
 #define AST_THRUST     0.42f
-#define AST_THRUST_TICKS 10   /* engine burn a tap buys */
+/* Consecutive PRESSING events before a held finger counts as thrust.
+   LVGL reads the pointer every ~30ms, so this is about 120ms - longer
+   than any tap, shorter than any deliberate hold. */
+#define AST_HOLD_TO_THRUST 4
 #define AST_DRAG       0.988f /* space is not quite frictionless here */
 #define AST_MAX_SPEED   4.6f
 
@@ -42,7 +49,7 @@
 
 #define AST_ROCK_MAX     14
 #define AST_ROCK_SIZES    3
-#define AST_WAVE_START    4   /* big rocks in wave 1 */
+#define AST_WAVE_START    3   /* big rocks in wave 1 */
 #define AST_WAVE_MAX      7
 
 #define AST_LIVES         3
@@ -56,6 +63,23 @@
 static const int  ast_rock_radius[AST_ROCK_SIZES] = { 8, 14, 22 };
 static const int  ast_rock_points[AST_ROCK_SIZES] = { 50, 30, 20 };
 static const float ast_rock_speed[AST_ROCK_SIZES] = { 1.55f, 1.15f, 0.80f };
+
+/* Rocks get quicker with each wave, capped. Without it a player who
+   simply stops moving and aims well is safe indefinitely - wrapping a
+   disc by reflecting through the centre puts every rock on a closed
+   periodic path, so a stationary ship that can hit anything it sees
+   never has to solve a new problem. The speed ramp is what eventually
+   makes standing still untenable. */
+#define AST_SPEED_PER_WAVE 0.06f
+#define AST_SPEED_MAX_MULT 1.90f
+
+static int ast_wave;   /* declared here: the speed ramp above needs it */
+
+static float ast_wave_speed_mult(void)
+{
+    float m = 1.0f + (float)(ast_wave - 1) * AST_SPEED_PER_WAVE;
+    return (m > AST_SPEED_MAX_MULT) ? AST_SPEED_MAX_MULT : m;
+}
 
 typedef struct {
     bool  active;
@@ -78,16 +102,38 @@ lv_obj_t *screen_asteroids = NULL;
 static float ast_ship_x, ast_ship_y;
 static float ast_ship_vx, ast_ship_vy;
 static int   ast_heading;          /* degrees, 0 = 3 o'clock */
-static int   ast_thrust_ticks;     /* engine still burning */
+static int   ast_hold;             /* consecutive PRESSING events */
 static int   ast_respawn_ticks;    /* invulnerable, and flashing */
 static int   ast_lives;
-static int   ast_wave;
 static ast_rock_t ast_rocks[AST_ROCK_MAX];
 static ast_shot_t ast_shots[AST_SHOT_MAX];
 
 static void asteroids_reset(minigame_t *g);
+static void asteroids_build(minigame_t *g);
 static void asteroids_tick(minigame_t *g);
 static void asteroids_draw(lv_event_t *e);
+
+static void event_ast_pressing(lv_event_t *e)
+{
+    (void)e;
+    if (ast_hold < AST_HOLD_TO_THRUST) ast_hold++;
+}
+
+static void event_ast_released(lv_event_t *e)
+{
+    (void)e;
+    ast_hold = 0;
+}
+
+/* The framework wires the tap (on PRESSED, so a shot leaves the moment
+   you touch the glass); these two turn a held finger into the engine. */
+static void asteroids_build(minigame_t *g)
+{
+    (void)g;
+    lv_obj_add_event_cb(screen_asteroids, event_ast_pressing, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(screen_asteroids, event_ast_released, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(screen_asteroids, event_ast_released, LV_EVENT_PRESS_LOST, NULL);
+}
 
 static minigame_t asteroids_game = {
     .screen   = &screen_asteroids,
@@ -98,6 +144,7 @@ static minigame_t asteroids_game = {
     .on_reset = asteroids_reset,
     .on_tick  = asteroids_tick,
     .on_draw  = asteroids_draw,
+    .on_build = asteroids_build,
     .on_tap   = asteroids_handle_tap,
     .tap_on_press = true,     /* an action game: fire on finger-down */
 };
@@ -142,8 +189,11 @@ static void ast_spawn_rock(int size, float x, float y)
         ast_rocks[i].size = size;
         ast_rocks[i].x = x;
         ast_rocks[i].y = y;
-        ast_rocks[i].vx = cosf(ang) * ast_rock_speed[size];
-        ast_rocks[i].vy = sinf(ang) * ast_rock_speed[size];
+        {
+            float sp = ast_rock_speed[size] * ast_wave_speed_mult();
+            ast_rocks[i].vx = cosf(ang) * sp;
+            ast_rocks[i].vy = sinf(ang) * sp;
+        }
         ast_rocks[i].spin = (int)(esp_random() % 360);
         ast_rocks[i].spin_rate = 1 + (int)(esp_random() % 4);
         if (esp_random() % 2U) ast_rocks[i].spin_rate = -ast_rocks[i].spin_rate;
@@ -178,7 +228,7 @@ static void ast_place_ship(void)
     ast_ship_vx = 0.0f;
     ast_ship_vy = 0.0f;
     ast_heading = 270;          /* pointing up */
-    ast_thrust_ticks = 0;
+    ast_hold = 0;
     ast_respawn_ticks = AST_RESPAWN_TICKS;
 }
 
@@ -229,9 +279,8 @@ static void asteroids_tick(minigame_t *g)
     if (ast_respawn_ticks > 0) ast_respawn_ticks--;
 
     /* ---- ship ---- */
-    if (ast_thrust_ticks > 0) {
+    if (ast_hold >= AST_HOLD_TO_THRUST) {
         float rad = (float)ast_heading * AST_DEG2RAD;
-        ast_thrust_ticks--;
         ast_ship_vx += cosf(rad) * AST_THRUST;
         ast_ship_vy += sinf(rad) * AST_THRUST;
     }
@@ -311,9 +360,6 @@ void asteroids_handle_tap(void)
     float rad;
 
     if (minigame_handle_tap(&asteroids_game)) return;
-
-    /* Thrust comes with the shot - see the file comment. */
-    ast_thrust_ticks = AST_THRUST_TICKS;
 
     rad = (float)ast_heading * AST_DEG2RAD;
     for (i = 0; i < AST_SHOT_MAX; i++) {
@@ -447,14 +493,14 @@ static void ast_draw_ship(lv_draw_ctx_t *ctx)
     ast_line(ctx, &hull, lx, ly, tx, ty);
     ast_line(ctx, &hull, rx, ry, tx, ty);
 
-    if (ast_thrust_ticks > 0) {
+    if (ast_hold >= AST_HOLD_TO_THRUST) {
         float fx, fy, f1x, f1y, f2x, f2y;
         lv_draw_line_dsc_init(&flame);
         flame.color = lv_color_hex(0xFF7043);
         flame.width = 2;
         flame.opa = LV_OPA_COVER;
         /* Length flickers with the burn so it reads as fire, not a rod. */
-        AST_PT(-6.0f - (float)(ast_thrust_ticks % 3) * 3.0f, 0.0f, fx, fy);
+        AST_PT(-6.0f - (float)(lv_tick_get() / 60 % 3) * 3.0f, 0.0f, fx, fy);
         AST_PT(-5.0f, -4.0f, f1x, f1y);
         AST_PT(-5.0f,  4.0f, f2x, f2y);
         ast_line(ctx, &flame, f1x, f1y, fx, fy);

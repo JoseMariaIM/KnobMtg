@@ -13,6 +13,20 @@
  * unlike the continuous sweep Pong and Breakout use. A tap fires down
  * whichever lane you are standing in.
  *
+ * What stops it being a button-mashing exercise is that enemies which
+ * reach the rim do not politely vanish: they climb OUT and crawl
+ * around the lip toward you. The first cut let anything in another
+ * lane escape harmlessly, which made defending your own lane and
+ * scoring the same action - so holding the trigger and spinning was
+ * both optimal and completely safe. Now every one you let through is
+ * still on the board and coming.
+ *
+ * A crawler that reaches your lane grapples rather than killing
+ * outright: you have a moment to shoot it, or to turn away, and
+ * turning away resets it. That is the choice the game is made of -
+ * the lane you are in is the only one you can shoot down, and also the
+ * only one that can hurt you.
+ *
  * Perspective comes from one simple rule: a thing at depth d (1.0 at
  * the centre, 0.0 at the rim) sits at radius TEM_R_RIM - d * span and
  * is drawn proportionally smaller. That single mapping makes the well
@@ -27,14 +41,40 @@
 #define TEM_LANES     12      /* 30 degrees each */
 #define TEM_LANE_DEG  (360 / TEM_LANES)
 
-#define TEM_SHOT_MAX      6
+/* Two, not six. With more in the air a player could spin the knob and
+   hold the trigger, sweeping every lane at once - the shot travels the
+   whole lane, so aiming barely mattered and every sweep killed
+   everything. Two means you are covering two lanes and choosing which. */
+#define TEM_SHOT_MAX      2
 #define TEM_SHOT_SPEED 0.075f /* depth units per tick: rim to throat in ~13 */
+/* Paced by a cooldown rather than by the slot count, for the same
+   reason Invaders is: a cap on shots in flight makes the rate depend
+   on whether the last one connected, which reads as the button
+   misfiring. */
+#define TEM_SHOT_COOLDOWN 6
 
 #define TEM_ENEMY_MAX     10
 #define TEM_ENEMY_BASE  0.0075f  /* climb per tick at level 1 */
 #define TEM_ENEMY_LEVEL 0.0016f  /* added per level */
-#define TEM_SPAWN_TICKS_MIN 26
-#define TEM_SPAWN_TICKS_VAR 40
+/* Capped, or the late game degenerates: uncapped, a high enough level
+   has enemies crossing the whole well inside one tick, so they arrive
+   at the rim before they can be shot in it and the game collapses into
+   nothing but crawlers. The floor on the spawn interval is what should
+   be making it hard by then, not a climb nobody can react to. */
+#define TEM_CLIMB_MAX   0.050f
+/* Spawn interval, which TIGHTENS with the level. Leaving it fixed was
+   the real reason the game never got hard: by level 48 enemies climbed
+   the well in twelve ticks but still arrived one at a time every
+   thirty-five, so there was never enough at once to overwhelm anyone.
+   Climb speed alone does not create pressure - volume does. */
+#define TEM_SPAWN_TICKS_MIN 30
+#define TEM_SPAWN_TICKS_VAR 24
+#define TEM_SPAWN_PER_LEVEL  2   /* ticks shaved per level */
+#define TEM_SPAWN_FLOOR      7
+
+/* Rim crawlers: what an enemy becomes when it gets past you. */
+#define TEM_CRAWL_TICKS    16   /* ticks per lane step along the rim */
+#define TEM_GRAPPLE_TICKS  20   /* grace once it is in your lane */
 /* An enemy that reaches the rim takes a life; one that gets close
    enough to matter is worth seeing early, which is what the widening
    sprite does for free. */
@@ -52,6 +92,10 @@ typedef struct {
     int   lane;
     float depth;      /* 1.0 at the throat, 0.0 at the rim */
     int   wiggle;     /* drawn limb animation */
+    bool  on_rim;     /* climbed out; now crawling the lip toward you */
+    bool  grabbed;    /* has hold of you: follows your lane until shot */
+    int   crawl;      /* ticks until its next lane step */
+    int   grapple;    /* ticks left once it has hold */
 } tem_enemy_t;
 
 typedef struct {
@@ -66,6 +110,7 @@ static int  tem_lane;          /* the claw's lane */
 static tem_enemy_t tem_enemies[TEM_ENEMY_MAX];
 static tem_shot_t  tem_shots[TEM_SHOT_MAX];
 static int  tem_spawn_countdown;
+static int  tem_shot_cooldown;
 static int  tem_lives;
 static int  tem_level;
 static int  tem_kills;
@@ -111,7 +156,18 @@ static void tem_point(int lane_deg, float depth, float *x, float *y)
 
 static float tem_climb_rate(void)
 {
-    return TEM_ENEMY_BASE + (float)(tem_level - 1) * TEM_ENEMY_LEVEL;
+    float r = TEM_ENEMY_BASE + (float)(tem_level - 1) * TEM_ENEMY_LEVEL;
+    return (r > TEM_CLIMB_MAX) ? TEM_CLIMB_MAX : r;
+}
+
+static int tem_spawn_interval(void)
+{
+    int base = TEM_SPAWN_TICKS_MIN - (tem_level - 1) * TEM_SPAWN_PER_LEVEL;
+    int var = TEM_SPAWN_TICKS_VAR - (tem_level - 1);
+
+    if (base < TEM_SPAWN_FLOOR) base = TEM_SPAWN_FLOOR;
+    if (var < 4) var = 4;
+    return base + (int)(esp_random() % (uint32_t)var);
 }
 
 static void tem_spawn_enemy(void)
@@ -123,8 +179,11 @@ static void tem_spawn_enemy(void)
         tem_enemies[i].lane = (int)(esp_random() % TEM_LANES);
         tem_enemies[i].depth = 1.0f;
         tem_enemies[i].wiggle = (int)(esp_random() % 100);
-        tem_spawn_countdown = TEM_SPAWN_TICKS_MIN +
-                              (int)(esp_random() % TEM_SPAWN_TICKS_VAR);
+        tem_enemies[i].on_rim = false;
+        tem_enemies[i].grabbed = false;
+        tem_enemies[i].crawl = TEM_CRAWL_TICKS;
+        tem_enemies[i].grapple = TEM_GRAPPLE_TICKS;
+        tem_spawn_countdown = tem_spawn_interval();
         return;
     }
 }
@@ -136,6 +195,7 @@ static void tempest_reset(minigame_t *g)
     memset(tem_enemies, 0, sizeof(tem_enemies));
     memset(tem_shots, 0, sizeof(tem_shots));
     tem_spawn_countdown = TEM_SPAWN_TICKS_MIN;
+    tem_shot_cooldown = 0;
     tem_lives = TEM_LIVES;
     tem_level = 1;
     tem_kills = 0;
@@ -162,6 +222,7 @@ static void tempest_tick(minigame_t *g)
     tem_anim++;
     if (tem_hit_flash > 0) tem_hit_flash--;
 
+    if (tem_shot_cooldown > 0) tem_shot_cooldown--;
     if (--tem_spawn_countdown <= 0) tem_spawn_enemy();
 
     /* ---- shots travel away from you, down the well ---- */
@@ -188,21 +249,49 @@ static void tempest_tick(minigame_t *g)
         }
     }
 
-    /* ---- enemies climb toward the rim ---- */
+    /* ---- enemies climb, then crawl the rim ---- */
     for (i = 0; i < TEM_ENEMY_MAX; i++) {
-        if (!tem_enemies[i].active) continue;
-        tem_enemies[i].depth -= climb;
-        tem_enemies[i].wiggle++;
-        if (tem_enemies[i].depth > 0.0f) continue;
+        tem_enemy_t *en = &tem_enemies[i];
 
-        /* Reached the lip. Only your own lane can hurt you - elsewhere
-           it climbs out and is simply gone, which keeps the game about
-           choosing which lane to defend. */
-        if (tem_enemies[i].lane == tem_lane) {
-            tem_lose_life(g);
-            return;
+        if (!en->active) continue;
+        en->wiggle++;
+
+        if (!en->on_rim) {
+            en->depth -= climb;
+            if (en->depth > 0.0f) continue;
+            /* Out of the well and onto the lip, wherever that was. */
+            en->depth = 0.0f;
+            en->on_rim = true;
+            en->crawl = TEM_CRAWL_TICKS;
+            en->grapple = TEM_GRAPPLE_TICKS;
+            continue;
         }
-        tem_enemies[i].active = false;
+
+        if (en->grabbed || en->lane == tem_lane) {
+            /* It has hold of you, and it keeps hold: its lane follows
+               yours from here. Turning away used to shake it off, which
+               made spinning the knob a perfect dodge - a player could
+               hold the trigger, spin, and never be touched no matter how
+               many got past them. The only way out now is to shoot it,
+               which costs a shot and the moment it takes to land. */
+            en->grabbed = true;
+            en->lane = tem_lane;
+            if (--en->grapple <= 0) {
+                tem_lose_life(g);
+                return;
+            }
+            continue;
+        }
+
+        if (--en->crawl > 0) continue;
+        en->crawl = TEM_CRAWL_TICKS;
+        {
+            /* One lane at a time, the short way round. */
+            int diff = tem_lane - en->lane;
+            while (diff > TEM_LANES / 2) diff -= TEM_LANES;
+            while (diff < -TEM_LANES / 2) diff += TEM_LANES;
+            en->lane = (en->lane + (diff > 0 ? 1 : -1) + TEM_LANES) % TEM_LANES;
+        }
     }
 
     if (tem_kills >= TEM_LEVEL_KILLS) {
@@ -226,12 +315,14 @@ void tempest_handle_tap(void)
     int i;
 
     if (minigame_handle_tap(&tempest_game)) return;
+    if (tem_shot_cooldown > 0) return;
 
     for (i = 0; i < TEM_SHOT_MAX; i++) {
         if (tem_shots[i].active) continue;
         tem_shots[i].active = true;
         tem_shots[i].lane = tem_lane;
         tem_shots[i].depth = 0.0f;
+        tem_shot_cooldown = TEM_SHOT_COOLDOWN;
         return;
     }
 }
@@ -259,6 +350,26 @@ int tempest_test_shots(void)
     for (i = 0; i < TEM_SHOT_MAX; i++) if (tem_shots[i].active) n++;
     return n;
 }
+
+int tempest_test_grabbers(void)
+{
+    int i, n = 0;
+    for (i = 0; i < TEM_ENEMY_MAX; i++) {
+        if (tem_enemies[i].active && tem_enemies[i].grabbed) n++;
+    }
+    return n;
+}
+
+int tempest_test_rim_crawlers(void)
+{
+    int i, n = 0;
+    for (i = 0; i < TEM_ENEMY_MAX; i++) {
+        if (tem_enemies[i].active && tem_enemies[i].on_rim) n++;
+    }
+    return n;
+}
+
+int tempest_test_shot_cooldown(void) { return tem_shot_cooldown; }
 
 bool tempest_test_closest_enemy(int *lane, int *climb_pct)
 {
@@ -370,8 +481,19 @@ static void tem_draw_enemy(lv_draw_ctx_t *ctx, const tem_enemy_t *en)
     uy = sinf((float)deg * TEM_DEG2RAD);
 
     lv_draw_line_dsc_init(&dsc);
-    dsc.color = lv_color_hex(0xAB47BC);
-    dsc.width = 2;
+    /* A crawler on the rim is a different kind of problem from
+       something still down the well - it is beside you and closing, so
+       it gets a hot colour and a thicker line rather than being just a
+       bigger purple one. It flashes once it has hold of your lane. */
+    if (en->on_rim) {
+        bool gripping = en->grabbed;
+        dsc.color = (gripping && ((en->wiggle / 3) % 2))
+                        ? lv_color_hex(0xFFFFFF) : lv_color_hex(0xEF5350);
+        dsc.width = 3;
+    } else {
+        dsc.color = lv_color_hex(0xAB47BC);
+        dsc.width = 2;
+    }
     dsc.opa = LV_OPA_COVER;
 
     {
