@@ -1,6 +1,7 @@
 #include "flappy.h"
 #include "minigame.h"
 #include "esp_random.h"
+#include <math.h>
 #include <string.h>
 
 /* Flappy Bird on a 360x360 round panel. The bird holds a fixed x and
@@ -22,11 +23,16 @@
 #define FLAPPY_FLAP     -7.40f
 #define FLAPPY_MAX_FALL  11.0f
 
-/* The bird's own limits, not the pipes'. Both sit where the round glass
-   still shows them: a floor at the canvas edge would be a fatal line the
-   player literally cannot see. */
-#define FLAPPY_CEILING      30
-#define FLAPPY_FLOOR       322
+/* The boundary is the glass itself - there is no drawn floor and no
+   ceiling, just the round edge of the panel. A horizontal brown strip
+   was a line the player had to learn; the bezel is a limit they can
+   already see, and on a circular display it is the honest one: the
+   playable space really is a disc, so pretending its top and bottom
+   are straight wasted the middle and lied about the corners.
+   Radius is a shade inside the visible circle so the bird is lost at
+   the edge rather than after vanishing under it. */
+#define FLAPPY_RIM_R       172
+#define FLAPPY_BIRD_HALF    10   /* half the bird's height, for the rim test */
 
 #define FLAPPY_PIPE_W       42
 #define FLAPPY_PIPE_GAP    104   /* vertical opening, generous: one button */
@@ -64,6 +70,7 @@ static minigame_t flappy_game = {
     .on_tick  = flappy_tick,
     .on_draw  = flappy_draw,
     .on_tap   = flappy_handle_tap,
+    .tap_on_press = true,     /* an action game: fire on finger-down */
 };
 
 static int flappy_random_gap(void)
@@ -125,11 +132,18 @@ static void flappy_tick(minigame_t *g)
     if (flappy_vy > FLAPPY_MAX_FALL) flappy_vy = FLAPPY_MAX_FALL;
     flappy_y += flappy_vy;
 
-    /* Ceiling and floor are both fatal, as in the original - a bird
-       parked against the roof would otherwise be a safe strategy. */
-    if (flappy_y < FLAPPY_CEILING || flappy_y + FLAPPY_BIRD_H > FLAPPY_FLOOR) {
-        minigame_over(g);
-        return;
+    /* Touching the rim anywhere is fatal, top or bottom alike - a bird
+       parked against the roof would otherwise be a safe strategy.
+       Expressed against the disc rather than as two y limits: the bird
+       holds a fixed x today, so this reduces to the same pair of
+       numbers, but it says what the rule actually is. */
+    {
+        float cx = (float)(FLAPPY_BIRD_X + FLAPPY_BIRD_W / 2) - 180.0f;
+        float cy = flappy_y + (float)FLAPPY_BIRD_H / 2.0f - 180.0f;
+        if (sqrtf(cx * cx + cy * cy) + (float)FLAPPY_BIRD_HALF > (float)FLAPPY_RIM_R) {
+            minigame_over(g);
+            return;
+        }
     }
 
     flappy_spawn_x -= FLAPPY_SPEED;
@@ -277,7 +291,7 @@ static void flappy_draw_bird(lv_draw_ctx_t *ctx)
 static void flappy_draw(lv_event_t *e)
 {
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(e);
-    lv_draw_rect_dsc_t body, lip, ground;
+    lv_draw_rect_dsc_t body, lip;
     int i;
 
     lv_draw_rect_dsc_init(&body);
@@ -293,13 +307,6 @@ static void flappy_draw(lv_event_t *e)
         if (!flappy_pipes[i].active) continue;
         flappy_draw_pipe(ctx, &body, &lip, &flappy_pipes[i]);
     }
-
-    /* A thin strip marking the fatal floor, so the limit is visible
-       rather than something the player only discovers by hitting it. */
-    lv_draw_rect_dsc_init(&ground);
-    ground.bg_color = lv_color_hex(0x6D4C41);
-    ground.bg_opa = LV_OPA_COVER;
-    flappy_fill(ctx, &ground, 70, FLAPPY_FLOOR, 290, FLAPPY_FLOOR + 4);
 
     flappy_draw_bird(ctx);
 }

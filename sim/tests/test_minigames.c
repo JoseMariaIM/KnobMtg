@@ -31,6 +31,42 @@ static void tick_ms(int ms)
     lv_timer_handler();
 }
 
+/* A real pointer device, so a "tap" in these tests is a press and a
+   release at a point on the screen - the same thing the touch panel
+   produces - rather than a hand-made LVGL event. That matters: games
+   subscribe to either LV_EVENT_PRESSED or LV_EVENT_CLICKED depending
+   on whether their action should land on finger-down, and a test that
+   posts one specific event only exercises half of them. */
+static lv_indev_drv_t test_pointer_drv;
+static lv_point_t test_pointer_at;
+static bool test_pointer_down;
+
+static void test_pointer_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
+{
+    (void)drv;
+    data->point = test_pointer_at;
+    data->state = test_pointer_down ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+}
+
+static void test_pointer_init(void)
+{
+    lv_indev_drv_init(&test_pointer_drv);
+    test_pointer_drv.type = LV_INDEV_TYPE_POINTER;
+    test_pointer_drv.read_cb = test_pointer_read;
+    lv_indev_drv_register(&test_pointer_drv);
+}
+
+static void test_tap_screen_at(int x, int y)
+{
+    int i;
+    test_pointer_at.x = (lv_coord_t)x;
+    test_pointer_at.y = (lv_coord_t)y;
+    test_pointer_down = true;
+    for (i = 0; i < 3; i++) tick_ms(20);
+    test_pointer_down = false;
+    for (i = 0; i < 3; i++) tick_ms(20);
+}
+
 static void ticks(int n, int ms)
 {
     int i;
@@ -1048,7 +1084,7 @@ static void test_tap_reaches_every_game(void)
         assert(*games[i].screen != NULL);
         assert(minigame_test_state(*games[i].screen) == MINIGAME_READY);
 
-        lv_event_send(*games[i].screen, LV_EVENT_CLICKED, NULL);
+        test_tap_screen_at(180, 180);
 
         if (minigame_test_state(*games[i].screen) != MINIGAME_PLAYING) {
             printf("FAIL: tapping %s's screen did nothing - is on_tap wired?\n",
@@ -1061,9 +1097,35 @@ static void test_tap_reaches_every_game(void)
     /* The control: dino, with its own hand-rolled wiring. */
     open_dino_screen();
     assert(dino_test_state() == DINO_TEST_READY);
-    lv_event_send(screen_dino, LV_EVENT_CLICKED, NULL);
+    test_tap_screen_at(180, 180);
     assert(dino_test_state() == DINO_TEST_PLAYING);
     printf("PASS: a real screen tap starts dino too\n");
+
+    /* And a tap anywhere works, not just in the middle. Invaders is the
+       one to check: its ship is at the bottom, and a player reported
+       firing only seeming to work down there. */
+    open_invaders_screen();
+    test_tap_screen_at(180, 300);
+    assert(minigame_test_state(screen_invaders) == MINIGAME_PLAYING);
+    {
+        const int spots[][2] = {
+            {180, 30}, {180, 90}, {60, 180}, {300, 180}, {180, 330},
+        };
+        unsigned k;
+        for (k = 0; k < sizeof(spots) / sizeof(spots[0]); k++) {
+            int before = invaders_test_shots_in_flight();
+            test_tap_screen_at(spots[k][0], spots[k][1]);
+            if (invaders_test_shots_in_flight() <= before) {
+                printf("FAIL: tapping invaders at (%d,%d) fired nothing\n",
+                       spots[k][0], spots[k][1]);
+            }
+            assert(invaders_test_shots_in_flight() > before);
+            /* Let the shot clear so the three-slot cap cannot mask the
+               next probe as a dead spot. */
+            { int t; for (t = 0; t < 40; t++) tick_ms(26); }
+        }
+    }
+    printf("PASS: invaders fires from a tap anywhere on the glass\n");
 }
 
 /* Leaving a game returns to the menu page it was started from. With
@@ -1329,6 +1391,7 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
 
     test_harness_init();
+    test_pointer_init();
     /* The intro's pending back_to_main() would otherwise navigate away
        mid-test and silently pause whichever game is running - see
        test_harness_settle_intro(). */

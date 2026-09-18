@@ -99,6 +99,7 @@ static minigame_t asteroids_game = {
     .on_tick  = asteroids_tick,
     .on_draw  = asteroids_draw,
     .on_tap   = asteroids_handle_tap,
+    .tap_on_press = true,     /* an action game: fire on finger-down */
 };
 
 static int ast_norm_angle(int a)

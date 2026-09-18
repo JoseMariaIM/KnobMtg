@@ -117,6 +117,7 @@ static minigame_t invaders_game = {
     .on_tick  = invaders_tick,
     .on_draw  = invaders_draw,
     .on_tap   = invaders_handle_tap,
+    .tap_on_press = true,     /* an action game: fire on finger-down */
 };
 
 static void inv_alien_rect(int idx, int *x1, int *y1, int *x2, int *y2)

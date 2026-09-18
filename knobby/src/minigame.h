@@ -50,6 +50,23 @@ struct minigame_s {
        game that fills in everything else but leaves this NULL is simply
        deaf to the touchscreen. */
     void (*on_tap)(void);
+    /* Deliver the tap on finger-DOWN instead of on release.
+     *
+     * For an action game this is simply better - a shot should leave
+     * when you press, not when you let go - and it is also robust to a
+     * release that never arrives as a click. On the device the touch
+     * path can swallow a release: a gesture that classifies as a swipe
+     * calls lv_indev_reset(), a press that wakes a dimmed screen is
+     * eaten deliberately, and a drag past the scroll threshold cancels
+     * the click too. None of that is reproducible in the simulator,
+     * which has its own input path, so the fix is to stop depending on
+     * the release at all where the action is harmless to repeat.
+     *
+     * Games whose tap does something destructive or final - Tetris'
+     * hard drop, Breakout's pause, a Rock Paper Scissors throw - stay
+     * on release, where a gesture that turns into a swipe correctly
+     * does NOT trigger them. */
+    bool            tap_on_press;
     /* Optional, and a pair: on_build adds any widgets of the game's own
        on top of the shared screen, on_free drops the pointers to them
        just before that screen is deleted.
