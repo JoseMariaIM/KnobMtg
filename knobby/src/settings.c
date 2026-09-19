@@ -15,7 +15,6 @@
 #include "ui_player_menu.h"
 #include "ui_wifi.h"
 #include "round_safe.h"
-#include "ui_list.h"
 #include "snake.h"
 #include "pong.h"
 #include "dino.h"
@@ -40,7 +39,8 @@ lv_obj_t *screen_minigames_menu = NULL;
 /* Page 0 of the minigames menu IS screen_minigames_menu, so the
    settings item that opens it (and settings_handle_back's scan over
    nav_screen pointers) keeps working unchanged. */
-
+lv_obj_t *minigames_pages[MINIGAMES_PAGE_MAX] = {NULL};
+int minigames_page_count = 0;
 
 // ---------- widgets ----------
 static lv_obj_t *arc_brightness = NULL;
@@ -209,7 +209,7 @@ static uint32_t deselect_color(int index)
 static void event_quad_screen_settings(lv_event_t *e)
 {
     (void)e;
-    open_settings_list();
+    lv_scr_load(settings_pages[0]);
 }
 
 static const char *autodim_label(int index)
@@ -548,115 +548,94 @@ static const setting_item_t settings_items[] = {
     { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
     { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
     { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
+    { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES, .navigate = open_minigames_menu, .nav_screen = &screen_minigames_menu },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
     { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE, .navigate = open_language_picker_screen, .nav_screen = &screen_language_picker },
     { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI, .navigate = open_wifi_settings_screen, .nav_screen = &screen_wifi_settings },
     { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES, .navigate = open_ota_update_screen, .nav_screen = &screen_ota_update },
 };
 #define SETTINGS_ITEM_COUNT ((int)(sizeof(settings_items) / sizeof(settings_items[0])))
+#define MAX_SETTINGS_PAGES  ((SETTINGS_ITEM_COUNT + 2) / 3)
 
-lv_obj_t *screen_settings_list = NULL;
+lv_obj_t *settings_pages[MAX_SETTINGS_PAGES];
+int settings_page_count = 0;
+static lv_obj_t *setting_btns[SETTINGS_ITEM_COUNT];
+static lv_obj_t *setting_lbls[SETTINGS_ITEM_COUNT];
+static int setting_page_of[SETTINGS_ITEM_COUNT];
 
-/* Settings used to be five quad pages of three items plus a "More"
-   tile - a quarter of every page spent on paging, and no way to see
-   where you were in the sequence. It is one scrolling list now; see
-   ui_list.h for why a list and not a grid. */
-static void settings_row_text(int index, char *name, size_t name_len,
-                              char *value, size_t value_len);
-static void settings_row_activate(int index);
-
-static const ui_list_model_t settings_list_model = {
-    .count = SETTINGS_ITEM_COUNT,
-    .text = settings_row_text,
-    .activate = settings_row_activate,
-};
-
-static ui_list_t settings_list = {
-    .screen = &screen_settings_list,
-    .title = STR_MENU_SETTINGS,
-    .model = &settings_list_model,
-};
-
-static void settings_row_text(int index, char *name, size_t name_len,
-                              char *value, size_t value_len)
+void refresh_settings_pages_ui(void)
 {
-    const setting_item_t *it;
-
-    name[0] = '\0';
-    value[0] = '\0';
-    if (index < 0 || index >= SETTINGS_ITEM_COUNT) return;
-    it = &settings_items[index];
-
-    if (it->label != NULL) {
-        /* These labels are authored as stacked lines ("Auto-dim\n30s")
-           because that is what a square tile wanted. A row wants them
-           side by side, so they are flattened and split here rather
-           than duplicated into a second set of strings. */
-        ui_list_split_label(it->label(it->get()), name, name_len, value, value_len);
-    } else {
-        ui_list_split_label(t(it->fixed_label_id), name, name_len, value, value_len);
-        /* A navigation row has no value to show, and splitting a
-           two-word name would wrongly turn its last word into one -
-           put the whole thing back as the name. */
-        if (value[0] != '\0') {
-            snprintf(name, name_len, "%s", t(it->fixed_label_id));
-            {
-                char *nl;
-                while ((nl = strchr(name, '\n')) != NULL) *nl = ' ';
-            }
-            value[0] = '\0';
-        }
+    int i;
+    for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
+        const setting_item_t *it = &settings_items[i];
+        int v;
+        if (setting_btns[i] == NULL || it->get == NULL) continue;
+        v = it->get();
+        lv_label_set_text(setting_lbls[i], it->label(v));
+        set_btn_color(setting_btns[i], it->color ? it->color(v) : 0x1A1A2E);
     }
 }
 
-static void settings_row_activate(int index)
+static void event_setting_item(lv_event_t *e)
 {
-    const setting_item_t *it;
-
-    if (index < 0 || index >= SETTINGS_ITEM_COUNT) return;
-    it = &settings_items[index];
-
+    const setting_item_t *it = lv_event_get_user_data(e);
+    if (it == NULL) return;
     if (it->navigate != NULL) {
         it->navigate();
         return;
     }
     it->set((it->get() + 1) % it->count);
+    refresh_settings_pages_ui();
 }
 
-void refresh_settings_pages_ui(void)
+static void event_setting_more(lv_event_t *e)
 {
-    if (screen_settings_list != NULL) ui_list_refresh(&settings_list);
+    int page = (int)(intptr_t)lv_event_get_user_data(e);
+    if (page >= 0 && page < settings_page_count)
+        lv_scr_load(settings_pages[page]);
 }
 
-static void build_settings_list(void)
+/* Chunk the flat item list into quad pages: 3 items + "More" per page.
+   "More" always advances and wraps from the last page to the first, so
+   tap navigation cycles just like the knob. */
+static void build_settings_pages(void)
 {
-    ui_list_build(&settings_list);
-}
+    int idx = 0;
+    int page = 0;
+    int total_pages = (SETTINGS_ITEM_COUNT + 2) / 3;
 
-/* Only one menu list is ever resident.
- *
- * Same argument as the minigames' own screen eviction: you can only be
- * looking at one menu, so holding all three costs ~12KB of a 128KB
- * pool permanently for nothing. Rebuilding is a few dozen objects on a
- * menu tap, far below anything noticeable, and it means the next menu
- * added is free rather than another bite out of the margin.
- *
- * Declared here and used by all three openers, which is why the lists
- * are forward-declared above it. */
-static ui_list_t tools_list;
-static ui_list_t minigames_list;
+    while (idx < SETTINGS_ITEM_COUNT) {
+        int remaining = SETTINGS_ITEM_COUNT - idx;
+        int on_page = (remaining < 3) ? remaining : 3;
+        int first = idx;
+        int s;
+        quad_item_t q[4];
 
-static void menus_evict_others(ui_list_t *keep)
-{
-    if (keep != &settings_list)  ui_list_free(&settings_list);
-    if (keep != &tools_list)     ui_list_free(&tools_list);
-    if (keep != &minigames_list) ui_list_free(&minigames_list);
-}
-
-void open_settings_list(void)
-{
-    ui_list_open(&settings_list);
-    menus_evict_others(&settings_list);
+        memset(q, 0, sizeof(q));
+        for (s = 0; s < 4; s++) q[s].label = "";
+        for (s = 0; s < on_page; s++, idx++) {
+            const setting_item_t *it = &settings_items[idx];
+            q[s].label = (it->label != NULL) ? it->label(it->get()) : t(it->fixed_label_id);
+            q[s].cb = event_setting_item;
+            q[s].enabled = true;
+            q[s].event = (it->event != 0) ? it->event : LV_EVENT_CLICKED;
+            q[s].user_data = (void *)it;
+            setting_page_of[idx] = page;
+        }
+        q[3].label = t(STR_SETTINGS_MORE);
+        q[3].cb = event_setting_more;
+        q[3].enabled = true;
+        q[3].event = LV_EVENT_CLICKED;
+        q[3].user_data = (void *)(intptr_t)((page + 1) % total_pages);
+        build_quad_screen(&settings_pages[page], q);
+        for (s = 0; s < on_page; s++) {
+            setting_btns[first + s] = lv_obj_get_child(settings_pages[page], s);
+            setting_lbls[first + s] = lv_obj_get_child(setting_btns[first + s], 0);
+        }
+        page++;
+    }
+    settings_page_count = page;
+    refresh_settings_pages_ui();
 }
 
 bool settings_handle_back(lv_obj_t *screen)
@@ -666,48 +645,51 @@ bool settings_handle_back(lv_obj_t *screen)
     for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
         if (settings_items[i].nav_screen != NULL && screen == *settings_items[i].nav_screen) {
             if (screen == screen_settings) settings_save();
-            /* Back from a sub-screen returns to the list with that item
-               still under the cursor, so you resume where you were
-               rather than at the top. */
-            if (screen_settings_list == NULL) build_settings_list();
-            ui_list_focus(&settings_list, i);
-            lv_scr_load(screen_settings_list);
+            lv_scr_load(settings_pages[setting_page_of[i]]);
             return true;
         }
     }
-    if (screen != NULL && screen == screen_settings_list) {
-        settings_save();
-        lv_scr_load(screen_quad_menu);
-        return true;
+    /* Back from any settings page exits to the quad menu — back means
+       "leave settings", not "previous page" (the knob flips pages). */
+    for (i = 0; i < settings_page_count; i++) {
+        if (screen == settings_pages[i]) {
+            settings_save();
+            lv_scr_load(screen_quad_menu);
+            return true;
+        }
     }
     return false;
 }
 
-/* Knob moves the cursor down the settings list. Returns false when the
-   active screen is not that list. */
+/* Knob left/right flips between settings pages, with wraparound.
+   Returns false when the active screen is not a settings page. */
 bool settings_knob_page(int dir)
 {
-    if (screen_settings_list == NULL) return false;
-    if (lv_scr_act() != screen_settings_list) return false;
-    ui_list_knob(&settings_list, dir);
-    return true;
+    int i;
+
+    for (i = 0; i < settings_page_count; i++) {
+        if (lv_scr_act() == settings_pages[i]) {
+            lv_scr_load(settings_pages[(i + dir + settings_page_count) % settings_page_count]);
+            return true;
+        }
+    }
+    return false;
 }
 
-bool settings_focus_item(const char *id)
+int settings_item_page(const char *id)
 {
     int i;
     for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
-        if (strcmp(settings_items[i].id, id) != 0) continue;
-        if (screen_settings_list == NULL) build_settings_list();
-        return ui_list_focus(&settings_list, i);
+        if (strcmp(settings_items[i].id, id) == 0)
+            return setting_page_of[i];
     }
-    return false;
+    return -1;
 }
 
 static void event_quad_tools(lv_event_t *e)
 {
     (void)e;
-    open_tools_menu();
+    lv_scr_load(screen_tools_menu);
 }
 
 static void event_general_game_mode(lv_event_t *e)
@@ -731,78 +713,6 @@ static void event_general_reset(lv_event_t *e)
 }
 
 // ---------- screen builders ----------
-/* Tools: the things you DO, as opposed to Settings' things you
-   configure. Minigames moved in here from Settings for exactly that
-   reason - it sat among Brightness and WiFi, which is not where anyone
-   looks for a game. Five entries is one too many for a quad, which is
-   the other reason this is a list. */
-typedef struct {
-    string_id_t   name;
-    lv_event_cb_t open;
-} tools_entry_t;
-
-static const tools_entry_t tools_entries[] = {
-    { STR_TOOL_DICE,      event_tool_dice },
-    { STR_TOOL_COIN,      event_tool_coin },
-    { STR_TOOL_EVENT_LOG, event_open_damage_log },
-    { STR_TOOL_MANA_POOL, event_tool_mana },
-    { STR_SETTING_MINIGAMES, NULL },   /* NULL: opened directly below */
-};
-#define TOOLS_ENTRY_COUNT \
-    ((int)(sizeof(tools_entries) / sizeof(tools_entries[0])))
-
-static void tools_row_text(int index, char *name, size_t name_len,
-                           char *value, size_t value_len)
-{
-    name[0] = '\0';
-    value[0] = '\0';
-    if (index < 0 || index >= TOOLS_ENTRY_COUNT) return;
-    snprintf(name, name_len, "%s", t(tools_entries[index].name));
-    {
-        char *nl;
-        while ((nl = strchr(name, '\n')) != NULL) *nl = ' ';
-    }
-}
-
-static void tools_row_activate(int index)
-{
-    if (index < 0 || index >= TOOLS_ENTRY_COUNT) return;
-    if (tools_entries[index].open != NULL) {
-        tools_entries[index].open(NULL);
-        return;
-    }
-    open_minigames_menu();
-}
-
-static const ui_list_model_t tools_list_model = {
-    .count = TOOLS_ENTRY_COUNT,
-    .text = tools_row_text,
-    .activate = tools_row_activate,
-};
-
-static void build_tools_list(void)
-{
-    tools_list.screen = &screen_tools_menu;
-    tools_list.title = STR_MENU_TOOLS;
-    tools_list.model = &tools_list_model;
-    ui_list_build(&tools_list);
-}
-
-void open_tools_menu(void)
-{
-    if (screen_tools_menu == NULL) build_tools_list();
-    ui_list_open(&tools_list);
-    menus_evict_others(&tools_list);
-}
-
-bool tools_knob(int dir)
-{
-    if (screen_tools_menu == NULL) return false;
-    if (lv_scr_act() != screen_tools_menu) return false;
-    ui_list_knob(&tools_list, dir);
-    return true;
-}
-
 void build_quad_menus(void)
 {
     quad_item_t main_items[4] = {
@@ -813,12 +723,19 @@ void build_quad_menus(void)
     };
     build_quad_screen(&screen_quad_menu, main_items);
 
-    /* None of the three lists is built here. Each is a screen many
-       sessions never open, and a list costs about as much pool as the
-       run of quad pages it replaced - so it is held only once someone
-       actually goes there. open_tools_menu(), open_settings_list() and
-       open_minigames_menu() each build on first entry, the same way
-       the games and the WiFi cluster do. */
+    quad_item_t tools_items[4] = {
+        {t(STR_TOOL_DICE),        event_tool_dice, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_COIN),        event_tool_coin, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_EVENT_LOG),  event_open_damage_log, true, LV_EVENT_CLICKED},
+        {t(STR_TOOL_MANA_POOL),  event_tool_mana, true, LV_EVENT_CLICKED},
+    };
+    build_quad_screen(&screen_tools_menu, tools_items);
+
+    build_settings_pages();
+    /* The minigames menu is NOT built here: three quad pages of tiles
+       for a screen many sessions never open is ~3.5KB of the LVGL pool
+       held permanently. open_minigames_menu() builds it on first
+       entry, same as the games themselves. */
 }
 
 void build_settings_screen(void)
@@ -902,87 +819,115 @@ static const minigame_entry_t minigame_entries[] = {
 #define MINIGAME_ENTRY_COUNT \
     ((int)(sizeof(minigame_entries) / sizeof(minigame_entries[0])))
 
-/* The row the running game was started from, so leaving it puts the
-   cursor back on the game you just played rather than at the top. */
-static int minigames_launch_row = 0;
+/* Which menu page the running game was started from, so leaving it
+   comes back to the tile the user actually pressed rather than dumping
+   them on page 1 to page their way back. Recorded at launch rather than
+   derived from a game->page table because the page the user was looking
+   at IS the page that game's tile is on - and this stays right if a
+   game is ever listed twice or the order changes. */
+static int minigames_launch_page = 0;
 
-static void minigames_row_text(int index, char *name, size_t name_len,
-                               char *value, size_t value_len);
-static void minigames_row_activate(int index);
-
-static const ui_list_model_t minigames_list_model = {
-    .count = MINIGAME_ENTRY_COUNT,
-    .text = minigames_row_text,
-    .activate = minigames_row_activate,
-};
-
-
-static void minigames_row_text(int index, char *name, size_t name_len,
-                               char *value, size_t value_len)
+static void event_open_minigame(lv_event_t *e)
 {
-    name[0] = '\0';
-    value[0] = '\0';
-    if (index < 0 || index >= MINIGAME_ENTRY_COUNT) return;
-    /* Game names are single words (or deliberately two lines, as Rock
-       Paper Scissors is) - flatten, never split: every word is part of
-       the name. */
-    snprintf(name, name_len, "%s", t(minigame_entries[index].name));
-    {
-        char *nl;
-        while ((nl = strchr(name, '\n')) != NULL) *nl = ' ';
+    const minigame_entry_t *entry = lv_event_get_user_data(e);
+    int i;
+
+    for (i = 0; i < minigames_page_count; i++) {
+        if (lv_scr_act() == minigames_pages[i]) {
+            minigames_launch_page = i;
+            break;
+        }
     }
+    if (entry != NULL && entry->open != NULL) entry->open();
 }
 
-static void minigames_row_activate(int index)
+static void event_minigames_more(lv_event_t *e)
 {
-    if (index < 0 || index >= MINIGAME_ENTRY_COUNT) return;
-    minigames_launch_row = index;
-    if (minigame_entries[index].open != NULL) minigame_entries[index].open();
+    int page = (int)(intptr_t)lv_event_get_user_data(e);
+    if (page >= 0 && page < minigames_page_count)
+        lv_scr_load(minigames_pages[page]);
 }
 
-/* Fresh entry: cursor at the top. */
+/* Fresh entry from Settings: always page 1. */
 void open_minigames_menu(void)
 {
     if (screen_minigames_menu == NULL) build_minigames_menu_screen();
-    ui_list_open(&minigames_list);
-    menus_evict_others(&minigames_list);
-    minigames_launch_row = 0;
+    minigames_launch_page = 0;
+    load_screen_if_needed(screen_minigames_menu);
 }
 
-/* Leaving a game: back to the row it was started from. */
+/* Leaving a game: back to the page it was started from. */
 void open_minigames_menu_at_launch_page(void)
 {
     if (screen_minigames_menu == NULL) build_minigames_menu_screen();
-    ui_list_focus(&minigames_list, minigames_launch_row);
-    load_screen_if_needed(screen_minigames_menu);
-    menus_evict_others(&minigames_list);
+    if (minigames_launch_page < 0 || minigames_launch_page >= minigames_page_count)
+        minigames_launch_page = 0;
+    load_screen_if_needed(minigames_pages[minigames_launch_page]);
 }
 
+/* Same 3-items-plus-"More" chunking as build_settings_pages(); see the
+   comment there for why "More" wraps rather than dead-ending. */
 void build_minigames_menu_screen(void)
 {
-    minigames_list.screen = &screen_minigames_menu;
-    minigames_list.title = STR_SETTING_MINIGAMES;
-    minigames_list.model = &minigames_list_model;
-    ui_list_build(&minigames_list);
+    int idx = 0;
+    int page = 0;
+    int total_pages = (MINIGAME_ENTRY_COUNT + 2) / 3;
+
+    while (idx < MINIGAME_ENTRY_COUNT && page < MINIGAMES_PAGE_MAX) {
+        int remaining = MINIGAME_ENTRY_COUNT - idx;
+        int on_page = (remaining < 3) ? remaining : 3;
+        int s;
+        quad_item_t q[4];
+
+        memset(q, 0, sizeof(q));
+        for (s = 0; s < 4; s++) q[s].label = "";
+        for (s = 0; s < on_page; s++, idx++) {
+            q[s].label = t(minigame_entries[idx].name);
+            q[s].cb = event_open_minigame;
+            q[s].enabled = true;
+            q[s].event = LV_EVENT_CLICKED;
+            q[s].user_data = (void *)&minigame_entries[idx];
+        }
+        q[3].label = t(STR_SETTINGS_MORE);
+        q[3].cb = event_minigames_more;
+        q[3].enabled = true;
+        q[3].event = LV_EVENT_CLICKED;
+        q[3].user_data = (void *)(intptr_t)((page + 1) % total_pages);
+        build_quad_screen(&minigames_pages[page], q);
+        page++;
+    }
+    minigames_page_count = page;
+    /* Page 0 doubles as the menu's public screen global - see the
+       comment where it is declared. */
+    screen_minigames_menu = minigames_pages[0];
 }
 
 bool minigames_handle_back(lv_obj_t *screen)
 {
-    if (screen != NULL && screen == screen_minigames_menu) {
-        /* One screen now, so back means "leave the menu". It used to
-           defer to settings_handle_back() because the menu lived in
-           Settings; it lives in Tools now - and Tools may have been
-           evicted while you were in here, so go through its opener. */
-        open_tools_menu();
-        return true;
+    int i;
+
+    /* Back from any page leaves the menu entirely rather than stepping
+       back a page (the knob flips pages) - same rule settings uses.
+       Page 0 is screen_minigames_menu, which settings_handle_back()
+       already knows how to exit, so every page defers to it. */
+    for (i = 1; i < minigames_page_count; i++) {
+        if (screen == minigames_pages[i]) {
+            return settings_handle_back(screen_minigames_menu);
+        }
     }
     return false;
 }
 
 bool minigames_knob_page(int dir)
 {
-    if (screen_minigames_menu == NULL) return false;
-    if (lv_scr_act() != screen_minigames_menu) return false;
-    ui_list_knob(&minigames_list, dir);
-    return true;
+    int i;
+
+    for (i = 0; i < minigames_page_count; i++) {
+        if (lv_scr_act() == minigames_pages[i]) {
+            lv_scr_load(minigames_pages[(i + dir + minigames_page_count) %
+                                        minigames_page_count]);
+            return true;
+        }
+    }
+    return false;
 }
