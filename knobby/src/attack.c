@@ -1,28 +1,38 @@
 #include "attack.h"
 #include "game.h"
 #include "lang.h"
+#include <math.h>
 
 extern void back_to_main(void);
 
 /* The resolve screen for an attack drag.
  *
- * Rebuilt to speak the same visual language as the rest of the device.
- * It used to be hairline white outlines, a stock LVGL checkbox and two
- * stock buttons - and those buttons came out in LVGL's default theme
- * blue, a colour that appears nowhere else on this device, which is
- * what made the screen read as borrowed from somewhere else.
+ * Built around the circle rather than down it. The first two versions
+ * were a stack of rectangular rows - a chip row, a tab row, a number,
+ * a button row - which is a form that happens to be displayed on a
+ * round panel. Everything else on this device is radial: the life
+ * counter's wedges, Pong and Breakout's rims, the dice. This screen
+ * now is too.
  *
- * Now it is built from the two things the rest of the UI is built
- * from: the dark tile (the same 0x1A1A2E the quad menus use) and the
- * players' own colours. The header shows both players as chips in
- * their panel colours, so the screen is visibly continuous with the
- * drag that opened it - which already draws the beam in the source's
- * colour and the reticle in the target's.
+ * Four sectors of the disc are the four modes, and the hub in the
+ * middle is the amount and the Resolve button in one. That is five
+ * touch targets, all of them enormous, instead of ten small ones -
+ * and it drops the mode labels' font from 14 to 22 because a sector
+ * has room a 70px tab never did.
  *
- * One accent colour per mode runs through the whole screen: the
- * selected tab, the amount, and the Resolve button all take it. That
- * means the button you are about to press is the colour of the thing
- * it is about to do. */
+ * The labels sit on the DIAGONALS, not at the cardinal points. At the
+ * right-hand cardinal point a horizontal label only has the band's
+ * radial width to live in (70px, which "Infectar" overflows); on the
+ * diagonal the same band offers about 125px because the label cuts
+ * across it. That is the whole reason the modes are arranged as
+ * corners rather than as up/down/left/right.
+ *
+ * Cancel is the swipe-back every other screen uses (see back_attack in
+ * knob.c), which is what buys the room for everything else to be big.
+ *
+ * One accent colour per mode runs through its sector, the hub's ring
+ * and the amount, so the number you are about to apply is the colour
+ * of the thing it is about to do. */
 
 // ---------- screens ----------
 lv_obj_t *screen_attack = NULL;
@@ -41,11 +51,14 @@ static int attack_amount = 1;
 // ---------- palette ----------
 /* Tile colours shared with the quad menus, so this screen sits in the
    same family as the menu it is reached from. */
-#define ATTACK_TILE_BG     0x1A1A2E
-#define ATTACK_TILE_TEXT   0x9AA0B4
-#define ATTACK_CANCEL_EDGE 0x39405A
-#define ATTACK_CANCEL_TEXT 0xC9CEDD
-#define ATTACK_HINT_TEXT   0x6E7486
+/* Lighter than the quad menus' 0x1A1A2E on purpose: those tiles are
+   separated by gaps on a black screen, but an unselected sector here
+   has to read as a distinct AREA against black, and 0x1A1A2E is close
+   enough to black that the four sectors vanished and their labels
+   looked like floating text. */
+#define ATTACK_TILE_BG     0x232B45
+#define ATTACK_HUB_BG      0x12151F
+#define ATTACK_TILE_TEXT   0xAEB4C6
 
 /* One per mode, in enum order. Red for damage, amber for lifelink
    (distinct from both the red it is a variant of and the green infect
@@ -59,15 +72,33 @@ static const string_id_t attack_mode_labels[ATTACK_MODE_COUNT] = {
     STR_ATTACK_MODE_CMDR, STR_ATTACK_MODE_INFECT,
 };
 
+// ---------- geometry ----------
+#define ATTACK_CX 180
+#define ATTACK_CY 180
+/* The mode sectors are an annulus from ATTACK_HUB_R out to
+   ATTACK_RING_R; the hub inside it is the amount and the Resolve
+   target. Both are well inside the 180px glass. */
+#define ATTACK_HUB_R     96
+#define ATTACK_RING_R   176
+#define ATTACK_SECTOR_GAP_DEG 3
+/* Where a sector's label sits: the middle of the band, not its inner
+   edge - at the inner edge a label reads as floating over the hub
+   rather than as belonging to its sector. */
+#define ATTACK_LABEL_R  ((ATTACK_HUB_R + ATTACK_RING_R) / 2)
+#define ATTACK_DEG2RAD  0.017453292f
+
+/* Mid-angle of each mode's sector, in LVGL's convention (0 = 3
+   o'clock, clockwise). Corners, not cardinal points - see the file
+   comment for why. Reading order: Dmg top-left, Lifelink top-right,
+   Cmdr bottom-left, Infect bottom-right. */
+static const int attack_mode_mid_deg[ATTACK_MODE_COUNT] = { 225, 315, 135, 45 };
+
 // ---------- widgets ----------
-static lv_obj_t *chip_source = NULL;
-static lv_obj_t *chip_target = NULL;
 static lv_obj_t *label_source = NULL;
+static lv_obj_t *label_arrow = NULL;
 static lv_obj_t *label_target = NULL;
-static lv_obj_t *btn_mode[ATTACK_MODE_COUNT];
 static lv_obj_t *label_mode[ATTACK_MODE_COUNT];
 static lv_obj_t *label_amount = NULL;
-static lv_obj_t *btn_attack_resolve = NULL;
 static lv_obj_t *label_attack_resolve = NULL;
 
 // ---------- refresh ----------
@@ -77,27 +108,27 @@ static void refresh_attack_ui(void)
     int i;
 
     if (attack_source < 0 || attack_target < 0) return;
+    if (screen_attack == NULL) return;
 
     accent = lv_color_hex(attack_mode_accent[attack_mode]);
 
-    /* Header chips carry each player's own colour, the same one their
-       panel and the drag beam used. */
-    if (chip_source != NULL) {
-        lv_obj_set_style_bg_color(chip_source,
-            get_effective_player_color(attack_source, attack_source_color, LIFE_VIB_MID), 0);
+    /* Each player's name in their own panel colour, so this screen
+       carries on from the drag that opened it - which already draws the
+       beam in the source's colour and the reticle in the target's. */
+    if (label_source != NULL) {
         lv_label_set_text(label_source, player_names[attack_source]);
+        lv_obj_set_style_text_color(label_source,
+            get_effective_player_color(attack_source, attack_source_color, LIFE_VIB_VIV), 0);
     }
-    if (chip_target != NULL) {
-        lv_obj_set_style_bg_color(chip_target,
-            get_effective_player_color(attack_target, attack_target_color, LIFE_VIB_MID), 0);
+    if (label_target != NULL) {
         lv_label_set_text(label_target, player_names[attack_target]);
+        lv_obj_set_style_text_color(label_target,
+            get_effective_player_color(attack_target, attack_target_color, LIFE_VIB_VIV), 0);
     }
 
     for (i = 0; i < ATTACK_MODE_COUNT; i++) {
         bool active = (attack_mode == i);
-        if (btn_mode[i] == NULL) continue;
-        lv_obj_set_style_bg_color(btn_mode[i],
-            active ? lv_color_hex(attack_mode_accent[i]) : lv_color_hex(ATTACK_TILE_BG), 0);
+        if (label_mode[i] == NULL) continue;
         lv_obj_set_style_text_color(label_mode[i],
             active ? lv_color_black() : lv_color_hex(ATTACK_TILE_TEXT), 0);
     }
@@ -108,10 +139,11 @@ static void refresh_attack_ui(void)
         lv_label_set_text(label_amount, buf);
         lv_obj_set_style_text_color(label_amount, accent, 0);
     }
-
-    if (btn_attack_resolve != NULL) {
-        lv_obj_set_style_bg_color(btn_attack_resolve, accent, 0);
+    if (label_attack_resolve != NULL) {
+        lv_obj_set_style_text_color(label_attack_resolve, accent, 0);
     }
+
+    lv_obj_invalidate(screen_attack);
 }
 
 void change_attack_amount(int delta)
@@ -141,20 +173,6 @@ void open_attack_screen(int source, int source_color,
 }
 
 // ---------- events ----------
-static void event_attack_mode(lv_event_t *e)
-{
-    int mode = (int)(intptr_t)lv_event_get_user_data(e);
-    if (mode < 0 || mode >= ATTACK_MODE_COUNT) return;
-    attack_mode = (attack_mode_t)mode;
-    refresh_attack_ui();
-}
-
-static void event_attack_cancel(lv_event_t *e)
-{
-    (void)e;
-    back_to_main();
-}
-
 static void event_attack_resolve(lv_event_t *e)
 {
     (void)e;
@@ -184,139 +202,202 @@ static void event_attack_resolve(lv_event_t *e)
     back_to_main();
 }
 
-// ---------- screen builder ----------
-/* Everything below is sized against the round glass: the widest corner
-   of each row has to stay inside ROUND_SAFE_RADIUS (see round_safe.h).
-   The tab row is the tightest - four 70px tabs sit 149px out at their
-   top corners, against a 171px allowance at that height. */
-/* Chip row: 100 wide at y=46 puts the outer top corners 175px from
-   centre. The first attempt (104 wide at y=40) put them at 183 and the
-   bezel clipped them. */
-#define ATTACK_CHIP_W   100
-#define ATTACK_CHIP_H    32
-#define ATTACK_CHIP_Y    46
-#define ATTACK_ARROW_GAP  26
-
-#define ATTACK_TAB_W     70
-#define ATTACK_TAB_H     38
-#define ATTACK_TAB_GAP    6
-#define ATTACK_TAB_Y     96
-
-#define ATTACK_ACT_W    104
-#define ATTACK_ACT_H     46
-
-static lv_obj_t *make_chip(lv_obj_t *parent, int x, lv_obj_t **out_label)
+/* One handler for the whole screen: which sector (or the hub) was
+   touched is a question about where the finger landed, and answering it
+   in polar coordinates is both shorter and gives far bigger targets
+   than four buttons and a fifth could. */
+static void event_attack_press(lv_event_t *e)
 {
-    lv_obj_t *chip = lv_obj_create(parent);
-    lv_obj_t *lbl;
+    lv_indev_t *indev = lv_indev_get_act();
+    lv_point_t p;
+    float dx, dy, r;
+    int deg, i;
 
-    lv_obj_remove_style_all(chip);
-    lv_obj_set_size(chip, ATTACK_CHIP_W, ATTACK_CHIP_H);
-    lv_obj_set_pos(chip, x, ATTACK_CHIP_Y);
-    lv_obj_set_style_radius(chip, 10, 0);
-    lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(chip, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    (void)e;
+    if (indev == NULL) return;
+    lv_indev_get_point(indev, &p);
 
-    lbl = lv_label_create(chip);
-    /* Names are user-editable and can be long; ellipsise rather than
-       let one overflow its chip into the other's. */
-    lv_obj_set_width(lbl, ATTACK_CHIP_W - 12);
-    lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+    dx = (float)p.x - (float)ATTACK_CX;
+    dy = (float)p.y - (float)ATTACK_CY;
+    r = sqrtf(dx * dx + dy * dy);
+
+    if (r <= (float)ATTACK_HUB_R) {
+        event_attack_resolve(NULL);
+        return;
+    }
+    if (r > (float)ATTACK_RING_R) return;   /* the rim, outside any sector */
+
+    deg = (int)(atan2f(dy, dx) * 57.29577951f);
+    if (deg < 0) deg += 360;
+
+    for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+        int diff = deg - attack_mode_mid_deg[i];
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        if (diff < -45 || diff > 45) continue;
+        attack_mode = (attack_mode_t)i;
+        refresh_attack_ui();
+        return;
+    }
+}
+
+// ---------- drawing ----------
+/* Band between two radii. lv_draw_arc's `radius` is the band's OUTER
+   edge and its width runs inward from there, which is easy to read as
+   "centre and thickness" - and was: the sectors came out spanning
+   56..136 instead of 96..176, so the labels at 136 sat on the outer
+   rim of their own sector, half of each one over bare black. Naming
+   both edges makes that mistake impossible. */
+static void attack_band(lv_draw_ctx_t *ctx, uint32_t color,
+                        int inner, int outer, int start_deg, int end_deg)
+{
+    lv_draw_arc_dsc_t dsc;
+    lv_point_t c = { ATTACK_CX, ATTACK_CY };
+
+    lv_draw_arc_dsc_init(&dsc);
+    dsc.color = lv_color_hex(color);
+    dsc.width = (lv_coord_t)(outer - inner);
+    dsc.opa = LV_OPA_COVER;
+    lv_draw_arc(ctx, &dsc, &c, (uint16_t)outer,
+                (uint16_t)((start_deg + 360) % 360),
+                (uint16_t)((end_deg + 360) % 360));
+}
+
+static void attack_disc(lv_draw_ctx_t *ctx, uint32_t color, int radius)
+{
+    lv_draw_rect_dsc_t dsc;
+    lv_area_t a;
+
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = lv_color_hex(color);
+    dsc.bg_opa = LV_OPA_COVER;
+    dsc.radius = LV_RADIUS_CIRCLE;
+    a.x1 = ATTACK_CX - radius;
+    a.y1 = ATTACK_CY - radius;
+    a.x2 = ATTACK_CX + radius;
+    a.y2 = ATTACK_CY + radius;
+    lv_draw_rect(ctx, &dsc, &a);
+}
+
+static void event_attack_draw(lv_event_t *e)
+{
+    lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(e);
+    int i;
+
+    for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+        bool active = (attack_mode == i);
+        int mid = attack_mode_mid_deg[i];
+        attack_band(ctx, active ? attack_mode_accent[i] : ATTACK_TILE_BG,
+                    ATTACK_HUB_R, ATTACK_RING_R,
+                    mid - 45 + ATTACK_SECTOR_GAP_DEG,
+                    mid + 45 - ATTACK_SECTOR_GAP_DEG);
+    }
+
+    /* The hub: a filled disc a shade off black, ringed in the current
+       mode's colour. The fill is what makes the middle read as a thing
+       to press rather than as the hole in the middle of a donut - on
+       pure black the ring alone looked like a decorative outline. */
+    attack_disc(ctx, ATTACK_HUB_BG, ATTACK_HUB_R - 3);
+    /* Two halves rather than 0..359: a single arc leaves the one
+       degree it did not sweep as a black spoke across the hub. */
+    attack_band(ctx, attack_mode_accent[attack_mode],
+                ATTACK_HUB_R - 3, ATTACK_HUB_R, 0, 180);
+    attack_band(ctx, attack_mode_accent[attack_mode],
+                ATTACK_HUB_R - 3, ATTACK_HUB_R, 180, 360);
+}
+
+// ---------- screen builder ----------
+static lv_obj_t *attack_make_label(lv_obj_t *parent, const lv_font_t *font,
+                                   uint32_t color, int width)
+{
+    lv_obj_t *lbl = lv_label_create(parent);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(color), 0);
+    lv_obj_set_style_text_font(lbl, font, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
-    lv_obj_center(lbl);
-
-    *out_label = lbl;
-    return chip;
+    if (width > 0) {
+        lv_obj_set_width(lbl, width);
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+    }
+    return lbl;
 }
 
 void build_attack_screen(void)
 {
     int i;
-    int row_w = ATTACK_MODE_COUNT * ATTACK_TAB_W + (ATTACK_MODE_COUNT - 1) * ATTACK_TAB_GAP;
-    int start_x = (360 - row_w) / 2;
-    int header_w = ATTACK_CHIP_W * 2 + ATTACK_ARROW_GAP;
-    int header_x = (360 - header_w) / 2;
-    lv_obj_t *arrow, *hint, *btn_cancel, *lbl;
 
     screen_attack = lv_obj_create(NULL);
     lv_obj_set_size(screen_attack, 360, 360);
     lv_obj_set_style_bg_color(screen_attack, lv_color_black(), 0);
     lv_obj_set_style_border_width(screen_attack, 0, 0);
+    lv_obj_set_style_pad_all(screen_attack, 0, 0);
     lv_obj_set_scrollbar_mode(screen_attack, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_flag(screen_attack, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(screen_attack, event_attack_draw, LV_EVENT_DRAW_MAIN, NULL);
+    lv_obj_add_event_cb(screen_attack, event_attack_press, LV_EVENT_CLICKED, NULL);
 
-    chip_source = make_chip(screen_attack, header_x, &label_source);
-    chip_target = make_chip(screen_attack,
-                            header_x + ATTACK_CHIP_W + ATTACK_ARROW_GAP, &label_target);
-
-    arrow = lv_label_create(screen_attack);
-    lv_label_set_text(arrow, ">");
-    lv_obj_set_style_text_color(arrow, lv_color_hex(ATTACK_TILE_TEXT), 0);
-    lv_obj_set_style_text_font(arrow, &lv_font_es_22, 0);
-    lv_obj_align(arrow, LV_ALIGN_TOP_MID, 0, ATTACK_CHIP_Y + 4);
-
+    /* Mode names, one per sector, placed out along its diagonal. */
     for (i = 0; i < ATTACK_MODE_COUNT; i++) {
-        lv_obj_t *btn = lv_btn_create(screen_attack);
-        lv_obj_set_size(btn, ATTACK_TAB_W, ATTACK_TAB_H);
-        lv_obj_set_pos(btn, start_x + i * (ATTACK_TAB_W + ATTACK_TAB_GAP), ATTACK_TAB_Y);
-        lv_obj_set_style_radius(btn, 9, 0);
-        lv_obj_set_style_border_width(btn, 0, 0);
-        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        lv_obj_set_style_shadow_width(btn, 0, 0);
-        lv_obj_add_event_cb(btn, event_attack_mode, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        btn_mode[i] = btn;
+        float rad = (float)attack_mode_mid_deg[i] * ATTACK_DEG2RAD;
+        int x = ATTACK_CX + (int)(cosf(rad) * (float)ATTACK_LABEL_R);
+        int y = ATTACK_CY + (int)(sinf(rad) * (float)ATTACK_LABEL_R);
 
-        lbl = lv_label_create(btn);
-        lv_label_set_text(lbl, t(attack_mode_labels[i]));
-        lv_obj_set_style_text_font(lbl, &lv_font_es_14, 0);
-        lv_obj_center(lbl);
-        label_mode[i] = lbl;
+        /* Auto-sized and centred on the point, not a fixed-width box:
+           a fixed width needs LV_LABEL_LONG_DOT to handle overflow, and
+           that ellipsises against a width of zero before the first
+           layout pass has run - which mangles the text permanently. */
+        label_mode[i] = attack_make_label(screen_attack, &lv_font_es_22,
+                                          ATTACK_TILE_TEXT, 0);
+        lv_label_set_text(label_mode[i], t(attack_mode_labels[i]));
+        lv_obj_align(label_mode[i], LV_ALIGN_CENTER,
+                     x - ATTACK_CX, y - ATTACK_CY);
     }
 
-    /* The amount gets the same weight the life counter gives a life
-       total - it is the same kind of number, and it is the one thing on
-       this screen the knob is editing. */
-    label_amount = lv_label_create(screen_attack);
+    /* Who is hitting whom, small, at the top of the hub. */
+    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
+    lv_obj_align(label_source, LV_ALIGN_CENTER, -42, -66);
+
+    label_arrow = attack_make_label(screen_attack, &lv_font_es_16, ATTACK_TILE_TEXT, 0);
+    lv_label_set_text(label_arrow, ">");
+    lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -66);
+
+    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
+    lv_obj_align(label_target, LV_ALIGN_CENTER, 42, -66);
+
+    /* The amount, at life-counter scale - it is the number the knob is
+       editing and the reason the screen exists. */
+    label_amount = attack_make_label(screen_attack, &lv_font_montserrat_bold_116,
+                                     0xFFFFFF, 0);
     lv_label_set_text(label_amount, "1");
-    lv_obj_set_style_text_font(label_amount, &lv_font_montserrat_bold_56, 0);
-    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, 8);
+    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, -2);
 
-    hint = lv_label_create(screen_attack);
-    lv_label_set_text(hint, t(STR_TURN_KNOB_THEN_APPLY));
-    lv_obj_set_style_text_color(hint, lv_color_hex(ATTACK_HINT_TEXT), 0);
-    lv_obj_set_style_text_font(hint, &lv_font_es_14, 0);
-    lv_obj_align(hint, LV_ALIGN_CENTER, 0, 52);
-
-    btn_cancel = lv_btn_create(screen_attack);
-    lv_obj_set_size(btn_cancel, ATTACK_ACT_W, ATTACK_ACT_H);
-    lv_obj_align(btn_cancel, LV_ALIGN_BOTTOM_MID, -57, -46);
-    lv_obj_set_style_radius(btn_cancel, 10, 0);
-    lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(ATTACK_TILE_BG), 0);
-    lv_obj_set_style_bg_opa(btn_cancel, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(btn_cancel, 1, 0);
-    lv_obj_set_style_border_color(btn_cancel, lv_color_hex(ATTACK_CANCEL_EDGE), 0);
-    lv_obj_set_style_shadow_width(btn_cancel, 0, 0);
-    lv_obj_add_event_cb(btn_cancel, event_attack_cancel, LV_EVENT_CLICKED, NULL);
-    lbl = lv_label_create(btn_cancel);
-    lv_label_set_text(lbl, t(STR_CANCEL));
-    lv_obj_set_style_text_color(lbl, lv_color_hex(ATTACK_CANCEL_TEXT), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
-    lv_obj_center(lbl);
-
-    btn_attack_resolve = lv_btn_create(screen_attack);
-    lv_obj_set_size(btn_attack_resolve, ATTACK_ACT_W, ATTACK_ACT_H);
-    lv_obj_align(btn_attack_resolve, LV_ALIGN_BOTTOM_MID, 57, -46);
-    lv_obj_set_style_radius(btn_attack_resolve, 10, 0);
-    lv_obj_set_style_bg_opa(btn_attack_resolve, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(btn_attack_resolve, 0, 0);
-    lv_obj_set_style_shadow_width(btn_attack_resolve, 0, 0);
-    lv_obj_add_event_cb(btn_attack_resolve, event_attack_resolve, LV_EVENT_CLICKED, NULL);
-    label_attack_resolve = lv_label_create(btn_attack_resolve);
+    label_attack_resolve = attack_make_label(screen_attack, &lv_font_es_22,
+                                             0xFFFFFF, 0);
     lv_label_set_text(label_attack_resolve, t(STR_RESOLVE));
-    lv_obj_set_style_text_color(label_attack_resolve, lv_color_black(), 0);
-    lv_obj_set_style_text_font(label_attack_resolve, &lv_font_es_16, 0);
-    lv_obj_center(label_attack_resolve);
+    lv_obj_align(label_attack_resolve, LV_ALIGN_CENTER, 0, 62);
 
     refresh_attack_ui();
+}
+
+// ---------- test accessors ----------
+attack_mode_t attack_test_mode(void)   { return attack_mode; }
+int attack_test_amount(void)           { return attack_amount; }
+
+lv_obj_t *attack_test_mode_label(int mode)
+{
+    if (mode < 0 || mode >= ATTACK_MODE_COUNT) return NULL;
+    return label_mode[mode];
+}
+
+void attack_test_geometry(int *cx, int *cy, int *inner_r, int *outer_r)
+{
+    if (cx != NULL)      *cx = ATTACK_CX;
+    if (cy != NULL)      *cy = ATTACK_CY;
+    if (inner_r != NULL) *inner_r = ATTACK_HUB_R;
+    if (outer_r != NULL) *outer_r = ATTACK_RING_R;
+}
+
+int attack_test_mode_mid_deg(int mode)
+{
+    if (mode < 0 || mode >= ATTACK_MODE_COUNT) return 0;
+    return attack_mode_mid_deg[mode];
 }

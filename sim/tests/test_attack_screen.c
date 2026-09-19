@@ -1,0 +1,328 @@
+/* The attack-resolve screen, which is a dial rather than a form.
+ *
+ * Four sectors of an annulus are the four modes and the hub in the
+ * middle is the amount plus Resolve, so there are no button widgets to
+ * hit-test against: which mode a touch selects is worked out from
+ * where the finger landed in polar coordinates. That makes two things
+ * worth guarding, and both of them have already gone wrong once.
+ *
+ * The first is that the drawn geometry and the pressed geometry are
+ * the same geometry. They are computed in two different places from
+ * the same constants, and lv_draw_arc's `radius` argument is the OUTER
+ * edge of the band with the width running inward - read as "centre and
+ * thickness" it silently draws the sectors 40px in from where they are
+ * pressed, which is exactly what happened: the labels ended up sitting
+ * on bare black outside their own sector and read as half-erased text.
+ * So the test checks every mode label's box lies inside the band, and
+ * that a tap aimed at the middle of a sector selects that sector.
+ *
+ * The second is that the hub is the Resolve button. It has no border
+ * and no widget - if the radial test that separates it from the
+ * sectors were wrong, the screen would either resolve when the player
+ * meant to pick a mode, or refuse to resolve at all. */
+#include "test_harness.h"
+#include "sim_stubs.h"
+#include "attack.h"
+#include "game.h"
+#include <stdio.h>
+#include <assert.h>
+#include <math.h>
+
+#define DEG2RAD 0.017453292f
+
+/* Mirrors of attack.c's palette. Duplicated deliberately: a test that
+   imported the constants would still pass if the palette changed to
+   something unreadable, and these are asserted on for contrast as much
+   as for position. */
+#define ATTACK_SECTOR_BG     0x232B45
+#define ATTACK_HUB_BG        0x12151F
+#define ATTACK_ACCENT_DAMAGE 0xEF5350
+
+static lv_indev_drv_t test_pointer_drv;
+static lv_point_t test_pointer_at;
+static bool test_pointer_down;
+
+static void test_pointer_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
+{
+    (void)drv;
+    data->point = test_pointer_at;
+    data->state = test_pointer_down ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+}
+
+static void test_pointer_init(void)
+{
+    lv_indev_drv_init(&test_pointer_drv);
+    test_pointer_drv.type = LV_INDEV_TYPE_POINTER;
+    test_pointer_drv.read_cb = test_pointer_read;
+    lv_indev_drv_register(&test_pointer_drv);
+}
+
+static void tick_ms(int ms)
+{
+    sim_tick_advance((uint32_t)ms);
+    lv_timer_handler();
+}
+
+static void tap_at(int x, int y)
+{
+    int i;
+    test_pointer_at.x = (lv_coord_t)x;
+    test_pointer_at.y = (lv_coord_t)y;
+    test_pointer_down = true;
+    for (i = 0; i < 3; i++) tick_ms(20);
+    test_pointer_down = false;
+    for (i = 0; i < 3; i++) tick_ms(20);
+}
+
+/* Polar point, in the same convention the screen uses: degrees
+   clockwise from 3 o'clock. */
+static void polar(int deg, int radius, int *x, int *y)
+{
+    int cx, cy;
+    attack_test_geometry(&cx, &cy, NULL, NULL);
+    *x = cx + (int)(cosf((float)deg * DEG2RAD) * (float)radius);
+    *y = cy + (int)(sinf((float)deg * DEG2RAD) * (float)radius);
+}
+
+static void open_attack(void)
+{
+    open_attack_screen(0, 0, 1, 1);
+    tick_ms(20);
+    assert(lv_scr_act() == screen_attack);
+}
+
+/* 16-bit colour: a 24-bit value does not survive the round trip, so
+   compare channel by channel with a little slack. */
+static bool colour_is(uint32_t got, uint32_t want)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        int g = (int)((got >> (i * 8)) & 0xFF);
+        int w = (int)((want >> (i * 8)) & 0xFF);
+        if (g - w > 8 || w - g > 8) return false;
+    }
+    return true;
+}
+
+static void expect_pixel(const char *what, int deg, int radius, uint32_t want)
+{
+    int x, y;
+    uint32_t got;
+
+    polar(deg, radius, &x, &y);
+    got = test_harness_pixel(x, y);
+    if (!colour_is(got, want)) {
+        printf("FAIL: %s - pixel at %d deg r=%d (%d,%d) is %06X, expected %06X\n",
+               what, deg, radius, x, y, got, want);
+        assert(0);
+    }
+}
+
+/* Where the sectors are actually PAINTED, sampled from the framebuffer.
+ *
+ * This is the assertion the earlier bug needed. lv_draw_arc's radius is
+ * the band's outer edge with the width running inward; read as "centre
+ * and thickness" it drew the ring at 56..136 while every touch was
+ * tested against 96..176. Reading widget geometry could never catch
+ * that - the band is not a widget - so the check has to be on pixels:
+ * paint at both edges of the band, hub colour inside it, black outside.
+ *
+ * Sampled well off each sector's mid-angle so the labels, which sit on
+ * the mid-angle, cannot colour the result. */
+static void test_the_sectors_are_painted_where_they_are_pressed(void)
+{
+    int inner, outer, i;
+
+    open_attack();
+    lv_refr_now(NULL);
+    attack_test_geometry(NULL, NULL, &inner, &outer);
+
+    for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+        int mid = attack_test_mode_mid_deg(i);
+        uint32_t fill = (i == (int)attack_test_mode())
+                            ? ATTACK_ACCENT_DAMAGE : ATTACK_SECTOR_BG;
+        int off;
+
+        for (off = -25; off <= 25; off += 50) {
+            expect_pixel("sector inner edge", mid + off, inner + 4, fill);
+            expect_pixel("sector mid", mid + off, (inner + outer) / 2, fill);
+            expect_pixel("sector outer edge", mid + off, outer - 4, fill);
+        }
+        /* Inside the hub and outside the rim, nothing of the band. */
+        expect_pixel("hub", mid, inner - 12, ATTACK_HUB_BG);
+        expect_pixel("outside the rim", mid, outer + 3, 0x000000);
+    }
+    printf("PASS: the sector band is painted over exactly the radii it is pressed on\n");
+}
+
+/* ---------------------------------------------------------------- */
+/* Every corner of every mode label has to be inside the band that is
+   painted behind it, or part of the word is drawn on black. Corners
+   rather than the centre: the labels sit on the diagonals precisely
+   because a word laid across the band reaches further than the band is
+   thick, so the centre being inside proves very little. */
+static void test_labels_sit_inside_their_sector(void)
+{
+    int cx, cy, inner, outer, i;
+
+    open_attack();
+    lv_refr_now(NULL);
+
+    attack_test_geometry(&cx, &cy, &inner, &outer);
+
+    for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+        lv_obj_t *lbl = attack_test_mode_label(i);
+        lv_coord_t x1, y1, x2, y2;
+        int mid = attack_test_mode_mid_deg(i);
+        int c;
+        static const int corner[4][2] = { {0,0}, {1,0}, {0,1}, {1,1} };
+
+        assert(lbl != NULL);
+        x1 = lv_obj_get_x(lbl);
+        y1 = lv_obj_get_y(lbl);
+        x2 = x1 + lv_obj_get_width(lbl) - 1;
+        y2 = y1 + lv_obj_get_height(lbl) - 1;
+        assert(lv_obj_get_width(lbl) > 0 && lv_obj_get_height(lbl) > 0);
+
+        for (c = 0; c < 4; c++) {
+            float dx = (float)(corner[c][0] ? x2 : x1) - (float)cx;
+            float dy = (float)(corner[c][1] ? y2 : y1) - (float)cy;
+            float r = sqrtf(dx * dx + dy * dy);
+            int deg = (int)(atan2f(dy, dx) / DEG2RAD);
+            int diff;
+
+            if (deg < 0) deg += 360;
+            diff = deg - mid;
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+
+            if (r < (float)inner || r > (float)outer || diff < -45 || diff > 45) {
+                printf("FAIL: mode %d label corner %d at r=%.1f, %d deg off centre;"
+                       " band is %d..%d and the sector spans +-45\n",
+                       i, c, (double)r, diff, inner, outer);
+                assert(0);
+            }
+        }
+    }
+    printf("PASS: every mode label lies inside the sector drawn behind it\n");
+}
+
+/* A tap in the middle of a sector selects that sector's mode - the
+   sectors are where they look like they are. */
+static void test_tapping_a_sector_selects_its_mode(void)
+{
+    int inner, outer, i;
+
+    attack_test_geometry(NULL, NULL, &inner, &outer);
+
+    for (i = ATTACK_MODE_COUNT - 1; i >= 0; i--) {
+        int x, y;
+        open_attack();   /* opens on Damage, so every hop is a real change */
+        polar(attack_test_mode_mid_deg(i), (inner + outer) / 2, &x, &y);
+        tap_at(x, y);
+        if (attack_test_mode() != (attack_mode_t)i) {
+            printf("FAIL: tap at (%d,%d) for mode %d selected mode %d\n",
+                   x, y, i, (int)attack_test_mode());
+            assert(0);
+        }
+    }
+    printf("PASS: a tap in a sector selects that sector's mode\n");
+}
+
+/* The gaps between sectors are decoration, not dead zones: a tap just
+   inside a sector's edge still counts as that sector. Drawn gaps are
+   3 degrees, so 43 degrees off centre lands on painted black but
+   inside the sector's 45. */
+static void test_the_drawn_gaps_are_not_dead_zones(void)
+{
+    int inner, outer, x, y;
+
+    attack_test_geometry(NULL, NULL, &inner, &outer);
+    open_attack();
+    polar(attack_test_mode_mid_deg(ATTACK_MODE_INFECT) - 43,
+          (inner + outer) / 2, &x, &y);
+    tap_at(x, y);
+    assert(attack_test_mode() == ATTACK_MODE_INFECT);
+    printf("PASS: the drawn gap between sectors still selects its own sector\n");
+}
+
+/* The hub resolves, and it resolves the mode that is selected. Damage
+   and Lifelink differ only in what happens to the attacker, so running
+   both proves the mode actually reached the resolve. */
+static void test_the_hub_resolves(void)
+{
+    int inner, target_before, source_before;
+    int x, y;
+
+    attack_test_geometry(NULL, NULL, &inner, NULL);
+
+    /* Damage: the target loses life, the attacker is untouched. */
+    open_attack();
+    change_attack_amount(2);     /* opens at 1 */
+    assert(attack_test_amount() == 3);
+    source_before = player_life[0];
+    target_before = player_life[1];
+    tap_at(180, 180);
+    tick_ms(20);
+    assert(lv_scr_act() != screen_attack);
+    assert(player_life[1] == target_before - 3);
+    assert(player_life[0] == source_before);
+
+    /* Lifelink: the same damage, and the attacker gains it back. */
+    open_attack();
+    polar(attack_test_mode_mid_deg(ATTACK_MODE_LIFELINK),
+          inner + 40, &x, &y);
+    tap_at(x, y);
+    assert(attack_test_mode() == ATTACK_MODE_LIFELINK);
+    change_attack_amount(4);
+    source_before = player_life[0];
+    target_before = player_life[1];
+    tap_at(180, 180);
+    tick_ms(20);
+    assert(lv_scr_act() != screen_attack);
+    assert(player_life[1] == target_before - 5);
+    assert(player_life[0] == source_before + 5);
+
+    printf("PASS: the hub resolves the selected mode\n");
+}
+
+/* Opening fresh always starts on Damage with 1 - the common case is
+   "one creature got through", and a screen that remembered the last
+   mode would silently apply infect to the next attack. */
+static void test_opening_resets_mode_and_amount(void)
+{
+    int inner, outer, x, y;
+
+    attack_test_geometry(NULL, NULL, &inner, &outer);
+    open_attack();
+    polar(attack_test_mode_mid_deg(ATTACK_MODE_CMDR), (inner + outer) / 2, &x, &y);
+    tap_at(x, y);
+    change_attack_amount(6);
+    assert(attack_test_mode() == ATTACK_MODE_CMDR);
+    assert(attack_test_amount() == 7);
+
+    open_attack();
+    assert(attack_test_mode() == ATTACK_MODE_DAMAGE);
+    assert(attack_test_amount() == 1);
+    printf("PASS: reopening resets to Damage 1\n");
+}
+
+int main(void)
+{
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    test_harness_init();
+    test_pointer_init();
+    test_harness_settle_intro();
+    test_harness_reset_4p();
+
+    test_the_sectors_are_painted_where_they_are_pressed();
+    test_labels_sit_inside_their_sector();
+    test_tapping_a_sector_selects_its_mode();
+    test_the_drawn_gaps_are_not_dead_zones();
+    test_the_hub_resolves();
+    test_opening_resets_mode_and_amount();
+
+    printf("\nAll attack screen tests passed.\n");
+    return 0;
+}

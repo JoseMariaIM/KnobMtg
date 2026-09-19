@@ -35,4 +35,15 @@ void open_attack_screen(int source, int source_color,
                         int target, int target_color);
 void change_attack_amount(int delta);
 
+/* ---------- read-only accessors (unit tests) ---------- */
+attack_mode_t attack_test_mode(void);
+int attack_test_amount(void);
+/* The label widget for a mode, so a test can check it lands inside the
+   sector it names rather than on the black gap next to it. */
+lv_obj_t *attack_test_mode_label(int mode);
+/* The sector band's two radii and a mode's mid-angle, so a test can
+   compare where things are DRAWN with where they are pressed. */
+void attack_test_geometry(int *cx, int *cy, int *inner_r, int *outer_r);
+int attack_test_mode_mid_deg(int mode);
+
 #endif // _ATTACK_H

@@ -15,6 +15,7 @@
 #include "storage.h"
 #include "hw.h"
 #include "sim_stubs.h"
+#include <string.h>
 
 #define TEST_SCREEN_W 360
 #define TEST_SCREEN_H 360
@@ -23,11 +24,41 @@ static lv_color_t test_draw_buf_data[TEST_SCREEN_W * 72];
 static lv_disp_draw_buf_t test_draw_buf;
 static lv_disp_drv_t test_disp_drv;
 
+/* Everything LVGL has painted, kept so a test can read back what the
+ * user would actually see.
+ *
+ * Most tests only need widget state, but the custom-drawn screens (the
+ * minigames, the attack dial) put nothing in the widget tree at all -
+ * their content exists only as pixels emitted from a DRAW_MAIN
+ * callback. For those, "is the thing where it looks like it is" is a
+ * question that can only be answered here. */
+static lv_color_t test_framebuffer[TEST_SCREEN_W * TEST_SCREEN_H];
+
 static void test_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p)
 {
-    (void)area;
-    (void)color_p;
+    lv_coord_t y;
+
+    for (y = area->y1; y <= area->y2; y++) {
+        lv_coord_t w = area->x2 - area->x1 + 1;
+        if (y < 0 || y >= TEST_SCREEN_H) continue;
+        memcpy(&test_framebuffer[y * TEST_SCREEN_W + area->x1], color_p,
+               (size_t)w * sizeof(lv_color_t));
+        color_p += w;
+    }
     lv_disp_flush_ready(drv);
+}
+
+/* The painted colour at a point, as 0xRRGGBB. Off-screen reads come
+   back as black, which is also the screens' background - a test that
+   wants to prove something was painted should assert on the colour it
+   expects, not merely on "not black". */
+static uint32_t test_harness_pixel(int x, int y)
+{
+    lv_color32_t c;
+
+    if (x < 0 || x >= TEST_SCREEN_W || y < 0 || y >= TEST_SCREEN_H) return 0;
+    c.full = lv_color_to32(test_framebuffer[y * TEST_SCREEN_W + x]);
+    return ((uint32_t)c.ch.red << 16) | ((uint32_t)c.ch.green << 8) | c.ch.blue;
 }
 
 /* Boots LVGL + the full UI (knob_gui builds all 35 screens, same as

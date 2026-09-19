@@ -49,5 +49,14 @@ bool breakout_test_ball_parked(void);
 int  breakout_test_iron_ms(void);
 /* How many power-up bricks the current wall still holds. */
 int  breakout_test_special_bricks_left(void);
+/* The radii the physics uses: the rim past which a ball is lost, and
+   the paddle's inner face, which is the surface it bounces off. A test
+   reads these to check the paddle is PAINTED across the same band it
+   is collided against - the two are computed in different places. */
+void breakout_test_arena_radii(int *cx, int *cy, int *rim_r, int *paddle_face_r);
+/* Inner and outer radius, and centre angle, of one brick - the same
+   bounds the collision test uses. Returns false for a broken brick. */
+bool breakout_test_brick_bounds(int idx, int *inner, int *outer, int *centre_deg);
+int  breakout_test_brick_count(void);
 
 #endif // _BREAKOUT_H

@@ -51,12 +51,15 @@
 #define BO_CY 180
 #define BO_ARENA_R      168   /* the rim: past this the ball is lost */
 #define BO_PADDLE_THICK   8
-#define BO_PADDLE_R     (BO_ARENA_R - BO_PADDLE_THICK / 2)
 /* The paddle's INNER face, which is the surface the ball actually
    bounces off. Testing contact at the rim instead let the ball sink
    the full thickness of the paddle before turning round, which looked
-   like it was passing through it. */
-#define BO_PADDLE_FACE  (BO_PADDLE_R - BO_PADDLE_THICK / 2)
+   like it was passing through it.
+ *
+ * The paddle is described by its two edges - face inward, rim outward -
+ * and drawn from the same two numbers, so what the player sees is
+ * exactly what the ball hits. */
+#define BO_PADDLE_FACE  (BO_ARENA_R - BO_PADDLE_THICK)
 #define BO_PADDLE_HALF_DEG 24 /* generous: the whole rim is the gutter */
 #define BO_PADDLE_STEP_DEG  6 /* per knob detent */
 /* How far off straight-inward an edge-of-paddle hit sends the ball.
@@ -288,7 +291,7 @@ static void bo_serve(void)
     float nx = cosf(rad), ny = sinf(rad);     /* outward radial */
     float tx = -ny, ty = nx;                  /* tangential */
     float lean = (esp_random() % 2U) ? 0.55f : -0.55f;
-    float r = (float)(BO_PADDLE_R - BO_PADDLE_THICK / 2 - BO_BALL_R - 1);
+    float r = (float)(BO_PADDLE_FACE - BO_BALL_R - 1);
     float mag;
 
     memset(bo_balls, 0, sizeof(bo_balls));
@@ -1010,7 +1013,8 @@ static void bo_invalidate_paddle(int angle)
 {
     lv_area_t a;
     bo_arc_bbox(angle - BO_PADDLE_HALF_DEG, angle + BO_PADDLE_HALF_DEG,
-                BO_PADDLE_R - BO_PADDLE_THICK, BO_PADDLE_R + BO_PADDLE_THICK, &a);
+                BO_PADDLE_FACE - BO_PADDLE_THICK / 2,
+                BO_ARENA_R + BO_PADDLE_THICK / 2, &a);
     bo_invalidate_area(&a);
 }
 
@@ -1042,17 +1046,26 @@ static void bo_invalidate_moving_parts(void)
 }
 
 // ---------- drawing ----------
-static void bo_draw_ring_arc(lv_draw_ctx_t *ctx, uint32_t color, lv_opa_t opa,
-                             int radius, int width, int start_deg, int end_deg)
+/* Draws the band between two radii.
+ *
+ * Takes inner and outer rather than LVGL's (radius, width), because
+ * lv_draw_arc()'s radius is the band's OUTER edge and the width runs
+ * INWARD from it - which is easy to read as "centre and thickness",
+ * and was: the bricks and the paddle were each drawn half a thickness
+ * inside where their collision maths put them, so the ball sank
+ * visibly into the paddle before turning round. Naming the two edges
+ * makes that impossible to get backwards. */
+static void bo_draw_band(lv_draw_ctx_t *ctx, uint32_t color, lv_opa_t opa,
+                         int inner, int outer, int start_deg, int end_deg)
 {
     lv_draw_arc_dsc_t dsc;
     lv_point_t c = { BO_CX, BO_CY };
 
     lv_draw_arc_dsc_init(&dsc);
     dsc.color = lv_color_hex(color);
-    dsc.width = (lv_coord_t)width;
+    dsc.width = (lv_coord_t)(outer - inner);
     dsc.opa = opa;
-    lv_draw_arc(ctx, &dsc, &c, (uint16_t)radius,
+    lv_draw_arc(ctx, &dsc, &c, (uint16_t)outer,
                 (uint16_t)bo_norm_angle(start_deg), (uint16_t)bo_norm_angle(end_deg));
 }
 
@@ -1162,13 +1175,13 @@ static void bo_draw_brick_mark(lv_draw_ctx_t *ctx, bo_brick_t kind, int idx)
         int my = BO_CY + (int)(sinf(rad) * (float)mid);
         bo_draw_icon(ctx, bo_icon_heart, BO_HEART_H, mx, my, 2, 0xB71C1C, 0xE57373);
     } else if (kind == BO_BRICK_MULTI) {
-        bo_draw_ring_arc(ctx, 0x00303A, LV_OPA_COVER, mid, 6,
-                         centre - 9, centre - 4);
-        bo_draw_ring_arc(ctx, 0x00303A, LV_OPA_COVER, mid, 6,
-                         centre + 4, centre + 9);
+        bo_draw_band(ctx, 0x00303A, LV_OPA_COVER, mid - 3, mid + 3,
+                     centre - 9, centre - 4);
+        bo_draw_band(ctx, 0x00303A, LV_OPA_COVER, mid - 3, mid + 3,
+                     centre + 4, centre + 9);
     } else {
-        bo_draw_ring_arc(ctx, 0x263238, LV_OPA_COVER, mid, 6,
-                         centre - 7, centre + 7);
+        bo_draw_band(ctx, 0x263238, LV_OPA_COVER, mid - 3, mid + 3,
+                     centre - 7, centre + 7);
     }
 }
 
@@ -1214,8 +1227,8 @@ static void breakout_draw(lv_event_t *e)
 
     /* The rim, so the gutter the player is defending is visible at all.
        It turns orange while the iron ball burns. */
-    bo_draw_ring_arc(ctx, iron ? 0xFF7043 : 0x1E2A30, LV_OPA_COVER,
-                     BO_ARENA_R, 2, 0, 359);
+    bo_draw_band(ctx, iron ? 0xFF7043 : 0x1E2A30, LV_OPA_COVER,
+                 BO_ARENA_R - 2, BO_ARENA_R, 0, 359);
 
 
 
@@ -1243,18 +1256,18 @@ static void breakout_draw(lv_event_t *e)
         case BO_BRICK_LIFE:  color = 0xF48FB1; break;
         default:             color = ring_color[i / BO_SECTORS]; break;
         }
-        bo_draw_ring_arc(ctx, color, LV_OPA_COVER, (inner + outer) / 2, BO_RING_THICK,
-                         centre - BO_SECTOR_DEG / 2 + BO_BRICK_GAP_DEG,
-                         centre + BO_SECTOR_DEG / 2 - BO_BRICK_GAP_DEG);
+        bo_draw_band(ctx, color, LV_OPA_COVER, inner, outer,
+                     centre - BO_SECTOR_DEG / 2 + BO_BRICK_GAP_DEG,
+                     centre + BO_SECTOR_DEG / 2 - BO_BRICK_GAP_DEG);
         if (kind != BO_BRICK_NORMAL) bo_draw_brick_mark(ctx, kind, i);
     }
 
     /* Paddle */
-    bo_draw_ring_arc(ctx,
-                     (bo_flash > 0 && (bo_flash % 2)) ? 0x00E5FF : 0xE0E0E0,
-                     LV_OPA_COVER, BO_PADDLE_R, BO_PADDLE_THICK,
-                     bo_paddle_angle - BO_PADDLE_HALF_DEG,
-                     bo_paddle_angle + BO_PADDLE_HALF_DEG);
+    bo_draw_band(ctx,
+                 (bo_flash > 0 && (bo_flash % 2)) ? 0x00E5FF : 0xE0E0E0,
+                 LV_OPA_COVER, BO_PADDLE_FACE, BO_ARENA_R,
+                 bo_paddle_angle - BO_PADDLE_HALF_DEG,
+                 bo_paddle_angle + BO_PADDLE_HALF_DEG);
 
     /* Balls */
     {
@@ -1319,3 +1332,26 @@ static void breakout_draw(lv_event_t *e)
         }
     }
 }
+
+void breakout_test_arena_radii(int *cx, int *cy, int *rim_r, int *paddle_face_r)
+{
+    if (cx != NULL)             *cx = BO_CX;
+    if (cy != NULL)             *cy = BO_CY;
+    if (rim_r != NULL)          *rim_r = BO_ARENA_R;
+    if (paddle_face_r != NULL)  *paddle_face_r = BO_PADDLE_FACE;
+}
+
+bool breakout_test_brick_bounds(int idx, int *inner, int *outer, int *centre_deg)
+{
+    int in, out, centre;
+
+    if (idx < 0 || idx >= BO_BRICK_COUNT) return false;
+    if (bo_bricks[idx] == BO_BRICK_EMPTY) return false;
+    bo_brick_bounds(idx, &in, &out, &centre);
+    if (inner != NULL)      *inner = in;
+    if (outer != NULL)      *outer = out;
+    if (centre_deg != NULL) *centre_deg = centre;
+    return true;
+}
+
+int breakout_test_brick_count(void) { return BO_BRICK_COUNT; }

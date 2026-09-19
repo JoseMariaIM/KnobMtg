@@ -621,6 +621,117 @@ static void test_breakout_no_teleports(void)
    rather than at one sampled instant: the failure modes here are
    occasional (one pair sticking together, one copy inheriting the
    burn), so a snapshot would miss them. */
+/* Breakout's arena is drawn entirely from DRAW_MAIN callbacks, so what
+ * the player aims at is a set of pixels with no widget behind it. The
+ * radii those pixels land on are computed separately from the radii the
+ * physics collides against, and they have drifted apart before:
+ * lv_draw_arc's radius is the band's OUTER edge with the width running
+ * inward, so "centre and thickness" drew every brick half a thickness
+ * inside its own collision box and put the paddle at 156..164 while the
+ * ball bounced off 160. That is what "the ball goes into the paddle and
+ * then comes back out" looks like, and no amount of reading game state
+ * can see it. These check the framebuffer instead. */
+/* True if the point is under one of the screen's widgets - the score
+   readout, the life row, a banner. Those are painted on top of the
+   arena, so a probe that lands on one says nothing about the arena
+   underneath and is skipped rather than asserted on. */
+static bool covered_by_a_widget(lv_obj_t *scr, int x, int y)
+{
+    uint32_t i;
+
+    for (i = 0; i < lv_obj_get_child_cnt(scr); i++) {
+        lv_obj_t *child = lv_obj_get_child(scr, (int32_t)i);
+        lv_area_t a;
+        if (lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) continue;
+        lv_obj_get_coords(child, &a);
+        /* A few pixels of margin: glyph antialiasing bleeds past the
+           label box it was measured into. */
+        if (x >= a.x1 - 3 && x <= a.x2 + 3 && y >= a.y1 - 3 && y <= a.y2 + 3) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_breakout_is_drawn_where_it_is_collided(void)
+{
+    int cx, cy, rim, face, ang, i, checked, r;
+    float rad;
+
+    /* Probed before the serve, with the ball parked on the paddle: the
+       only moving thing on the board is then at a known angle, and
+       every probe here is taken well away from it. */
+    open_breakout_screen();
+    ticks(3, 20);
+    lv_refr_now(NULL);
+    assert(screen_breakout != NULL);
+
+    breakout_test_arena_radii(&cx, &cy, &rim, &face);
+    assert(breakout_test_ball_parked());
+
+    /* The paddle spans its face out to the rim, and nothing inside the
+       face: a ball at face - 1 is still in open play. Sampled 18
+       degrees round from the parked ball, still well inside the
+       paddle's half-width. */
+    ang = breakout_test_paddle_angle() + 18;
+    rad = (float)ang * 0.017453292f;
+    for (r = face + 2; r < rim - 1; r++) {
+        int x = cx + (int)lroundf(cosf(rad) * (float)r);
+        int y = cy + (int)lroundf(sinf(rad) * (float)r);
+        if (covered_by_a_widget(screen_breakout, x, y)) continue;
+        if (test_harness_pixel(x, y) == 0x000000) {
+            printf("FAIL: paddle not painted at r=%d (face %d, rim %d)\n",
+                   r, face, rim);
+            assert(0);
+        }
+    }
+    for (r = face - 8; r < face - 2; r++) {
+        int x = cx + (int)lroundf(cosf(rad) * (float)r);
+        int y = cy + (int)lroundf(sinf(rad) * (float)r);
+        if (covered_by_a_widget(screen_breakout, x, y)) continue;
+        if (test_harness_pixel(x, y) != 0x000000) {
+            printf("FAIL: paddle painted at r=%d, inside its own face (%d)\n", r, face);
+            assert(0);
+        }
+    }
+    printf("PASS: breakout - the paddle is painted across the band it bounces on\n");
+
+    /* Every brick is painted over its own collision bounds, sampled a
+       pixel inside each radial edge at the brick's centre angle. The
+       gaps between bricks are angular, so the centre angle never lands
+       on one. */
+    checked = 0;
+    for (i = 0; i < breakout_test_brick_count(); i++) {
+        int inner, outer, centre;
+        int probe[2], k;
+
+        if (!breakout_test_brick_bounds(i, &inner, &outer, &centre)) continue;
+        rad = (float)centre * 0.017453292f;
+        /* Two pixels inside each edge, and rounded rather than
+           truncated: truncation pulls the probe toward the centre by up
+           to a pixel in each axis, which off a 117px radius is enough
+           to land just outside the band being tested. */
+        probe[0] = inner + 2;
+        probe[1] = outer - 2;
+        for (k = 0; k < 2; k++) {
+            int x = cx + (int)lroundf(cosf(rad) * (float)probe[k]);
+            int y = cy + (int)lroundf(sinf(rad) * (float)probe[k]);
+            if (covered_by_a_widget(screen_breakout, x, y)) continue;
+            if (test_harness_pixel(x, y) == 0x000000) {
+                printf("FAIL: brick %d not painted at r=%d (bounds %d..%d, %d deg)\n",
+                       i, probe[k], inner, outer, centre);
+                assert(0);
+            }
+        }
+        checked++;
+    }
+    assert(checked > 20);   /* a full wall, not an empty board misread as a pass */
+    printf("PASS: breakout - every brick is painted over its own collision bounds (%d)\n",
+           checked);
+
+    breakout_leave_screen();
+}
+
 static void test_breakout_ball_interactions(void)
 {
     int guard;
@@ -1416,6 +1527,7 @@ int main(void)
     printf("---- breakout carry-over ----\n"); test_breakout_carry_over();
     printf("---- breakout motion ----\n"); test_breakout_no_teleports();
     printf("---- breakout ball interactions ----\n"); test_breakout_ball_interactions();
+    printf("---- breakout drawing ----\n"); test_breakout_is_drawn_where_it_is_collided();
     printf("---- invaders ----\n"); test_invaders();
     printf("---- tetris ----\n");   test_tetris();
     printf("---- rps ----\n");      test_rps();
