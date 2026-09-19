@@ -395,6 +395,56 @@ static void test_labels_fit_in_every_language(void)
     build_attack_screen();
 }
 
+/* Nothing in the hub may grow past the hub.
+ *
+ * The hub's radius is the number's: "99" in the 116pt face spans an
+ * 85px half-diagonal, and 88 is that plus clearance. Everything else
+ * in there - the Resolve word, the "who hits whom" row - is small
+ * enough today, and the temptation when this screen next gets tidied
+ * will be to make one of them bigger. Doing so pushes it out over the
+ * sector ring, where it lands on a bright accent colour and vanishes.
+ *
+ * Checked at 99 rather than at the 1 the screen opens on, because the
+ * widest amount is the one that decides the geometry. */
+static void test_the_hub_holds_its_contents(void)
+{
+    lv_obj_t *widgets[3];
+    const char *names[3] = { "amount", "Resolve", "source name" };
+    int cx, cy, hub, i;
+
+    open_attack();
+    change_attack_amount(98);
+    assert(attack_test_amount() == 99);
+    lv_obj_update_layout(screen_attack);
+    lv_refr_now(NULL);
+
+    attack_test_geometry(&cx, &cy, &hub, NULL);
+    widgets[0] = attack_test_amount_label();
+    widgets[1] = attack_test_resolve_label();
+    widgets[2] = attack_test_source_label();
+
+    for (i = 0; i < 3; i++) {
+        lv_area_t a;
+        int c;
+        static const int corner[4][2] = { {0,0}, {1,0}, {0,1}, {1,1} };
+
+        assert(widgets[i] != NULL);
+        lv_obj_get_coords(widgets[i], &a);
+        for (c = 0; c < 4; c++) {
+            float dx = (float)(corner[c][0] ? a.x2 : a.x1) - (float)cx;
+            float dy = (float)(corner[c][1] ? a.y2 : a.y1) - (float)cy;
+            float r = sqrtf(dx * dx + dy * dy);
+
+            if (r > (float)hub) {
+                printf("FAIL: the %s reaches r=%.1f, past the hub's %d\n",
+                       names[i], (double)r, hub);
+                assert(0);
+            }
+        }
+    }
+    printf("PASS: the hub holds its contents at the widest amount\n");
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -410,6 +460,7 @@ int main(void)
     test_the_drawn_gaps_are_not_dead_zones();
     test_the_hub_resolves();
     test_opening_resets_mode_and_amount();
+    test_the_hub_holds_its_contents();
     test_labels_fit_in_every_language();
 
     printf("\nAll attack screen tests passed.\n");

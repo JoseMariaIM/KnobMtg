@@ -77,8 +77,15 @@ static const string_id_t attack_mode_labels[ATTACK_MODE_COUNT] = {
 #define ATTACK_CY 180
 /* The mode sectors are an annulus from ATTACK_HUB_R out to
    ATTACK_RING_R; the hub inside it is the amount and the Resolve
-   target. Both are well inside the 180px glass. */
-#define ATTACK_HUB_R     96
+   target. Both are well inside the 180px glass.
+ *
+ * The hub is as small as its own contents allow, because every pixel
+ * taken off it is a pixel of width for the mode names - and the names
+ * are what run out of room. 88 is set by the amount at its widest:
+ * "99" in the 116pt face spans a half-diagonal of 85px, so a smaller
+ * hub would mean a smaller number, and the number is the thing this
+ * screen exists to set. */
+#define ATTACK_HUB_R     88
 #define ATTACK_RING_R   176
 #define ATTACK_SECTOR_GAP_DEG 3
 /* Where a sector's label sits: the middle of the band, not its inner
@@ -349,7 +356,7 @@ static const lv_font_t *const attack_label_fonts[] = {
 
 /* Margin kept between the text and the paint it sits on, so a glyph's
    antialiased edge never touches bare background. */
-#define ATTACK_LABEL_MARGIN 3
+#define ATTACK_LABEL_MARGIN 2
 
 static bool attack_label_fits(int cx, int cy, int half_w, int half_h, int mid_deg)
 {
@@ -376,90 +383,82 @@ static bool attack_label_fits(int cx, int cy, int half_w, int half_h, int mid_de
     return true;
 }
 
-/* The spot nearest the middle of a sector where this text, in this
-   font, sits entirely on paint. False if there is no such spot. */
-static bool attack_find_label_spot(const char *text, const lv_font_t *font,
-                                   int mid_deg, int *out_x, int *out_y)
+/* Whether this text, in this font, fits inside its sector when it is
+   centred on the sector's diagonal at this radius. */
+static bool attack_label_fits_at(const char *text, const lv_font_t *font,
+                                 int mid_deg, int radius)
 {
     float rad = (float)mid_deg * ATTACK_DEG2RAD;
-    int ideal_x = ATTACK_CX + (int)lroundf(cosf(rad) * (float)ATTACK_LABEL_R);
-    int ideal_y = ATTACK_CY + (int)lroundf(sinf(rad) * (float)ATTACK_LABEL_R);
+    int x = ATTACK_CX + (int)lroundf(cosf(rad) * (float)radius);
+    int y = ATTACK_CY + (int)lroundf(sinf(rad) * (float)radius);
     lv_point_t size;
-    int half_w, half_h, x, y;
-    long best_d = 0;
-    bool found = false;
 
     lv_txt_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    half_w = ((int)size.x + 1) / 2;
-    half_h = ((int)size.y + 1) / 2;
-
-    /* Searched in two dimensions, not just out along the diagonal. A
-       wide word centred exactly on the diagonal pushes one corner past
-       the outer circle long before the word itself is too big for the
-       sector; sliding it a little off the diagonal tucks that corner
-       back in, and that is the difference between "Comandante" fitting
-       and not. */
-    for (y = ATTACK_CY - ATTACK_RING_R; y <= ATTACK_CY + ATTACK_RING_R; y += 2) {
-        for (x = ATTACK_CX - ATTACK_RING_R; x <= ATTACK_CX + ATTACK_RING_R; x += 2) {
-            long dx = x - ideal_x, dy = y - ideal_y;
-            long d = dx * dx + dy * dy;
-
-            if (found && d >= best_d) continue;
-            if (!attack_label_fits(x, y, half_w, half_h, mid_deg)) continue;
-            *out_x = x; *out_y = y; best_d = d; found = true;
-        }
-    }
-    return found;
+    return attack_label_fits(x, y, ((int)size.x + 1) / 2, ((int)size.y + 1) / 2,
+                             mid_deg);
 }
 
-/* Lays out all four mode names together, at the largest size that fits
- * every one of them.
+/* Lays out all four mode names together: one size, one radius, each
+ * centred on its own diagonal.
  *
- * Sizing each label independently is tempting and looks wrong: three
- * words at 22pt beside one at 16 reads as a mistake rather than as a
- * longer word, and the small one is the one naming the least obvious
- * mode. So the four share a size, and the longest word sets it.
+ * Symmetry is the whole point. Letting each label find the nearest
+ * spot that happened to fit put "Comandante" low and left of where
+ * "Daño" sat, and four words at four different offsets read as a
+ * layout accident even when every one of them is legible. Sharing a
+ * size matters for the same reason: three words at 22pt beside one at
+ * 16 reads as a mistake rather than as a longer word, and the odd one
+ * out is the mode whose name matters most.
  *
- * Which word that is depends on the language - "Cmdr" fit at any size,
- * "Comandante" is 146px wide and the most a 22pt line can be in a
- * 90-degree sector 80px thick is 118 - so the size is searched for
- * rather than chosen, and the search runs again whenever the screen is
- * rebuilt in another language. */
+ * So the longest word sets both numbers for everyone. Which word that
+ * is depends on the language - "Cmdr" fit at any size, "Comandante"
+ * is 146px at 22pt and no 22pt line centred on a diagonal of this band
+ * can exceed about 118 - so they are searched for rather than chosen,
+ * and the search runs again whenever the screen is built in another
+ * language. */
 static void attack_layout_mode_labels(void)
 {
-    int spot_x[ATTACK_MODE_COUNT], spot_y[ATTACK_MODE_COUNT];
-    int f, i, chosen = ATTACK_LABEL_FONT_COUNT - 1;
+    int f, r, i;
+    int chosen_font = ATTACK_LABEL_FONT_COUNT - 1;
+    int chosen_r = ATTACK_LABEL_R;
+    bool settled = false;
 
-    for (f = 0; f < ATTACK_LABEL_FONT_COUNT; f++) {
-        bool all = true;
-        for (i = 0; i < ATTACK_MODE_COUNT; i++) {
-            if (!attack_find_label_spot(lv_label_get_text(label_mode[i]),
-                                        attack_label_fonts[f],
-                                        attack_mode_mid_deg[i],
-                                        &spot_x[i], &spot_y[i])) {
-                all = false;
-                break;
+    for (f = 0; f < ATTACK_LABEL_FONT_COUNT && !settled; f++) {
+        int spread;
+        /* Out from the middle of the band in both directions, so the
+           radius chosen is the one that looks most centred among those
+           that work for all four. */
+        for (spread = 0;
+             spread <= (ATTACK_RING_R - ATTACK_HUB_R) / 2 && !settled;
+             spread++) {
+            int dir;
+            for (dir = (spread == 0) ? 1 : -1; dir <= 1 && !settled; dir += 2) {
+                r = ATTACK_LABEL_R + dir * spread;
+                for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+                    if (!attack_label_fits_at(lv_label_get_text(label_mode[i]),
+                                              attack_label_fonts[f],
+                                              attack_mode_mid_deg[i], r)) {
+                        break;
+                    }
+                }
+                if (i == ATTACK_MODE_COUNT) {
+                    chosen_font = f;
+                    chosen_r = r;
+                    settled = true;
+                }
             }
         }
-        if (all) { chosen = f; break; }
     }
 
-    /* Falling out of that loop means even the smallest font cannot
-       hold every word. Place what can be placed and leave the rest on
-       the band's midline: the unit test fails on it, which is a better
-       outcome than a silently clipped label. */
+    /* Not settling means even the smallest font cannot hold every word
+       at any one radius. Lay them out anyway, on the band's midline at
+       the smallest size, and let the unit test say so - a loud failure
+       beats a silently clipped label. */
     for (i = 0; i < ATTACK_MODE_COUNT; i++) {
         float rad = (float)attack_mode_mid_deg[i] * ATTACK_DEG2RAD;
-        if (!attack_find_label_spot(lv_label_get_text(label_mode[i]),
-                                    attack_label_fonts[chosen],
-                                    attack_mode_mid_deg[i],
-                                    &spot_x[i], &spot_y[i])) {
-            spot_x[i] = ATTACK_CX + (int)lroundf(cosf(rad) * (float)ATTACK_LABEL_R);
-            spot_y[i] = ATTACK_CY + (int)lroundf(sinf(rad) * (float)ATTACK_LABEL_R);
-        }
-        lv_obj_set_style_text_font(label_mode[i], attack_label_fonts[chosen], 0);
+        lv_obj_set_style_text_font(label_mode[i], attack_label_fonts[chosen_font], 0);
         lv_obj_align(label_mode[i], LV_ALIGN_CENTER,
-                     spot_x[i] - ATTACK_CX, spot_y[i] - ATTACK_CY);
+                     (int)lroundf(cosf(rad) * (float)chosen_r),
+                     (int)lroundf(sinf(rad) * (float)chosen_r));
     }
 }
 
@@ -491,27 +490,33 @@ void build_attack_screen(void)
     attack_layout_mode_labels();
 
     /* Who is hitting whom, small, at the top of the hub. */
-    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
-    lv_obj_align(label_source, LV_ALIGN_CENTER, -42, -66);
+    /* Fixed-width and ellipsised, so a long name cannot push the row
+       out over the sector ring - and narrow enough that the FULL box,
+       not just today's "P1", stays inside the hub. */
+    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 48);
+    lv_obj_align(label_source, LV_ALIGN_CENTER, -29, -54);
 
     label_arrow = attack_make_label(screen_attack, &lv_font_es_16, ATTACK_TILE_TEXT, 0);
     lv_label_set_text(label_arrow, ">");
-    lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -66);
+    lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -54);
 
-    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
-    lv_obj_align(label_target, LV_ALIGN_CENTER, 42, -66);
+    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 48);
+    lv_obj_align(label_target, LV_ALIGN_CENTER, 29, -54);
 
     /* The amount, at life-counter scale - it is the number the knob is
        editing and the reason the screen exists. */
     label_amount = attack_make_label(screen_attack, &lv_font_montserrat_bold_116,
                                      0xFFFFFF, 0);
     lv_label_set_text(label_amount, "1");
-    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, -2);
+    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, 0);
 
-    label_attack_resolve = attack_make_label(screen_attack, &lv_font_es_22,
+    /* Smaller than the mode names on purpose: the hub's job is the
+       number, and at 22pt this word crowded both it and the hub's own
+       edge. */
+    label_attack_resolve = attack_make_label(screen_attack, &lv_font_es_16,
                                              0xFFFFFF, 0);
     lv_label_set_text(label_attack_resolve, t(STR_RESOLVE));
-    lv_obj_align(label_attack_resolve, LV_ALIGN_CENTER, 0, 62);
+    lv_obj_align(label_attack_resolve, LV_ALIGN_CENTER, 0, 56);
 
     refresh_attack_ui();
 }
@@ -539,3 +544,7 @@ int attack_test_mode_mid_deg(int mode)
     if (mode < 0 || mode >= ATTACK_MODE_COUNT) return 0;
     return attack_mode_mid_deg[mode];
 }
+
+lv_obj_t *attack_test_amount_label(void)  { return label_amount; }
+lv_obj_t *attack_test_resolve_label(void) { return label_attack_resolve; }
+lv_obj_t *attack_test_source_label(void)  { return label_source; }

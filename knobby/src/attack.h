@@ -45,5 +45,12 @@ lv_obj_t *attack_test_mode_label(int mode);
    compare where things are DRAWN with where they are pressed. */
 void attack_test_geometry(int *cx, int *cy, int *inner_r, int *outer_r);
 int attack_test_mode_mid_deg(int mode);
+/* The hub's own widgets - the amount, the Resolve word, the "who hits
+   whom" row - so a test can check they stay inside the hub at their
+   widest. The hub's radius is set by the amount's 116pt face; nothing
+   in here may quietly outgrow it. */
+lv_obj_t *attack_test_amount_label(void);
+lv_obj_t *attack_test_resolve_label(void);
+lv_obj_t *attack_test_source_label(void);
 
 #endif // _ATTACK_H
