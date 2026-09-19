@@ -58,6 +58,15 @@ void build_minigames_menu_screen(void);
 void build_table_sync_screen(void);
 void build_partners_screen(void);
 void open_partners_screen(void);
+bool partners_knob_page(int dir);
+
+/* ---------- read-only accessors (unit tests) ---------- */
+int partners_test_page_count(void);
+int partners_test_page(void);
+/* The player a quarter stands for on the page being shown, or -1 for
+   the "More" quarter and any past the end of the table. */
+int partners_test_tile_player(int slot);
+void partners_page_reset_for_test(void);
 void build_language_picker_screen(void);
 
 void refresh_settings_ui(void);

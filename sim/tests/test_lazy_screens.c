@@ -13,6 +13,7 @@
 #include "ui_wifi.h"
 #include "snake.h"
 #include "pong.h"
+#include "settings.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -21,6 +22,15 @@ int main(void)
     lv_obj_t *first_build;
 
     test_harness_init();
+
+    /* ---- Partners: a quad page most sessions never open ---- */
+    assert(screen_partners == NULL);
+    open_partners_screen();
+    assert(screen_partners != NULL);
+    first_build = screen_partners;
+    open_partners_screen();
+    assert(screen_partners == first_build);
+    printf("PASS: the partners menu is built on first open, once\n");
 
     /* ---- WiFi/OTA cluster: NULL until the first of its three entry
        points is opened, then built as one unit ---- */

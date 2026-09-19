@@ -29,6 +29,7 @@
  * runtime. */
 #include "test_harness.h"
 #include "settings.h"
+#include "settings.h"
 #include "ui_wifi.h"
 #include "snake.h"
 #include "pong.h"
@@ -71,6 +72,13 @@ static void open_every_lazy_screen(void)
     open_invaders_screen();
     open_rps_screen();
     open_asteroids_screen();
+
+    /* The partners menu is sized by the player count - a full table of
+       eight needs three quad pages where the default four needs one -
+       so it is opened at its worst, not at its default. Measuring it
+       at four would have hidden two thirds of it. */
+    nvs_set_num_players(MAX_GAME_PLAYERS);
+    open_partners_screen();
 }
 
 static uint32_t report(const char *label, lv_mem_monitor_t *mon)
