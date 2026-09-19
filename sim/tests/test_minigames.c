@@ -1173,55 +1173,78 @@ static void test_tap_reaches_every_game(void)
     printf("PASS: invaders fires from a tap anywhere on the glass\n");
 }
 
-/* Leaving a game returns to the menu page it was started from. With
- * nine games across three pages, always landing on page 1 meant paging
- * back every single time you finished a run of anything in the second
- * half of the list.
+/* Leaving a game puts the cursor back on the game you just played.
  *
- * Driven through a real tile press rather than by calling the game's
- * open function: it is the press that records the page, so calling
- * open_<game>_screen() directly would test nothing. */
+ * The menu was four quad pages and is one scrolling list now, so the
+ * thing to check moved with it: not "which page loaded" but "which row
+ * is selected". That is read off the row's own styling - the selected
+ * row is the one drawn with a border - so the test sees what the user
+ * sees rather than trusting an internal index.
+ *
+ * Driven through a real row press: it is the press that records where
+ * to come back to, so calling open_<game>_screen() would test
+ * nothing. */
+#define MINIGAME_ROW_INVADERS 7
+
+static lv_obj_t *minigames_row(int index)
+{
+    /* screen children: [0] title, [1] the scrolling container. */
+    lv_obj_t *cont = lv_obj_get_child(screen_minigames_menu, 1);
+    if (cont == NULL) return NULL;
+    return lv_obj_get_child(cont, index);
+}
+
+static bool minigames_row_selected(int index)
+{
+    lv_obj_t *row = minigames_row(index);
+    if (row == NULL) return false;
+    return lv_obj_get_style_border_width(row, 0) > 0;
+}
+
 static void test_back_returns_to_the_launching_page(void)
 {
-    lv_obj_t *page;
-    lv_obj_t *tile;
-
     open_minigames_menu();
-    /* Not a fixed number: the menu paginates whatever minigame_entries[]
-       holds, and this test is about where BACK lands, not how many
-       pages there happen to be. It only needs a page past the first. */
-    assert(minigames_page_count >= 3);
-    assert(lv_scr_act() == minigames_pages[0]);
+    assert(lv_scr_act() == screen_minigames_menu);
+    assert(minigames_row_selected(0));
 
-    /* Page 3 holds Catch Egg / Invaders / Rock Paper Scissors. */
-    page = minigames_pages[2];
-    lv_scr_load(page);
-    tile = lv_obj_get_child(page, 1);        /* second tile: Invaders */
-    assert(tile != NULL);
-    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    lv_event_send(minigames_row(MINIGAME_ROW_INVADERS), LV_EVENT_CLICKED, NULL);
     assert(lv_scr_act() == screen_invaders);
 
     open_minigames_menu_at_launch_page();
-    assert(lv_scr_act() == minigames_pages[2]);
-    printf("PASS: leaving a game returns to the page it was started from\n");
+    assert(lv_scr_act() == screen_minigames_menu);
+    assert(minigames_row_selected(MINIGAME_ROW_INVADERS));
+    assert(!minigames_row_selected(0));
+    printf("PASS: leaving a game returns the cursor to the game you played\n");
 
-    /* A game launched from page 1 still comes back to page 1 - the
-       recorded page has to be updated per launch, not sticky. */
-    lv_scr_load(minigames_pages[0]);
-    tile = lv_obj_get_child(minigames_pages[0], 0);   /* Snake */
-    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    /* Per launch, not sticky: a game started from the top comes back to
+       the top. */
+    lv_event_send(minigames_row(0), LV_EVENT_CLICKED, NULL);
     open_minigames_menu_at_launch_page();
-    assert(lv_scr_act() == minigames_pages[0]);
-    printf("PASS: the return page follows the most recent launch\n");
+    assert(minigames_row_selected(0));
+    assert(!minigames_row_selected(MINIGAME_ROW_INVADERS));
+    printf("PASS: the return row follows the most recent launch\n");
 
-    /* Entering fresh from Settings is always page 1, not wherever the
-       last game happened to live. */
-    lv_scr_load(minigames_pages[2]);
-    tile = lv_obj_get_child(minigames_pages[2], 0);
-    lv_event_send(tile, LV_EVENT_CLICKED, NULL);
+    /* Entering fresh starts at the top wherever the last game lived. */
+    lv_event_send(minigames_row(MINIGAME_ROW_INVADERS), LV_EVENT_CLICKED, NULL);
     open_minigames_menu();
-    assert(lv_scr_act() == minigames_pages[0]);
-    printf("PASS: opening the menu from Settings still lands on page 1\n");
+    assert(minigames_row_selected(0));
+    printf("PASS: opening the menu fresh still starts at the top\n");
+
+    /* And the knob walks the list, wrapping at the end - it has no
+       stops, so the cursor does not either. */
+    {
+        int count = 10;   /* minigame_entries[] */
+        int i;
+        minigames_knob_page(1);
+        assert(minigames_row_selected(1));
+        minigames_knob_page(-1);
+        assert(minigames_row_selected(0));
+        minigames_knob_page(-1);
+        assert(minigames_row_selected(count - 1));
+        for (i = 0; i < count; i++) minigames_knob_page(1);
+        assert(minigames_row_selected(count - 1));
+        printf("PASS: the knob scrolls the list and wraps at both ends\n");
+    }
 }
 
 /* ---------------------------------------------------------------- */

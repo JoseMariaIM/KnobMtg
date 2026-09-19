@@ -131,8 +131,8 @@ static void nav_3p(void)         { nvs_set_players_to_track(3); reset_all_values
 static void nav_4p(void)         { nvs_set_players_to_track(4); reset_all_values(); back_to_main(); }
 static void nav_intro(void)      { lv_scr_load(screen_intro); }
 static void nav_menu(void)       { open_quad_menu(); }
-static void nav_tools(void)      { lv_scr_load(screen_tools_menu); }
-static void nav_settings_menu(void) { lv_scr_load(settings_pages[0]); }
+static void nav_tools(void)      { open_tools_menu(); }
+static void nav_settings_menu(void) { open_settings_list(); }
 static void nav_brightness(void) { open_settings_screen(); }
 static void nav_battery(void)    { open_battery_screen(); }
 static void nav_minigames(void)  { open_minigames_menu(); }
@@ -230,27 +230,23 @@ static const screen_entry_t all_screens[] = {
 };
 
 /* Settings screens resolved dynamically from the declarative table:
-   "settings-page<N>" (1-based) and "setting:<id>" (page hosting that item).
+   "setting:<id>" opens the settings list with that item under the
+   cursor. "settings-page<N>" is kept as an alias for it so existing
+   scripts do not break, but settings is one scrolling list now rather
+   than N quad pages, so every page number lands on the same screen.
    Returns 1 if it navigated, 0 if the name is not a settings form. */
 static int nav_dynamic_settings(const char *name)
 {
     if (strncmp(name, "settings-page", 13) == 0) {
-        int p = atoi(name + 13);
-        if (p < 1 || p > settings_page_count) {
-            fprintf(stderr, "Settings page out of range: %s (pages: 1-%d)\n",
-                    name, settings_page_count);
-            exit(1);
-        }
-        lv_scr_load(settings_pages[p - 1]);
+        open_settings_list();
         return 1;
     }
     if (strncmp(name, "setting:", 8) == 0) {
-        int p = settings_item_page(name + 8);
-        if (p < 0) {
+        open_settings_list();
+        if (!settings_focus_item(name + 8)) {
             fprintf(stderr, "Unknown setting id: %s\n", name + 8);
             exit(1);
         }
-        lv_scr_load(settings_pages[p]);
         return 1;
     }
     return 0;
@@ -547,7 +543,9 @@ int main(int argc, char *argv[])
     knob_gui();
 
     if (print_settings_pages) {
-        printf("%d\n", settings_page_count);
+        /* One list, one screen. Kept so generate_matrix.sh keeps
+           working; it just has one page to walk now. */
+        printf("1\n");
         return 0;
     }
 

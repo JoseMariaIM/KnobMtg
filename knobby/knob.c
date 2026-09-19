@@ -433,7 +433,16 @@ static void back_player_name(void)
 static void back_mana(void)
 {
     mana_discard_preview();
-    lv_scr_load(screen_tools_menu);
+    open_tools_menu();
+}
+
+/* Tools is a lazily-built list, so its screen pointer is NULL until
+   somebody opens it. Every back target that lands there has to go
+   through the opener rather than load the pointer, or a screen reached
+   by any other route would hand lv_scr_load() a NULL. */
+static void back_to_tools(void)
+{
+    open_tools_menu();
 }
 
 static void back_snake(void)
@@ -519,9 +528,9 @@ static void back_ota_qr(void)
 
 static const screen_desc_t screen_registry[] = {
     /* screen                      build                              on_knob              on_back                  back_target             menu_facing */
-    { &screen_dice_menu,           build_dice_menu_screen,            change_dice_quantity, NULL,                    &screen_tools_menu,     false },
+    { &screen_dice_menu,           build_dice_menu_screen,            change_dice_quantity, back_to_tools,           NULL,                   false },
     { &screen_dice,                build_dice_screen,                 NULL,                 back_dice,               NULL,                   false },
-    { &screen_coin,                build_coin_screen,                 NULL,                 NULL,                    &screen_tools_menu,     false },
+    { &screen_coin,                build_coin_screen,                 NULL,                 back_to_tools,           NULL,                   false },
     { &screen_1p,                  build_main_screen,                 NULL,                 NULL,                    NULL,                   false },
     { &screen_multiplayer,         build_multiplayer_screen,          change_player_life,   NULL,                    NULL,                   false },
     { &screen_victory,             build_victory_screen,              NULL,                 NULL,                    NULL,                   false },
@@ -541,7 +550,7 @@ static const screen_desc_t screen_registry[] = {
     { &screen_battery,             build_battery_screen,              NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_table_sync,          build_table_sync_screen,           NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
-    { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
+    { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      back_to_tools,           NULL,                   false },
     { &screen_game_mode_menu,      build_game_mode_menu_screen,       change_num_players,   NULL,                    &screen_quad_menu,      false },
     { &screen_custom_life,         build_custom_life_screen,          change_custom_life,   back_custom_life,        NULL,                   false },
     /* screen_quad_menu/screen_tools_menu: built by build_quad_menus(), see knob_gui() */
@@ -580,13 +589,12 @@ static void handle_back_navigation(lv_obj_t *screen)
 {
     const screen_desc_t *desc;
 
-    /* Minigames pages 1..N are not in the table (they are built as a
-       group, like settings pages); they defer to settings' own exit. */
+    /* The minigames list is not in the table; it exits to Tools. */
     if (minigames_handle_back(screen)) return;
 
-    /* Settings pages and their sub-screens own their own back targets
-       (see settings_handle_back()'s scan over settings_items[]/
-       settings_pages[]) - checked first, exactly like before this table. */
+    /* The settings list and its sub-screens own their own back targets
+       (see settings_handle_back()'s scan over settings_items[]) -
+       checked first, exactly like before this table. */
     if (settings_handle_back(screen)) return;
 
     desc = find_screen_desc(screen);
@@ -594,7 +602,11 @@ static void handle_back_navigation(lv_obj_t *screen)
 
     if (desc->on_back != NULL) {
         desc->on_back();
-    } else if (desc->back_target != NULL) {
+    } else if (desc->back_target != NULL && *desc->back_target != NULL) {
+        /* The NULL check is not belt-and-braces: several screens are
+           built lazily now, so a back_target can legitimately be unset
+           if its screen was never opened. Loading it would be a null
+           dereference inside LVGL rather than a stuck screen. */
         lv_scr_load(*desc->back_target);
     }
 }
@@ -732,8 +744,11 @@ static void handle_knob_event(knob_event_t k)
         return;
     }
 
-    /* Paged menus: the knob flips between pages (no-op elsewhere). */
+    /* The scrolling lists: each moves its own cursor and reports
+       whether the active screen was its own, so they are tried in
+       turn. */
     if (minigames_knob_page(dir)) return;
+    if (tools_knob(dir)) return;
     settings_knob_page(dir);
 }
 

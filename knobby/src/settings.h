@@ -30,15 +30,11 @@ typedef struct {
                                     LV_EVENT_LONG_PRESSED for "Hold" items) */
 } setting_item_t;
 
-extern lv_obj_t *settings_pages[];
-extern int settings_page_count;
-
-/* Minigames menu: one quad page per three games, plus "More". Sized for
-   comfortably more games than exist so adding one is only a row in
-   minigame_entries[] (settings.c). */
-#define MINIGAMES_PAGE_MAX 6
-extern lv_obj_t *minigames_pages[MINIGAMES_PAGE_MAX];
-extern int minigames_page_count;
+/* Settings, Tools and Minigames are each one knob-driven scrolling list
+   now rather than a run of quad pages - see ui_list.h. The main menu
+   stays a quad because it holds exactly four things, which is what a
+   2x2 grid is good at. */
+extern lv_obj_t *screen_settings_list;
 
 /* One game as the menu sees it: a name and the door into it. The game's
    own knob/tap/back behaviour is per-screen and lives in knob.c's
@@ -63,15 +59,22 @@ void refresh_battery_ui(void);
 void refresh_table_sync_ui(void);
 
 bool settings_handle_back(lv_obj_t *screen);
+/* Knob handlers for the three lists: each returns false when the active
+   screen is not its own, so knob.c can try them in turn. */
 bool settings_knob_page(int dir);
 bool minigames_handle_back(lv_obj_t *screen);
 bool minigames_knob_page(int dir);
-int settings_item_page(const char *id);
+bool tools_knob(int dir);
+/* Puts the cursor on a named setting, building the list if needed.
+   Used by the simulator to screenshot one setting in place. */
+bool settings_focus_item(const char *id);
 
 void open_quad_menu(void);
 void open_settings_screen(void);
 void open_battery_screen(void);
 void open_minigames_menu(void);
+void open_settings_list(void);
+void open_tools_menu(void);
 void open_minigames_menu_at_launch_page(void);
 void menu_facing_refresh(void);
 void open_table_sync_screen(void);

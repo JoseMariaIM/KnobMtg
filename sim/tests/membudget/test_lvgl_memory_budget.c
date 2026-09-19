@@ -60,6 +60,10 @@
 static void open_every_lazy_screen(void)
 {
     open_wifi_settings_screen();
+    /* The three menus are lists built on first entry now, so they
+       belong here rather than in the boot baseline. */
+    open_settings_list();
+    open_tools_menu();
     open_minigames_menu();
     open_snake_screen();
     open_pong_screen();
