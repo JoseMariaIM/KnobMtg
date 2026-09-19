@@ -24,6 +24,8 @@
 #include "sim_stubs.h"
 #include "attack.h"
 #include "game.h"
+#include "lang.h"
+#include "storage.h"
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
@@ -307,6 +309,92 @@ static void test_opening_resets_mode_and_amount(void)
     printf("PASS: reopening resets to Damage 1\n");
 }
 
+/* All four names share one size, and none of them had to fall back.
+ *
+ * Sizing each label to its own word gives three at 22pt beside one at
+ * 16, which reads as a bug rather than as a longer word - and the odd
+ * one out is "Commander", the mode whose name matters most. The size
+ * is therefore whatever the longest of the four can take.
+ *
+ * Run in Spanish as well as English, because the longest word is not
+ * the same word in both: "Cmdr" fit at any size, "Comandante" is 146px
+ * at 22pt and no 22pt line in a 90-degree sector can exceed 118. A
+ * layout that only ever ran in English would ship a clipped label to
+ * every Spanish user. */
+static void check_labels_in_current_language(const char *lang_name)
+{
+    const lv_font_t *font = NULL;
+    int cx, cy, inner, outer, i;
+
+    attack_test_geometry(&cx, &cy, &inner, &outer);
+
+    for (i = 0; i < ATTACK_MODE_COUNT; i++) {
+        lv_obj_t *lbl = attack_test_mode_label(i);
+        const lv_font_t *f;
+        lv_coord_t x1, y1, x2, y2;
+        int mid = attack_test_mode_mid_deg(i);
+        int c;
+        static const int corner[4][2] = { {0,0}, {1,0}, {0,1}, {1,1} };
+
+        assert(lbl != NULL);
+        f = lv_obj_get_style_text_font(lbl, LV_PART_MAIN);
+        if (font == NULL) font = f;
+        if (f != font) {
+            printf("FAIL: %s - mode %d uses a different font from mode 0\n",
+                   lang_name, i);
+            assert(0);
+        }
+
+        x1 = lv_obj_get_x(lbl);
+        y1 = lv_obj_get_y(lbl);
+        x2 = x1 + lv_obj_get_width(lbl) - 1;
+        y2 = y1 + lv_obj_get_height(lbl) - 1;
+        assert(lv_obj_get_width(lbl) > 0 && lv_obj_get_height(lbl) > 0);
+
+        for (c = 0; c < 4; c++) {
+            float dx = (float)(corner[c][0] ? x2 : x1) - (float)cx;
+            float dy = (float)(corner[c][1] ? y2 : y1) - (float)cy;
+            float r = sqrtf(dx * dx + dy * dy);
+            int deg = (int)(atan2f(dy, dx) / DEG2RAD);
+            int diff;
+
+            if (deg < 0) deg += 360;
+            diff = deg - mid;
+            while (diff > 180) diff -= 360;
+            while (diff < -180) diff += 360;
+
+            if (r < (float)inner || r > (float)outer || diff < -45 || diff > 45) {
+                printf("FAIL: %s - mode %d ('%s') corner %d at r=%.1f, %d deg off"
+                       " centre; band is %d..%d and the sector spans +-45\n",
+                       lang_name, i, lv_label_get_text(lbl), c, (double)r, diff,
+                       inner, outer);
+                assert(0);
+            }
+        }
+    }
+}
+
+static void test_labels_fit_in_every_language(void)
+{
+    check_labels_in_current_language("English");
+    printf("PASS: the four mode names share one size and fit their sectors (English)\n");
+
+    /* Rebuilt rather than relabelled: the firmware only ever builds
+       this screen once, in whatever language was stored at boot, so
+       rebuilding is what a Spanish device actually does. */
+    nvs_set_language(1);
+    lang_init();
+    build_attack_screen();
+    open_attack();
+    lv_refr_now(NULL);
+    check_labels_in_current_language("Spanish");
+    printf("PASS: the four mode names share one size and fit their sectors (Spanish)\n");
+
+    nvs_set_language(0);
+    lang_init();
+    build_attack_screen();
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -322,6 +410,7 @@ int main(void)
     test_the_drawn_gaps_are_not_dead_zones();
     test_the_hub_resolves();
     test_opening_resets_mode_and_amount();
+    test_labels_fit_in_every_language();
 
     printf("\nAll attack screen tests passed.\n");
     return 0;

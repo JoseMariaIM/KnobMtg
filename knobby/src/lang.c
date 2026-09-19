@@ -184,8 +184,8 @@ static const char *strings_en[STR_COUNT] = {
 
     [STR_VICTORY_WINNER] = "Winner",
 
-    [STR_ATTACK_MODE_DAMAGE] = "Dmg",
-    [STR_ATTACK_MODE_CMDR] = "Cmdr",
+    [STR_ATTACK_MODE_DAMAGE] = "Damage",
+    [STR_ATTACK_MODE_CMDR] = "Commander",
     [STR_ATTACK_MODE_INFECT] = "Infect",
     [STR_ATTACK_LIFELINK] = "Lifelink",
     [STR_ATTACK_TITLE_FMT] = "%s > %s",
@@ -405,9 +405,9 @@ static const char *strings_es[STR_COUNT] = {
     [STR_VICTORY_WINNER] = "Ganador",
 
     [STR_ATTACK_MODE_DAMAGE] = "Daño",
-    [STR_ATTACK_MODE_CMDR] = "Cmdr",
+    [STR_ATTACK_MODE_CMDR] = "Comandante",
     [STR_ATTACK_MODE_INFECT] = "Infectar",
-    [STR_ATTACK_LIFELINK] = "Vínculo",
+    [STR_ATTACK_LIFELINK] = "Vínculo\nvital",
     [STR_ATTACK_TITLE_FMT] = "%s > %s",
     [STR_CANCEL] = "Cancelar",
     [STR_RESOLVE] = "Resolver",
