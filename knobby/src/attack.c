@@ -44,6 +44,9 @@ static int attack_source_color = 0;
 static int attack_target_color = 0;
 static attack_mode_t attack_mode = ATTACK_MODE_DAMAGE;
 static int attack_amount = 1;
+/* 0 = the attacker's commander, 1 = their partner. Only ever 1 while
+   the attacker actually has a partner; see attack_can_use_partner. */
+static int attack_cmd_slot = 0;
 
 #define ATTACK_AMOUNT_MIN 0
 #define ATTACK_AMOUNT_MAX 99
@@ -70,6 +73,24 @@ static const uint32_t attack_mode_accent[ATTACK_MODE_COUNT] = {
 static const string_id_t attack_mode_labels[ATTACK_MODE_COUNT] = {
     STR_ATTACK_MODE_DAMAGE, STR_ATTACK_LIFELINK,
     STR_ATTACK_MODE_CMDR, STR_ATTACK_MODE_INFECT,
+};
+
+/* A second name some sectors can take. Only Commander has one: when the
+ * attacker fields a partner, tapping that sector again swaps it to the
+ * partner's tally and the word changes with it.
+ *
+ * A toggle rather than a fifth sector or a split one. The two
+ * commanders are the same kind of thing and you use one at a time, so
+ * they share a slice; a fifth sector would narrow all four, and half a
+ * sector would not hold either word - "Comandante" already sets the
+ * font for the whole dial.
+ *
+ * It is the same word the commander-damage screen uses for its own
+ * partner tab, deliberately: one name for one tally. */
+#define ATTACK_NO_ALT_LABEL (-1)
+static const int attack_mode_alt_labels[ATTACK_MODE_COUNT] = {
+    ATTACK_NO_ALT_LABEL, ATTACK_NO_ALT_LABEL,
+    (int)STR_TAB_PARTNER, ATTACK_NO_ALT_LABEL,
 };
 
 // ---------- geometry ----------
@@ -108,6 +129,22 @@ static lv_obj_t *label_mode[ATTACK_MODE_COUNT];
 static lv_obj_t *label_amount = NULL;
 static lv_obj_t *label_attack_resolve = NULL;
 
+/* Whether the attacker in THIS attack fields a partner. The flag is
+   the source player's, not the target's: it is the source's commander
+   dealing the damage. */
+static bool attack_can_use_partner(void)
+{
+    return attack_source >= 0 && player_has_partner(attack_source);
+}
+
+static const char *attack_mode_label_text(int mode)
+{
+    if (mode == (int)ATTACK_MODE_CMDR && attack_cmd_slot != 0) {
+        return t((string_id_t)attack_mode_alt_labels[mode]);
+    }
+    return t(attack_mode_labels[mode]);
+}
+
 // ---------- refresh ----------
 static void refresh_attack_ui(void)
 {
@@ -136,6 +173,7 @@ static void refresh_attack_ui(void)
     for (i = 0; i < ATTACK_MODE_COUNT; i++) {
         bool active = (attack_mode == i);
         if (label_mode[i] == NULL) continue;
+        lv_label_set_text(label_mode[i], attack_mode_label_text(i));
         lv_obj_set_style_text_color(label_mode[i],
             active ? lv_color_black() : lv_color_hex(ATTACK_TILE_TEXT), 0);
     }
@@ -174,6 +212,7 @@ void open_attack_screen(int source, int source_color,
     attack_target_color = target_color;
     attack_mode = ATTACK_MODE_DAMAGE;
     attack_amount = 1;
+    attack_cmd_slot = 0;
 
     refresh_attack_ui();
     load_screen_if_needed(screen_attack);
@@ -196,7 +235,8 @@ static void event_attack_resolve(lv_event_t *e)
             apply_life_delta(attack_source, attack_amount);
             break;
         case ATTACK_MODE_CMDR:
-            apply_attack_cmd_damage(attack_source, attack_target, attack_amount);
+            apply_attack_cmd_damage(attack_source, attack_target, attack_amount,
+                                    attack_cmd_slot);
             break;
         case ATTACK_MODE_INFECT:
             apply_attack_poison(attack_target, attack_amount);
@@ -242,7 +282,19 @@ static void event_attack_press(lv_event_t *e)
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
         if (diff < -45 || diff > 45) continue;
-        attack_mode = (attack_mode_t)i;
+        if (attack_mode == (attack_mode_t)i &&
+            attack_mode_alt_labels[i] != ATTACK_NO_ALT_LABEL &&
+            attack_can_use_partner()) {
+            /* Already on this mode: the second tap is the swap to the
+               partner's tally, and the third swaps back. */
+            attack_cmd_slot = !attack_cmd_slot;
+        } else {
+            /* Arriving from another mode always lands on the primary
+               commander, the same way the commander-damage screen
+               always opens on it. */
+            attack_cmd_slot = 0;
+            attack_mode = (attack_mode_t)i;
+        }
         refresh_attack_ui();
         return;
     }
@@ -434,9 +486,21 @@ static void attack_layout_mode_labels(void)
             for (dir = (spread == 0) ? 1 : -1; dir <= 1 && !settled; dir += 2) {
                 r = ATTACK_LABEL_R + dir * spread;
                 for (i = 0; i < ATTACK_MODE_COUNT; i++) {
-                    if (!attack_label_fits_at(lv_label_get_text(label_mode[i]),
+                    /* Both of a sector's possible names, not just the
+                       one showing. The commander sector swaps to
+                       "Compañero" mid-attack, and a layout measured
+                       only against "Comandante" would let that swap
+                       push the word off its own paint. */
+                    if (!attack_label_fits_at(t(attack_mode_labels[i]),
                                               attack_label_fonts[f],
                                               attack_mode_mid_deg[i], r)) {
+                        break;
+                    }
+                    if (attack_mode_alt_labels[i] != ATTACK_NO_ALT_LABEL &&
+                        !attack_label_fits_at(
+                            t((string_id_t)attack_mode_alt_labels[i]),
+                            attack_label_fonts[f],
+                            attack_mode_mid_deg[i], r)) {
                         break;
                     }
                 }

@@ -146,6 +146,8 @@ static void nav_eggs(void)       { open_eggs_screen(); }
 static void nav_invaders(void)   { open_invaders_screen(); }
 static void nav_rps(void)        { open_rps_screen(); }
 static void nav_asteroids(void)  { open_asteroids_screen(); }
+static void nav_partners(void) { open_partners_screen(); }
+
 static void nav_table_sync(void) { open_table_sync_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
@@ -167,7 +169,10 @@ static void nav_all_damage(void) {
     refresh_all_damage_ui();
     lv_scr_load(screen_player_all_damage);
 }
-static void nav_counters_menu(void) { lv_scr_load(screen_counter_menu); }
+/* Through open_counter_menu(), not a raw screen load: the tile
+   gating runs on open, and a screenshot that skipped it would show a
+   menu no player ever sees. */
+static void nav_counters_menu(void) { open_counter_menu(); }
 static void nav_counter_edit(void) {
     begin_counter_edit(0, COUNTER_TYPE_POISON);
     refresh_counter_edit_ui();
@@ -209,6 +214,7 @@ static const screen_entry_t all_screens[] = {
     {"rps",           nav_rps},
     {"asteroids",     nav_asteroids},
     {"table-sync",    nav_table_sync},
+    {"partners",      nav_partners},
     {"dice",          nav_dice},
     {"dice-menu",     nav_dice_menu},
     {"coin",          nav_coin},
@@ -283,6 +289,7 @@ static void print_usage(void)
            "  --orientation <n>      0=absolute, 1=centric, 2=tabletop (default: 0)\n"
            "  --display-rotation <n> Physical rotation: 0=0°, 1=90°, 2=180°, 3=270° (default: 0)\n"
            "  --lang <en|es>         UI language (default: en)\n"
+           "  --partners <mask>      Bitmask of players fielding a partner, e.g. 1 = P1\n"
            "  --menu-facing <n>      0=menus fixed, 1=player menus face the acting player (default: 0)\n"
            "  --brightness <n>       Brightness percent 1-100 (default: 30)\n"
            "  --auto-dim <n>         0=OFF, 1=15s, 2=30s, 3=60s (default: 0)\n"
@@ -313,7 +320,7 @@ static void print_usage(void)
            "\nTimer state (1p only):\n"
            "\n  --help, -h             Show this message\n"
            "\nAvailable screens:\n"
-           "  main 1p 2p 3p 4p intro menu tools settings-menu\n"
+           "  main 1p 2p 3p 4p intro menu tools settings-menu partners\n"
            "  snake pong dino tetris breakout flappy eggs invaders rps\n"
            "  asteroids\n"
            "  settings-page<N>       Settings page N (1-based)\n"
@@ -462,6 +469,8 @@ int main(int argc, char *argv[])
             sim_nvs_preset_i8("rotation", (int8_t)atoi(argv[++i]));
         } else if (strcmp(argv[i], "--display-rotation") == 0 && i + 1 < argc) {
             sim_nvs_preset_i8("disp_rot", (int8_t)atoi(argv[++i]));
+        } else if (strcmp(argv[i], "--partners") == 0 && i + 1 < argc) {
+            sim_nvs_preset_i8("partners", (int8_t)atoi(argv[++i]));
         } else if (strcmp(argv[i], "--lang") == 0 && i + 1 < argc) {
             sim_nvs_preset_i8("language",
                               (int8_t)(strcmp(argv[++i], "es") == 0 ? 1 : 0));
@@ -614,6 +623,10 @@ int main(int argc, char *argv[])
                --enemy-damage override, which seeds the rows explicitly. */ \
             if (lv_scr_act() == screen_select || lv_scr_act() == screen_damage) \
                 prepare_cmd_damage_for_player(menu_player); \
+            /* The counters menu gates its partner tile on open, and the \
+               acting player is only known here - so re-open it for the \
+               one that was actually asked for. */ \
+            if (lv_scr_act() == screen_counter_menu) open_counter_menu(); \
             menu_facing_refresh(); \
         } \
         if (enemy_damage_set) { \

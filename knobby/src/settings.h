@@ -11,6 +11,7 @@ extern lv_obj_t *screen_settings;
 extern lv_obj_t *screen_battery;
 extern lv_obj_t *screen_minigames_menu;
 extern lv_obj_t *screen_table_sync;
+extern lv_obj_t *screen_partners;
 extern lv_obj_t *screen_language_picker;
 
 // ---------- declarative settings ----------
@@ -55,6 +56,8 @@ void build_settings_screen(void);
 void build_battery_screen(void);
 void build_minigames_menu_screen(void);
 void build_table_sync_screen(void);
+void build_partners_screen(void);
+void open_partners_screen(void);
 void build_language_picker_screen(void);
 
 void refresh_settings_ui(void);

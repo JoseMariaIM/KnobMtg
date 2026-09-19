@@ -103,7 +103,24 @@ void open_player_menu(int player_index) {
   load_screen_if_needed(screen_player_menu);
 }
 
-void open_counter_menu(void) { load_screen_if_needed(screen_counter_menu); }
+/* The partner-tax tile only means something for a player who fields a
+   partner, so it is hidden rather than greyed for everyone else - the
+   same rule the commander-damage slot tabs follow. Re-evaluated on
+   every open because the menu is built once but visited per player. */
+static void refresh_counter_menu_for_player(void) {
+  lv_obj_t *tile;
+
+  if (screen_counter_menu == NULL) return;
+  tile = lv_obj_get_child(screen_counter_menu, COUNTER_TYPE_PARTNER_TAX);
+  if (tile == NULL) return;
+  if (player_has_partner(menu_player)) lv_obj_clear_flag(tile, LV_OBJ_FLAG_HIDDEN);
+  else                                 lv_obj_add_flag(tile, LV_OBJ_FLAG_HIDDEN);
+}
+
+void open_counter_menu(void) {
+  load_screen_if_needed(screen_counter_menu);
+  refresh_counter_menu_for_player();
+}
 
 static void open_all_damage_screen(void) {
   all_damage_value = 0;
@@ -649,4 +666,12 @@ void build_player_color_picker_screen(void) {
   btn_color_apply = make_button(screen_player_color_picker, t(STR_APPLY), 120, 46,
                                 event_color_apply);
   lv_obj_align(btn_color_apply, LV_ALIGN_CENTER, 0, 80);
+}
+
+bool counter_menu_test_partner_tile_visible(void) {
+  lv_obj_t *tile;
+
+  if (screen_counter_menu == NULL) return false;
+  tile = lv_obj_get_child(screen_counter_menu, COUNTER_TYPE_PARTNER_TAX);
+  return tile != NULL && !lv_obj_has_flag(tile, LV_OBJ_FLAG_HIDDEN);
 }

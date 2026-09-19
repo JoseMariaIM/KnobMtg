@@ -179,6 +179,23 @@ static void style_slot_tab(lv_obj_t *btn, bool active)
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
 }
 
+/* Whether any player LISTED on this screen fields a partner.
+ *
+ * The slot tabs pick which of a source's two commanders a number
+ * belongs to, so they are worth showing only when one of the sources
+ * in front of you actually has two. Asked of the listed opponents
+ * rather than of the table as a whole: a partner sitting out of this
+ * particular target's row set is not a choice this screen can make. */
+static bool select_screen_has_partner_source(void)
+{
+    int i;
+
+    for (i = 0; i < active_enemy_count; i++) {
+        if (player_has_partner(get_cmd_target_player_index(i))) return true;
+    }
+    return false;
+}
+
 void refresh_select_ui(void)
 {
     int i;
@@ -190,8 +207,27 @@ void refresh_select_ui(void)
     int grid_x = (240 - grid_w) / 2;
     int grid_y = (230 - grid_h) / 2;
 
-    if (btn_slot_commander != NULL) style_slot_tab(btn_slot_commander, cmd_damage_slot == 0);
-    if (btn_slot_partner != NULL) style_slot_tab(btn_slot_partner, cmd_damage_slot == 1);
+    {
+        bool show_slots = select_screen_has_partner_source();
+
+        /* With nobody to choose between, the pair of tabs is not a
+           disabled control - it is a question that does not arise, so
+           it goes away entirely rather than sitting there greyed. */
+        if (!show_slots && cmd_damage_slot != 0) {
+            cmd_damage_slot = 0;
+            refresh_cmd_damage_slot();
+        }
+        if (btn_slot_commander != NULL) {
+            if (show_slots) lv_obj_clear_flag(btn_slot_commander, LV_OBJ_FLAG_HIDDEN);
+            else            lv_obj_add_flag(btn_slot_commander, LV_OBJ_FLAG_HIDDEN);
+            style_slot_tab(btn_slot_commander, cmd_damage_slot == 0);
+        }
+        if (btn_slot_partner != NULL) {
+            if (show_slots) lv_obj_clear_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
+            else            lv_obj_add_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
+            style_slot_tab(btn_slot_partner, cmd_damage_slot == 1);
+        }
+    }
 
     for (i = 0; i < MAX_ENEMY_COUNT; i++) {
         if (select_rows[i] == NULL) continue;
@@ -477,8 +513,9 @@ void build_select_screen(void)
     /* Commander/Partner slot toggle: which of the target's two
        commanders (if they run Partner) subsequent damage edits affect.
        Only meaningful for players who actually have a partner
-       commander, but always shown, same as the always-visible
-       Commander Tax / Partner Tax counters. */
+       commander. Both are hidden unless one of the opponents listed
+       below actually fields a partner - see
+       select_screen_has_partner_source(). */
     btn_slot_commander = lv_btn_create(screen_select);
     lv_obj_remove_style_all(btn_slot_commander);
     lv_obj_set_size(btn_slot_commander, 100, 30);
@@ -569,4 +606,10 @@ void build_damage_screen(void)
 
     lv_obj_t *btn = make_button(screen_damage, t(STR_APPLY), 120, 46, event_damage_apply);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
+}
+
+bool select_test_slot_tabs_visible(void)
+{
+    if (btn_slot_partner == NULL) return false;
+    return !lv_obj_has_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
 }

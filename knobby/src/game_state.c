@@ -603,7 +603,7 @@ void damage_cancel(void)
    the drag gesture), so this applies straight to cmd_damage_totals
    instead of going through the enemies[]-list editor damage_apply()
    uses. Mirrors its log/elimination/sync sequence exactly. */
-void apply_attack_cmd_damage(int source, int target, int delta)
+void apply_attack_cmd_damage(int source, int target, int delta, int slot)
 {
     int *cell;
     int encoded_source;
@@ -612,9 +612,15 @@ void apply_attack_cmd_damage(int source, int target, int delta)
     if (player_eliminated[target]) return;
     if (delta == 0) return;
 
-    cell = &cmd_damage_totals[source][target];
+    /* A partner's 21 is its own 21: the two commanders never pool, so
+       a source with no partner declared must never be able to open a
+       second tally by accident. */
+    if (slot != 0 && !player_has_partner(source)) slot = 0;
+
+    cell = (slot != 0) ? &partner_cmd_damage_totals[source][target]
+                       : &cmd_damage_totals[source][target];
     *cell += delta;
-    encoded_source = encode_cmd_source(source, 0);
+    encoded_source = encode_cmd_source(source, slot);
     damage_log_add(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
     player_life[target] = clamp_life(player_life[target] - delta);
     if (*cell >= 21 || player_life[target] <= 0) {
@@ -714,6 +720,33 @@ void start_all_damage_flash(int delta, const bool *targets)
     notify_all_damage_flash_schedule();
 
     notify_refresh_player_ui();
+}
+
+bool player_has_partner(int player)
+{
+    if (player < 0 || player >= MAX_GAME_PLAYERS) return false;
+    return (nvs_get_partner_mask() & (1 << player)) != 0;
+}
+
+void set_player_has_partner(int player, bool has)
+{
+    int mask;
+
+    if (player < 0 || player >= MAX_GAME_PLAYERS) return;
+    mask = nvs_get_partner_mask();
+    if (has) mask |= (1 << player);
+    else     mask &= ~(1 << player);
+    nvs_set_partner_mask(mask);
+}
+
+bool any_player_has_partner(void)
+{
+    int i, num = nvs_get_num_players();
+
+    for (i = 0; i < num; i++) {
+        if (player_has_partner(i)) return true;
+    }
+    return false;
 }
 
 void prepare_cmd_damage_for_player(int target)

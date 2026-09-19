@@ -82,6 +82,19 @@ extern counter_type_t counter_edit_type;
 extern int counter_edit_value;
 extern bool player_eliminated[MAX_DISPLAY_PLAYERS];
 
+/* Whether this player fields a partner commander.
+ *
+ * Every partner control on the device is gated on this: the second
+ * commander-damage slot, the partner-tax counter, the attack dial's
+ * second commander mode. Most games have no partners in them at all,
+ * and showing those controls to everyone made the device look like it
+ * was tracking something the table was not. */
+bool player_has_partner(int player);
+void set_player_has_partner(int player, bool has);
+/* True if ANY player in the current game fields one - the question a
+   screen asks before it draws a shared partner control. */
+bool any_player_has_partner(void);
+
 // ---------- commander-slot encoding ----------
 /* The damage log and elimination-undo bookkeeping both store a single
    "source" int for LOG_EVT_CMD_DAMAGE entries. Rather than widen those
@@ -108,7 +121,7 @@ void damage_cancel(void);
 void change_player_life(int delta);
 void change_all_damage(int delta);
 void apply_life_delta(int player, int delta);
-void apply_attack_cmd_damage(int source, int target, int delta);
+void apply_attack_cmd_damage(int source, int target, int delta, int slot);
 void apply_attack_poison(int target, int delta);
 
 // ---------- all-damage flash (read-only post-commit feedback) ----------

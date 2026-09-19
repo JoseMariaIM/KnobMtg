@@ -42,6 +42,12 @@ void nvs_set_multi_select(int value);
 
 #define NAME_LIST_COUNT 10
 #define NAME_LIST_LEN   16
+/* One bit per player index: set means that player fields a partner
+   commander, which is what makes every partner control on the device
+   appear at all. */
+int  nvs_get_partner_mask(void);
+void nvs_set_partner_mask(int mask);
+
 void nvs_get_name_list(char (*out)[NAME_LIST_LEN]);
 void nvs_set_name_list(const char (*list)[NAME_LIST_LEN]);
 

@@ -6,6 +6,7 @@
  * partner_cmd_damage_totals in game.h). Originally sim/test_partner_commander.c;
  * moved here to run under `make test` instead of by hand. */
 #include "test_harness.h"
+#include "ui_1p.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -30,6 +31,12 @@ int main(void)
        Auto-elimination only engages in multiplayer (see
        check_player_elimination), so players-to-track must be > 1. */
     test_harness_reset_4p();
+
+    /* Alice fields a partner; nobody else does. Without this the
+       second slot does not exist as far as the UI is concerned - the
+       tabs are hidden and the screen pins itself to the primary
+       commander - which is the behaviour the last case below checks. */
+    set_player_has_partner(0, true);
 
     /* Enter the Commander Damage flow for Bob once, exactly as the
        player menu does. Row 0 in the enemy list is Alice
@@ -63,6 +70,21 @@ int main(void)
     assert(partner_cmd_damage_totals[0][1] <= 20);
     assert(cmd_damage_totals[0][1] == 18);
     printf("PASS: revive clamps only the lethal slot, primary total untouched\n");
+
+    /* And with the partner taken away again, the second tally is not
+       reachable at all: the screen pins itself back to the primary
+       commander rather than leaving a slot nobody declared. A stray
+       write here would open a second 21-damage clock on a player who
+       only has one commander. */
+    set_player_has_partner(0, false);
+    prepare_cmd_damage_for_player(/*target=*/2);
+    cmd_damage_slot = 1;
+    refresh_select_ui();
+    assert(cmd_damage_slot == 0);
+    select_and_apply(/*source_row=*/0, 7);
+    assert(partner_cmd_damage_totals[0][2] == 0);
+    assert(cmd_damage_totals[0][2] == 7);
+    printf("PASS: with no partner declared, damage cannot reach the partner tally\n");
 
     printf("\nAll partner-commander tests passed.\n");
     return 0;

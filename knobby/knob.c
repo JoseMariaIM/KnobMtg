@@ -540,6 +540,7 @@ static const screen_desc_t screen_registry[] = {
     { &screen_settings,            build_settings_screen,             settings_screen_knob, NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_battery,             build_battery_screen,              NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_table_sync,          build_table_sync_screen,           NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_partners,            build_partners_screen,             NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
     { &screen_game_mode_menu,      build_game_mode_menu_screen,       change_num_players,   NULL,                    &screen_quad_menu,      false },

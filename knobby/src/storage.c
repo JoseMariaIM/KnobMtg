@@ -24,6 +24,13 @@ static int cached_auto_eliminate = 1; /* 1=ON (default), 0=OFF */
 static int cached_random_first = 1; /* 1=ON (default): random first-player pick on reset */
 static int cached_multi_select = 0; /* 0=OFF (default), 1=ON */
 static int cached_language = 0; /* 0=English (default), 1=Espanol - see lang_t */
+/* One bit per player: set means that player fields a partner commander.
+   A bitmask rather than an array because MAX_GAME_PLAYERS is 8 and this
+   rides along with the other scalars in the settings blob, which is
+   written whole on every save. Default 0 - partners are the exception,
+   not the rule, and a player who does not have one should never see a
+   partner control at all. */
+static uint8_t cached_partners = 0;
 static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
 static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
@@ -96,6 +103,10 @@ void knob_nvs_init(void)
         int8_t lang_val = 0;
         nvs_get_i8(handle, "language", &lang_val);
         cached_language = (lang_val != 0) ? 1 : 0;
+
+        int8_t partner_val = 0;
+        nvs_get_i8(handle, "partners", &partner_val);
+        cached_partners = (uint8_t)partner_val;
 
         size_t nl_size = sizeof(cached_name_list);
         nvs_get_blob(handle, "name_list", cached_name_list, &nl_size);
@@ -176,6 +187,19 @@ void nvs_set_color_mode(int value)
 int nvs_get_language(void)
 {
     return cached_language;
+}
+
+int nvs_get_partner_mask(void)
+{
+    return (int)cached_partners;
+}
+
+void nvs_set_partner_mask(int mask)
+{
+    uint8_t next = (uint8_t)(mask & 0xFF);
+    if (next == cached_partners) return;
+    cached_partners = next;
+    settings_dirty = true;
 }
 
 void nvs_set_language(int value)
@@ -385,6 +409,7 @@ void settings_save(void)
         nvs_set_i8(handle, "multi_sel", (int8_t)cached_multi_select);
         nvs_set_i8(handle, "menu_face", (int8_t)cached_menu_facing);
         nvs_set_i8(handle, "language", (int8_t)cached_language);
+        nvs_set_i8(handle, "partners", (int8_t)cached_partners);
         nvs_set_blob(handle, "name_list", cached_name_list, sizeof(cached_name_list));
         nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));

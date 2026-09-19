@@ -26,9 +26,11 @@
 #include "game.h"
 #include "lang.h"
 #include "storage.h"
+#include "game_state.h"
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <string.h>
 
 #define DEG2RAD 0.017453292f
 
@@ -84,6 +86,14 @@ static void polar(int deg, int radius, int *x, int *y)
     attack_test_geometry(&cx, &cy, NULL, NULL);
     *x = cx + (int)(cosf((float)deg * DEG2RAD) * (float)radius);
     *y = cy + (int)(sinf((float)deg * DEG2RAD) * (float)radius);
+}
+
+static void tap_sector(attack_mode_t mode)
+{
+    int inner, outer, x, y;
+    attack_test_geometry(NULL, NULL, &inner, &outer);
+    polar(attack_test_mode_mid_deg((int)mode), (inner + outer) / 2, &x, &y);
+    tap_at(x, y);
 }
 
 static void open_attack(void)
@@ -374,9 +384,27 @@ static void check_labels_in_current_language(const char *lang_name)
     }
 }
 
+/* Both of the commander sector's names, not just the one showing.
+   The sector swaps to the partner's name mid-attack, and a layout
+   measured only against "Comandante" would let that swap push the word
+   off its own paint. */
+static void check_labels_including_the_partner_swap(const char *lang_name)
+{
+    check_labels_in_current_language(lang_name);
+
+    set_player_has_partner(0, true);
+    open_attack();
+    tap_sector(ATTACK_MODE_CMDR);
+    tap_sector(ATTACK_MODE_CMDR);
+    lv_obj_update_layout(screen_attack);
+    lv_refr_now(NULL);
+    check_labels_in_current_language(lang_name);
+    set_player_has_partner(0, false);
+}
+
 static void test_labels_fit_in_every_language(void)
 {
-    check_labels_in_current_language("English");
+    check_labels_including_the_partner_swap("English");
     printf("PASS: the four mode names share one size and fit their sectors (English)\n");
 
     /* Rebuilt rather than relabelled: the firmware only ever builds
@@ -387,7 +415,7 @@ static void test_labels_fit_in_every_language(void)
     build_attack_screen();
     open_attack();
     lv_refr_now(NULL);
-    check_labels_in_current_language("Spanish");
+    check_labels_including_the_partner_swap("Spanish");
     printf("PASS: the four mode names share one size and fit their sectors (Spanish)\n");
 
     nvs_set_language(0);
@@ -445,6 +473,86 @@ static void test_the_hub_holds_its_contents(void)
     printf("PASS: the hub holds its contents at the widest amount\n");
 }
 
+/* The commander sector carries two tallies behind one slice.
+ *
+ * A partner's 21 is its own 21, so the attacker's two commanders need
+ * separate totals - but they are the same kind of thing and you use
+ * one at a time, so they share a sector instead of taking a fifth.
+ * Tapping the sector you are already on swaps between them, and the
+ * word in the sector changes so the swap is visible.
+ *
+ * The flag consulted is the SOURCE player's: it is their commander
+ * dealing the damage, not the target's. Getting that backwards would
+ * put the control in front of exactly the wrong players. */
+static void test_the_commander_sector_carries_the_partner(void)
+{
+    lv_obj_t *lbl;
+    /* Copied, not aliased: lv_label_get_text hands back a pointer into
+       the label's own buffer, so holding it would compare the new text
+       against itself and pass no matter what. */
+    char primary[24];
+    int target_before;
+
+    /* Nobody has a partner: the sector is a plain mode and tapping it
+       again must not quietly arm a second tally. */
+    set_player_has_partner(0, false);
+    open_attack();
+    tap_sector(ATTACK_MODE_CMDR);
+    lbl = attack_test_mode_label((int)ATTACK_MODE_CMDR);
+    snprintf(primary, sizeof(primary), "%s", lv_label_get_text(lbl));
+    assert(attack_test_mode() == ATTACK_MODE_CMDR);
+    tap_sector(ATTACK_MODE_CMDR);
+    assert(attack_test_mode() == ATTACK_MODE_CMDR);
+    if (strcmp(lv_label_get_text(lbl), primary) != 0) {
+        printf("FAIL: the sector swapped to '%s' for an attacker with no partner\n",
+               lv_label_get_text(lbl));
+        assert(0);
+    }
+    change_attack_amount(4);
+    target_before = player_life[1];
+    tap_at(180, 180);
+    tick_ms(20);
+    assert(cmd_damage_totals[0][1] == 5);
+    assert(partner_cmd_damage_totals[0][1] == 0);
+    assert(player_life[1] == target_before - 5);
+    printf("PASS: with no partner, the commander sector is one mode with one tally\n");
+
+    /* The attacker has a partner: the second tap swaps the word, and
+       the damage lands on the partner's own total. */
+    set_player_has_partner(0, true);
+    open_attack();
+    tap_sector(ATTACK_MODE_CMDR);
+    assert(strcmp(lv_label_get_text(lbl), primary) == 0);
+    tap_sector(ATTACK_MODE_CMDR);
+    if (strcmp(lv_label_get_text(lbl), primary) == 0) {
+        printf("FAIL: the sector kept saying '%s' for an attacker with a partner\n",
+               primary);
+        assert(0);
+    }
+    change_attack_amount(2);
+    tap_at(180, 180);
+    tick_ms(20);
+    assert(partner_cmd_damage_totals[0][1] == 3);
+    assert(cmd_damage_totals[0][1] == 5);   /* the primary tally is untouched */
+    printf("PASS: the second tap moves the damage to the partner's own tally\n");
+
+    /* A third tap comes back, and leaving the sector resets to the
+       primary - arriving at commander damage should never silently be
+       "the partner" because of what you did last time. */
+    open_attack();
+    tap_sector(ATTACK_MODE_CMDR);
+    tap_sector(ATTACK_MODE_CMDR);
+    tap_sector(ATTACK_MODE_CMDR);
+    assert(strcmp(lv_label_get_text(lbl), primary) == 0);
+    tap_sector(ATTACK_MODE_CMDR);
+    tap_sector(ATTACK_MODE_INFECT);
+    tap_sector(ATTACK_MODE_CMDR);
+    assert(strcmp(lv_label_get_text(lbl), primary) == 0);
+    printf("PASS: the swap is reversible and does not survive leaving the sector\n");
+
+    set_player_has_partner(0, false);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -460,6 +568,7 @@ int main(void)
     test_the_drawn_gaps_are_not_dead_zones();
     test_the_hub_resolves();
     test_opening_resets_mode_and_amount();
+    test_the_commander_sector_carries_the_partner();
     test_the_hub_holds_its_contents();
     test_labels_fit_in_every_language();
 
