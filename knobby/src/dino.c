@@ -1,6 +1,5 @@
 #include "dino.h"
 #include "minigame.h"
-#include "settings.h"
 #include "lang.h"
 #include "game.h"
 #include "storage.h"

@@ -2,7 +2,6 @@
 #include "game.h"
 #include "esp_random.h"
 #include "lang.h"
-#include "settings.h"
 
 // ---------- dice modes ----------
 typedef enum {

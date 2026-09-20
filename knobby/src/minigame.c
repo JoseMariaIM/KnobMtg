@@ -1,6 +1,5 @@
 #include "minigame.h"
 #include <math.h>
-#include "settings.h"
 #include "game.h"
 #include <string.h>
 
