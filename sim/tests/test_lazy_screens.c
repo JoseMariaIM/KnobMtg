@@ -14,6 +14,7 @@
 #include "snake.h"
 #include "pong.h"
 #include "settings.h"
+#include "nav.h"
 #include "ui_table_sync.h"
 #include "ui_language.h"
 #include "ui_partners.h"

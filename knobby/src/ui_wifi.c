@@ -1,9 +1,9 @@
 #include "ui_wifi.h"
+#include "nav.h"
 #include "quad_screen.h"
 #include "wifi_ota.h"
 #include "storage.h"
 #include "lang.h"
-#include "settings.h"
 #include "custom_keyboard.h"
 #include "round_safe.h"
 #include <string.h>
@@ -140,7 +140,7 @@ void open_wifi_settings_screen(void)
 static void event_wifi_status_auto_exit_cb(lv_timer_t *timer)
 {
     lv_timer_del(timer);
-    settings_handle_back(screen_wifi_settings);
+    nav_handle_back(screen_wifi_settings);
 }
 
 /* Jumps to the connection-result screen, performs the (blocking)

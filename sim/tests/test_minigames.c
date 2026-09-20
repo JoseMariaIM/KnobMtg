@@ -12,6 +12,7 @@
 #include "sim_stubs.h"
 #include "minigame.h"
 #include "settings.h"
+#include "nav.h"
 #include "ui_battery.h"
 #include "minigames_menu.h"
 #include "flappy.h"

@@ -15,6 +15,7 @@
 #include "game_state.h"
 #include "storage.h"
 #include "settings.h"
+#include "nav.h"
 #include "ui_partners.h"
 #include "ui_battery.h"
 #include "ui_1p.h"

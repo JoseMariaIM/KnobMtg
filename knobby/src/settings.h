@@ -5,8 +5,6 @@
 #include "lang.h"
 
 // ---------- screens ----------
-extern lv_obj_t *screen_quad_menu;
-extern lv_obj_t *screen_tools_menu;
 extern lv_obj_t *screen_settings;
 
 // ---------- declarative settings ----------
@@ -30,21 +28,27 @@ extern lv_obj_t *settings_pages[];
 extern int settings_page_count;
 
 // ---------- functions ----------
-void build_quad_menus(void);
 void build_settings_screen(void);
-
-/* ---------- read-only accessors (unit tests) ---------- */
 
 void refresh_settings_ui(void);
 void refresh_settings_pages_ui(void);
 
-bool settings_handle_back(lv_obj_t *screen);
+/* What a screen IS to settings - not where back should send it; see
+   nav.h. *page receives the settings page index: the page the item
+   sits on for a CHILD, the page itself for a PAGE. */
+typedef enum {
+    SETTINGS_SCREEN_NONE = 0,
+    SETTINGS_SCREEN_PAGE,
+    SETTINGS_SCREEN_CHILD,
+} settings_screen_kind_t;
+
+settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page);
+bool settings_screen_needs_save(lv_obj_t *screen);
+void settings_show_page(int page);
+void build_settings_pages(void);
 bool settings_knob_page(int dir);
-bool minigames_handle_back(lv_obj_t *screen);
 int settings_item_page(const char *id);
 
-void open_quad_menu(void);
 void open_settings_screen(void);
-void menu_facing_refresh(void);
 
 #endif // _SETTINGS_H

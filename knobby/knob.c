@@ -8,6 +8,7 @@
 #include "src/ui_mp.h"
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
+#include "src/nav.h"
 #include "src/minigames_menu.h"
 #include "src/ui_battery.h"
 #include "src/ui_partners.h"
@@ -589,14 +590,11 @@ static void handle_back_navigation(lv_obj_t *screen)
 {
     const screen_desc_t *desc;
 
-    /* Minigames pages 1..N are not in the table (they are built as a
-       group, like settings pages); they defer to settings' own exit. */
-    if (minigames_handle_back(screen)) return;
-
-    /* Settings pages and their sub-screens own their own back targets
-       (see settings_handle_back()'s scan over settings_items[]/
-       settings_pages[]) - checked first, exactly like before this table. */
-    if (settings_handle_back(screen)) return;
+    /* The settings cluster and the minigames menu answer for their own
+       screens - neither is in the table below, both being built as
+       groups rather than one at a time. Checked first, exactly like
+       before this table existed. See nav_handle_back(). */
+    if (nav_handle_back(screen)) return;
 
     desc = find_screen_desc(screen);
     if (desc == NULL) return;

@@ -8,25 +8,11 @@
 #include "hw.h"
 #include "storage.h"
 #include <string.h>
-#include "dice.h"
 #include "lang.h"
-#include "game_mode.h"
-#include "damage_log.h"
-#include "rename.h"
 #include "game.h"
-#include "mana.h"
-#include "ui_1p.h"
-#include "ui_mp.h"
-#include "ui_player_menu.h"
 #include "ui_wifi.h"
 
-// Forward declarations for cross-module calls
-extern void reset_all_values(void);
-extern void back_to_main(void);
-
 // ---------- screens ----------
-lv_obj_t *screen_quad_menu = NULL;
-lv_obj_t *screen_tools_menu = NULL;
 lv_obj_t *screen_settings = NULL;
 
 // ---------- widgets ----------
@@ -53,12 +39,6 @@ void refresh_settings_ui(void)
     snprintf(buf, sizeof(buf), t(STR_BRIGHTNESS_FMT), brightness_percent);
     lv_label_set_text(label_settings_value, buf);
     refresh_brightness_ring();
-}
-
-// ---------- navigation ----------
-void open_quad_menu(void)
-{
-    load_screen_if_needed(screen_quad_menu);
 }
 
 void open_settings_screen(void)
@@ -97,12 +77,6 @@ static uint32_t deselect_color(int index)
         0x37474F, 0x1B5E20, 0x0D47A1, 0x4A148C  /* grey, green, blue, purple */
     };
     return (index >= 0 && index < DESELECT_COUNT) ? colors[index] : 0x1A1A2E;
-}
-
-static void event_quad_screen_settings(lv_event_t *e)
-{
-    (void)e;
-    lv_scr_load(settings_pages[0]);
 }
 
 static const char *autodim_label(int index)
@@ -169,46 +143,6 @@ static uint32_t toggle_color(int val)
 {
     return val ? TOGGLE_ON : TOGGLE_OFF;
 }
-
-/* Player-scoped menu screens that should face the acting player when
-   menu facing is enabled. screen_select/screen_damage are the commander
-   damage picker and editor: player-scoped in multiplayer (opened from the
-   player menu, which sets cmd_damage_target), and a no-op in 1-player
-   since mp_player_seat_rotation() returns 0 there. */
-static bool screen_is_player_menu(lv_obj_t *screen)
-{
-    return screen == screen_player_menu ||
-           screen == screen_eliminated_player_menu ||
-           screen == screen_player_all_damage ||
-           screen == screen_counter_menu ||
-           screen == screen_counter_edit ||
-           screen == screen_player_color_menu ||
-           screen == screen_player_color_picker ||
-           screen == screen_player_name ||
-           screen == screen_select ||
-           screen == screen_damage;
-}
-
-/* Single applier for the effective display rotation: the user's physical
-   rotation, plus the acting player's seat on player menus when the
-   "Menus: Face Player" toggle is on. Idempotent — recomputes from the
-   active screen, so any navigation path can call it safely. */
-void menu_facing_refresh(void)
-{
-    static int applied = -1;
-    int target = nvs_get_display_rotation();
-
-    if (nvs_get_menu_facing() && screen_is_player_menu(lv_scr_act()))
-        target = (target + mp_player_seat_rotation(menu_player)) & 3;
-    if (target == applied) return;
-    applied = target;
-    display_apply_rotation(target);
-    /* Repaint the whole frame immediately: the panel's GRAM still holds the
-       old orientation the instant the MADCTL flags change. */
-    lv_obj_invalidate(lv_scr_act());
-    lv_refr_now(NULL);
-}
-
 static const char *random_first_label(int val)
 {
     return val ? t(STR_SETTING_RANDOM_FIRST_ON) : t(STR_SETTING_RANDOM_FIRST_OFF);
@@ -296,7 +230,7 @@ static void event_setting_more(lv_event_t *e)
 /* Chunk the flat item list into quad pages: 3 items + "More" per page.
    "More" always advances and wraps from the last page to the first, so
    tap navigation cycles just like the knob. */
-static void build_settings_pages(void)
+void build_settings_pages(void)
 {
     int idx = 0;
     int page = 0;
@@ -336,27 +270,39 @@ static void build_settings_pages(void)
     refresh_settings_pages_ui();
 }
 
-bool settings_handle_back(lv_obj_t *screen)
+/* Classification only - what a screen IS to settings, not where
+   back should send it. nav.c owns that decision; keeping it here is
+   what used to make settings.c name screen_quad_menu and every module
+   that wanted to leave a settings sub-screen call into settings. */
+settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page)
 {
     int i;
 
     for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
         if (settings_items[i].nav_screen != NULL && screen == *settings_items[i].nav_screen) {
-            if (screen == screen_settings) settings_save();
-            lv_scr_load(settings_pages[setting_page_of[i]]);
-            return true;
+            if (page != NULL) *page = setting_page_of[i];
+            return SETTINGS_SCREEN_CHILD;
         }
     }
-    /* Back from any settings page exits to the quad menu — back means
-       "leave settings", not "previous page" (the knob flips pages). */
     for (i = 0; i < settings_page_count; i++) {
         if (screen == settings_pages[i]) {
-            settings_save();
-            lv_scr_load(screen_quad_menu);
-            return true;
+            if (page != NULL) *page = i;
+            return SETTINGS_SCREEN_PAGE;
         }
     }
-    return false;
+    return SETTINGS_SCREEN_NONE;
+}
+
+/* Brightness is applied live as the knob turns, so leaving its screen
+   is what commits it to NVS. */
+bool settings_screen_needs_save(lv_obj_t *screen)
+{
+    return screen == screen_settings;
+}
+
+void settings_show_page(int page)
+{
+    if (page >= 0 && page < settings_page_count) lv_scr_load(settings_pages[page]);
 }
 
 /* Knob left/right flips between settings pages, with wraparound.
@@ -382,58 +328,6 @@ int settings_item_page(const char *id)
             return setting_page_of[i];
     }
     return -1;
-}
-
-static void event_quad_tools(lv_event_t *e)
-{
-    (void)e;
-    lv_scr_load(screen_tools_menu);
-}
-
-static void event_general_game_mode(lv_event_t *e)
-{
-    (void)e;
-    open_game_mode_menu();
-}
-
-static void event_open_damage_log(lv_event_t *e)
-{
-    (void)e;
-    open_damage_log_screen();
-}
-
-static void event_general_reset(lv_event_t *e)
-{
-    (void)e;
-    reset_all_values();
-    back_to_main();
-    lv_indev_wait_release(lv_indev_get_act());
-}
-
-// ---------- screen builders ----------
-void build_quad_menus(void)
-{
-    quad_item_t main_items[4] = {
-        {t(STR_MENU_SETTINGS), event_quad_screen_settings, true, LV_EVENT_CLICKED},
-        {t(STR_MENU_GAME_MODE), event_general_game_mode, true, LV_EVENT_CLICKED},
-        {t(STR_MENU_TOOLS),             event_quad_tools, true, LV_EVENT_CLICKED},
-        {t(STR_MENU_RESET_HOLD), event_general_reset, true, LV_EVENT_LONG_PRESSED},
-    };
-    build_quad_screen(&screen_quad_menu, main_items);
-
-    quad_item_t tools_items[4] = {
-        {t(STR_TOOL_DICE),        event_tool_dice, true, LV_EVENT_CLICKED},
-        {t(STR_TOOL_COIN),        event_tool_coin, true, LV_EVENT_CLICKED},
-        {t(STR_TOOL_EVENT_LOG),  event_open_damage_log, true, LV_EVENT_CLICKED},
-        {t(STR_TOOL_MANA_POOL),  event_tool_mana, true, LV_EVENT_CLICKED},
-    };
-    build_quad_screen(&screen_tools_menu, tools_items);
-
-    build_settings_pages();
-    /* The minigames menu is NOT built here: three quad pages of tiles
-       for a screen many sessions never open is ~3.5KB of the LVGL pool
-       held permanently. open_minigames_menu() builds it on first
-       entry, same as the games themselves. */
 }
 
 void build_settings_screen(void)
@@ -465,20 +359,4 @@ void build_settings_screen(void)
     lv_obj_set_style_text_color(label_settings_hint, lv_color_hex(0x6A6A6A), 0);
     lv_obj_set_style_text_font(label_settings_hint, &lv_font_es_14, 0);
     lv_obj_align(label_settings_hint, LV_ALIGN_CENTER, 0, 24);
-}
-
-bool minigames_handle_back(lv_obj_t *screen)
-{
-    int i;
-
-    /* Back from any page leaves the menu entirely rather than stepping
-       back a page (the knob flips pages) - same rule settings uses.
-       Page 0 is screen_minigames_menu, which settings_handle_back()
-       already knows how to exit, so every page defers to it. */
-    for (i = 1; i < minigames_page_count; i++) {
-        if (screen == minigames_pages[i]) {
-            return settings_handle_back(screen_minigames_menu);
-        }
-    }
-    return false;
 }
