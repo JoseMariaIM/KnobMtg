@@ -1,4 +1,6 @@
 #include "settings.h"
+#include "ui_battery.h"
+#include "minigames_menu.h"
 #include "quad_screen.h"
 #include "hw.h"
 #include "storage.h"
@@ -16,16 +18,6 @@
 #include "ui_player_menu.h"
 #include "ui_wifi.h"
 #include "round_safe.h"
-#include "snake.h"
-#include "pong.h"
-#include "dino.h"
-#include "tetris.h"
-#include "breakout.h"
-#include "flappy.h"
-#include "eggs.h"
-#include "invaders.h"
-#include "rps.h"
-#include "asteroids.h"
 
 // Forward declarations for cross-module calls
 extern void reset_all_values(void);
@@ -35,20 +27,11 @@ extern void back_to_main(void);
 lv_obj_t *screen_quad_menu = NULL;
 lv_obj_t *screen_tools_menu = NULL;
 lv_obj_t *screen_settings = NULL;
-lv_obj_t *screen_battery = NULL;
-lv_obj_t *screen_minigames_menu = NULL;
-/* Page 0 of the minigames menu IS screen_minigames_menu, so the
-   settings item that opens it (and settings_handle_back's scan over
-   nav_screen pointers) keeps working unchanged. */
-lv_obj_t *minigames_pages[MINIGAMES_PAGE_MAX] = {NULL};
-int minigames_page_count = 0;
 
 // ---------- widgets ----------
 static lv_obj_t *arc_brightness = NULL;
 static lv_obj_t *label_settings_value = NULL;
 static lv_obj_t *label_settings_hint = NULL;
-static lv_obj_t *label_settings_battery = NULL;
-static lv_obj_t *label_settings_battery_detail = NULL;
 
 // ---------- refresh ----------
 static void refresh_brightness_ring(void)
@@ -69,30 +52,6 @@ void refresh_settings_ui(void)
     snprintf(buf, sizeof(buf), t(STR_BRIGHTNESS_FMT), brightness_percent);
     lv_label_set_text(label_settings_value, buf);
     refresh_brightness_ring();
-}
-
-void refresh_battery_ui(void)
-{
-    char buf[32];
-    char detail_buf[48];
-
-    battery_percent = read_battery_percent();
-    if (label_settings_battery == NULL) return;
-
-    if (battery_percent < 0) {
-        lv_label_set_text(label_settings_battery, t(STR_BATTERY_UNKNOWN));
-        if (label_settings_battery_detail != NULL) {
-            lv_label_set_text(label_settings_battery_detail, t(STR_BATTERY_NOT_CALIBRATED));
-        }
-        return;
-    }
-
-    snprintf(buf, sizeof(buf), t(STR_BATTERY_FMT), battery_percent);
-    lv_label_set_text(label_settings_battery, buf);
-    if (label_settings_battery_detail != NULL) {
-        snprintf(detail_buf, sizeof(detail_buf), t(STR_BATTERY_CALIBRATED_FMT), battery_voltage);
-        lv_label_set_text(label_settings_battery_detail, detail_buf);
-    }
 }
 
 // ---------- navigation ----------
@@ -217,13 +176,6 @@ static void autodim_set(int v)
 static uint32_t toggle_color(int val)
 {
     return val ? TOGGLE_ON : TOGGLE_OFF;
-}
-
-void open_battery_screen(void)
-{
-    update_battery_measurement(true);
-    refresh_battery_ui();
-    lv_scr_load(screen_battery);
 }
 
 /* Player-scoped menu screens that should face the acting player when
@@ -862,139 +814,6 @@ void build_settings_screen(void)
     lv_obj_align(label_settings_hint, LV_ALIGN_CENTER, 0, 24);
 }
 
-void build_battery_screen(void)
-{
-    screen_battery = lv_obj_create(NULL);
-    lv_obj_set_size(screen_battery, 360, 360);
-    lv_obj_set_style_bg_color(screen_battery, lv_color_black(), 0);
-    lv_obj_set_style_border_width(screen_battery, 0, 0);
-    lv_obj_set_scrollbar_mode(screen_battery, LV_SCROLLBAR_MODE_OFF);
-
-    lv_obj_t *title = lv_label_create(screen_battery);
-    lv_label_set_text(title, t(STR_BATTERY_TITLE));
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_set_style_text_font(title, &lv_font_es_22, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
-
-    label_settings_battery = lv_label_create(screen_battery);
-    lv_label_set_text(label_settings_battery, "Battery: --%");
-    lv_obj_set_style_text_color(label_settings_battery, lv_color_white(), 0);
-    lv_obj_set_style_text_font(label_settings_battery, &lv_font_es_32, 0);
-    lv_obj_align(label_settings_battery, LV_ALIGN_CENTER, 0, -10);
-
-    label_settings_battery_detail = lv_label_create(screen_battery);
-    lv_label_set_text(label_settings_battery_detail, "No calibrated reading");
-    lv_obj_set_style_text_color(label_settings_battery_detail, lv_color_hex(0x7A7A7A), 0);
-    lv_obj_set_style_text_font(label_settings_battery_detail, &lv_font_es_16, 0);
-    lv_obj_align(label_settings_battery_detail, LV_ALIGN_CENTER, 0, 30);
-}
-
-// ---------- minigames menu ----------
-/* Every game on the device, in menu order. This table is the only place
-   a game has to be listed for it to appear, paginate and open: adding
-   one is a row here plus its screen_registry[] row in knob.c (for the
-   knob/back dispatch, which is per-screen, not per-menu-entry).
-
-   Ordered oldest-first so the games people already have records in stay
-   on the first page where they have always been. */
-static const minigame_entry_t minigame_entries[] = {
-    { STR_MINIGAME_SNAKE,    open_snake_screen    },
-    { STR_MINIGAME_PONG,     open_pong_screen     },
-    { STR_MINIGAME_DINO,     open_dino_screen     },
-    { STR_MINIGAME_TETRIS,   open_tetris_screen   },
-    { STR_MINIGAME_BREAKOUT, open_breakout_screen },
-    { STR_MINIGAME_FLAPPY,   open_flappy_screen   },
-    { STR_MINIGAME_EGGS,     open_eggs_screen     },
-    { STR_MINIGAME_INVADERS, open_invaders_screen },
-    { STR_MINIGAME_RPS,      open_rps_screen      },
-    { STR_MINIGAME_ASTEROIDS, open_asteroids_screen },
-};
-#define MINIGAME_ENTRY_COUNT \
-    ((int)(sizeof(minigame_entries) / sizeof(minigame_entries[0])))
-
-/* Which menu page the running game was started from, so leaving it
-   comes back to the tile the user actually pressed rather than dumping
-   them on page 1 to page their way back. Recorded at launch rather than
-   derived from a game->page table because the page the user was looking
-   at IS the page that game's tile is on - and this stays right if a
-   game is ever listed twice or the order changes. */
-static int minigames_launch_page = 0;
-
-static void event_open_minigame(lv_event_t *e)
-{
-    const minigame_entry_t *entry = lv_event_get_user_data(e);
-    int i;
-
-    for (i = 0; i < minigames_page_count; i++) {
-        if (lv_scr_act() == minigames_pages[i]) {
-            minigames_launch_page = i;
-            break;
-        }
-    }
-    if (entry != NULL && entry->open != NULL) entry->open();
-}
-
-static void event_minigames_more(lv_event_t *e)
-{
-    int page = (int)(intptr_t)lv_event_get_user_data(e);
-    if (page >= 0 && page < minigames_page_count)
-        lv_scr_load(minigames_pages[page]);
-}
-
-/* Fresh entry from Settings: always page 1. */
-void open_minigames_menu(void)
-{
-    if (screen_minigames_menu == NULL) build_minigames_menu_screen();
-    minigames_launch_page = 0;
-    load_screen_if_needed(screen_minigames_menu);
-}
-
-/* Leaving a game: back to the page it was started from. */
-void open_minigames_menu_at_launch_page(void)
-{
-    if (screen_minigames_menu == NULL) build_minigames_menu_screen();
-    if (minigames_launch_page < 0 || minigames_launch_page >= minigames_page_count)
-        minigames_launch_page = 0;
-    load_screen_if_needed(minigames_pages[minigames_launch_page]);
-}
-
-/* Same 3-items-plus-"More" chunking as build_settings_pages(); see the
-   comment there for why "More" wraps rather than dead-ending. */
-void build_minigames_menu_screen(void)
-{
-    int idx = 0;
-    int page = 0;
-    int total_pages = (MINIGAME_ENTRY_COUNT + 2) / 3;
-
-    while (idx < MINIGAME_ENTRY_COUNT && page < MINIGAMES_PAGE_MAX) {
-        int remaining = MINIGAME_ENTRY_COUNT - idx;
-        int on_page = (remaining < 3) ? remaining : 3;
-        int s;
-        quad_item_t q[4];
-
-        memset(q, 0, sizeof(q));
-        for (s = 0; s < 4; s++) q[s].label = "";
-        for (s = 0; s < on_page; s++, idx++) {
-            q[s].label = t(minigame_entries[idx].name);
-            q[s].cb = event_open_minigame;
-            q[s].enabled = true;
-            q[s].event = LV_EVENT_CLICKED;
-            q[s].user_data = (void *)&minigame_entries[idx];
-        }
-        q[3].label = t(STR_SETTINGS_MORE);
-        q[3].cb = event_minigames_more;
-        q[3].enabled = true;
-        q[3].event = LV_EVENT_CLICKED;
-        q[3].user_data = (void *)(intptr_t)((page + 1) % total_pages);
-        build_quad_screen(&minigames_pages[page], q);
-        page++;
-    }
-    minigames_page_count = page;
-    /* Page 0 doubles as the menu's public screen global - see the
-       comment where it is declared. */
-    screen_minigames_menu = minigames_pages[0];
-}
-
 bool minigames_handle_back(lv_obj_t *screen)
 {
     int i;
@@ -1006,20 +825,6 @@ bool minigames_handle_back(lv_obj_t *screen)
     for (i = 1; i < minigames_page_count; i++) {
         if (screen == minigames_pages[i]) {
             return settings_handle_back(screen_minigames_menu);
-        }
-    }
-    return false;
-}
-
-bool minigames_knob_page(int dir)
-{
-    int i;
-
-    for (i = 0; i < minigames_page_count; i++) {
-        if (lv_scr_act() == minigames_pages[i]) {
-            lv_scr_load(minigames_pages[(i + dir + minigames_page_count) %
-                                        minigames_page_count]);
-            return true;
         }
     }
     return false;

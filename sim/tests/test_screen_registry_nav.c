@@ -13,6 +13,8 @@
 #include "test_harness.h"
 #include "dice.h"
 #include "settings.h"
+#include "ui_battery.h"
+#include "minigames_menu.h"
 #include "ui_1p.h"
 #include "ui_mp.h"
 #include <stdio.h>

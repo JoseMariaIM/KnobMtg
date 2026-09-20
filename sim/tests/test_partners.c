@@ -15,6 +15,7 @@
 #include "game_state.h"
 #include "storage.h"
 #include "settings.h"
+#include "ui_battery.h"
 #include "ui_1p.h"
 #include "ui_player_menu.h"
 #include <stdio.h>

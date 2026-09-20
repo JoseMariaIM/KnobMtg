@@ -8,6 +8,8 @@
 #include "src/ui_mp.h"
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
+#include "src/minigames_menu.h"
+#include "src/ui_battery.h"
 #include "src/game_mode.h"
 #include "src/damage_log.h"
 #include "src/rename.h"

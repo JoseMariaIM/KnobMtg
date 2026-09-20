@@ -12,6 +12,8 @@
 #include "sim_stubs.h"
 #include "minigame.h"
 #include "settings.h"
+#include "ui_battery.h"
+#include "minigames_menu.h"
 #include "flappy.h"
 #include "eggs.h"
 #include "breakout.h"

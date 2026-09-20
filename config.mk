@@ -15,14 +15,14 @@ CC        ?= clang
 
 # OS-Specific Defaults
 ifeq ($(OS),Windows_NT)
-    # Make command — use mingw32-make if make is missing
-    MAKE_CMD := $(shell where make 2>nul)
-    ifndef MAKE_CMD
-        MAKE := mingw32-make
-    else
-        MAKE := make
-    endif
-    
+    # No MAKE := here. GNU make already defines MAKE as the very
+    # executable that is running, which is what recursion wants -
+    # mingw32-make invoked as mingw32-make keeps using itself. The
+    # detection this replaces ran `where make 2>nul`, and `2>nul` is
+    # cmd redirection: under the sh that make uses for recipes here it
+    # creates a FILE called nul, which is a reserved device name that
+    # git then refuses to index.
+
     # LVGL path — Windows default. USERPROFILE arrives with backslashes
     # (C:\Users\name), which survive the / -> __ mangling in sim/Makefile's
     # obj_name and become directories that do not exist, so gcc dies on the

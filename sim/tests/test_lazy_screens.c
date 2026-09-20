@@ -14,6 +14,8 @@
 #include "snake.h"
 #include "pong.h"
 #include "settings.h"
+#include "ui_battery.h"
+#include "minigames_menu.h"
 #include <stdio.h>
 #include <assert.h>
 

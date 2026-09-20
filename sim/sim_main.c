@@ -12,6 +12,8 @@
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "settings.h"
+#include "ui_battery.h"
+#include "minigames_menu.h"
 #include "intro.h"
 #include "dice.h"
 #include "damage_log.h"
