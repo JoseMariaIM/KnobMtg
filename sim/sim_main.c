@@ -12,6 +12,8 @@
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "settings.h"
+#include "ui_table_sync.h"
+#include "ui_language.h"
 #include "ui_partners.h"
 #include "ui_battery.h"
 #include "minigames_menu.h"

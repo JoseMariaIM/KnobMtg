@@ -11,6 +11,8 @@
 #include "src/minigames_menu.h"
 #include "src/ui_battery.h"
 #include "src/ui_partners.h"
+#include "src/ui_table_sync.h"
+#include "src/ui_language.h"
 #include "src/game_mode.h"
 #include "src/damage_log.h"
 #include "src/rename.h"
