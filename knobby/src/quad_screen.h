@@ -30,6 +30,15 @@ typedef struct {
     void *user_data;            /* passed to cb via lv_event_get_user_data */
 } quad_item_t;
 
+/* Tile backgrounds for an on/off state, shared by every screen built
+   out of these tiles - settings toggles, the partner picker, the
+   current row in the language list. They were settings.c statics, and
+   the screens that moved out needed them too. */
+#define TOGGLE_ON  0x1B5E20u   /* dark green */
+#define TOGGLE_OFF 0x4A1010u   /* dark red */
+
+void set_btn_color(lv_obj_t *btn, uint32_t color);
+
 /* Creates *screen and fills it with four 178x178 tiles. A quarter with
    no cb, or with .enabled false, is drawn dimmed and non-clickable. */
 void build_quad_screen(lv_obj_t **screen, quad_item_t items[4]);

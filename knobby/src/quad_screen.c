@@ -60,3 +60,8 @@ void build_quad_screen(lv_obj_t **screen, quad_item_t items[4])
         }
     }
 }
+
+void set_btn_color(lv_obj_t *btn, uint32_t color)
+{
+    if (btn != NULL) lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+}
