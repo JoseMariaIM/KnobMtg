@@ -577,6 +577,10 @@ int main(int argc, char *argv[])
                 if (name_values[i][0]) \
                     snprintf(player_names[i], sizeof(player_names[i]), "%s", name_values[i]); \
             } \
+            /* The attack screen copies the names into its labels when \
+               it opens, and the names only arrive here - after the \
+               navigation. Re-open it so a screenshot shows them. */ \
+            if (lv_scr_act() == screen_attack) open_attack_screen(0, 0, 1, 1); \
         } \
         if (selected_players_set) { \
             int j; \

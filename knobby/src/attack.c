@@ -380,7 +380,12 @@ static lv_obj_t *attack_make_label(lv_obj_t *parent, const lv_font_t *font,
     lv_obj_set_style_text_font(lbl, font, 0);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     if (width > 0) {
-        lv_obj_set_width(lbl, width);
+        /* Height as well as width. LV_LABEL_LONG_DOT only ellipsises
+           what does not fit in the BOX, and a content-sized height
+           means everything fits - the label just grows a second line
+           instead. On this screen that second line pushed a long name
+           clean out of the hub and over the sector ring behind it. */
+        lv_obj_set_size(lbl, width, lv_font_get_line_height(font));
         lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
     }
     return lbl;
@@ -579,25 +584,40 @@ void build_attack_screen(void)
     attack_layout_mode_labels();
 
     /* Who is hitting whom, small, at the top of the hub. */
-    /* Fixed-width and ellipsised, so a long name cannot push the row
-       out over the sector ring - and narrow enough that the FULL box,
-       not just today's "P1", stays inside the hub. */
-    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
-    lv_obj_align(label_source, LV_ALIGN_CENTER, -36, -54);
+    /* The hub's contents are not stacked symmetrically about its
+       centre, and that is deliberate.
+     *
+     * A circle is widest across its middle, and the amount - the one
+     * thing here that is 148px across at "99" - was sitting exactly
+     * there, pushing the two names up into the narrow part where their
+     * boxes could only be 62px. "Chema" is 58px, so an ordinary first
+     * name came within four pixels of being clipped.
+     *
+     * Dropping the amount 15px below centre costs it nothing (it still
+     * clears the hub by a pixel at its widest) and buys the name row
+     * 12px of width each side. The numbers below are the tightest
+     * arrangement that keeps every corner of every box inside the hub;
+     * test_the_hub_holds_its_contents() fails if one creeps out.
+     *
+     * Fixed-width and ellipsised, so a long name cannot push the row
+     * out over the sector ring - the FULL box has to fit, not just
+     * today's text. */
+    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 74);
+    lv_obj_align(label_source, LV_ALIGN_CENTER, -42, -40);
 
     label_arrow = attack_make_label(screen_attack, &lv_font_es_16, ATTACK_TILE_TEXT, 0);
     lv_label_set_text(label_arrow, ">");
-    lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -54);
+    lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -40);
 
-    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
-    lv_obj_align(label_target, LV_ALIGN_CENTER, 36, -54);
+    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 74);
+    lv_obj_align(label_target, LV_ALIGN_CENTER, 42, -40);
 
     /* The amount, at life-counter scale - it is the number the knob is
        editing and the reason the screen exists. */
     label_amount = attack_make_label(screen_attack, &lv_font_montserrat_bold_116,
                                      0xFFFFFF, 0);
     lv_label_set_text(label_amount, "1");
-    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(label_amount, LV_ALIGN_CENTER, 0, 15);
 
     /* Smaller than the mode names on purpose: the hub's job is the
        number, and at 22pt this word crowded both it and the hub's own
@@ -605,7 +625,7 @@ void build_attack_screen(void)
     label_attack_resolve = attack_make_label(screen_attack, &lv_font_es_16,
                                              0xFFFFFF, 0);
     lv_label_set_text(label_attack_resolve, t(STR_RESOLVE));
-    lv_obj_align(label_attack_resolve, LV_ALIGN_CENTER, 0, 56);
+    lv_obj_align(label_attack_resolve, LV_ALIGN_CENTER, 0, 70);
 
     refresh_attack_ui();
 }

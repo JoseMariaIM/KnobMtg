@@ -440,6 +440,22 @@ static void test_the_hub_holds_its_contents(void)
     const char *names[3] = { "amount", "Resolve", "source name" };
     int cx, cy, hub, i;
 
+    /* A name far longer than its box, and the screen REBUILT with it
+       already set.
+     *
+     * That ordering is the real one and it matters: the stored names
+     * are restored before any screen is built (see knob_hw_init), so a
+     * player called Maximiliano is the first text this label ever
+     * holds. LV_LABEL_LONG_DOT only ellipsises what does not fit the
+     * box, and a label that has never been laid out has no height to
+     * not fit - it grows a second line instead and climbs out of the
+     * hub over the sector ring. Setting the long name on a label that
+     * has already been laid out once hides the bug completely, which
+     * is why this rebuilds rather than just renaming. */
+    snprintf(player_names[0], sizeof(player_names[0]), "%s", "Maximiliano");
+    snprintf(player_names[1], sizeof(player_names[1]), "%s", "Bartolomeo");
+    build_attack_screen();
+
     open_attack();
     change_attack_amount(98);
     assert(attack_test_amount() == 99);
@@ -470,7 +486,9 @@ static void test_the_hub_holds_its_contents(void)
             }
         }
     }
-    printf("PASS: the hub holds its contents at the widest amount\n");
+    snprintf(player_names[0], sizeof(player_names[0]), "%s", "P1");
+    snprintf(player_names[1], sizeof(player_names[1]), "%s", "P2");
+    printf("PASS: the hub holds its contents at the widest amount and longest name\n");
 }
 
 /* The commander sector carries two tallies behind one slice.
