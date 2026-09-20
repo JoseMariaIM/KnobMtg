@@ -138,4 +138,25 @@ bool minigame_touch_point(lv_point_t *out);
 minigame_state_t minigame_test_state(lv_obj_t *screen);
 int minigame_test_score(lv_obj_t *screen);
 
+/* ---------- partial redraw ----------
+ * Repainting all 360x360 every frame costs ~259KB over QSPI and a full
+ * software render at 80MHz, 25 times a second - by far the largest
+ * thing this device does while a game is on screen. A game that knows
+ * which pixels actually changed sets .partial_redraw and calls these
+ * instead, once per moving thing, with its position BEFORE and AFTER
+ * the move so the trail behind it gets repainted too.
+ *
+ * Coordinates are clamped to the panel, so callers can pass boxes that
+ * run off the edge without checking. */
+void minigame_invalidate_rect(lv_obj_t *screen, int x1, int y1, int x2, int y2);
+/* A sprite as a centre and a half-extent - the shape most of these
+   games' moving parts already have. */
+void minigame_invalidate_box(lv_obj_t *screen, int cx, int cy, int half);
+/* A band of an annulus, for the games built in polar coordinates: the
+   bounding box is walked round the arc rather than taken from the two
+   end points, which for anything wider than a quadrant would miss the
+   bulge in between. Angles are degrees clockwise from 3 o'clock. */
+void minigame_invalidate_arc(lv_obj_t *screen, int cx, int cy,
+                             int r_in, int r_out, int start_deg, int end_deg);
+
 #endif // _MINIGAME_H

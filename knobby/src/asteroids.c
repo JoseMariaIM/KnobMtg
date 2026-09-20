@@ -147,7 +147,48 @@ static minigame_t asteroids_game = {
     .on_build = asteroids_build,
     .on_tap   = asteroids_handle_tap,
     .tap_on_press = true,     /* an action game: fire on finger-down */
+    .partial_redraw = true,   /* see ast_touch_everything() */
 };
+
+/* ---------- partial redraw ----------
+ *
+ * Everything here moves every tick, so this game saves less than the
+ * others - but a screenful of black between a dozen rocks is still
+ * most of the panel, and repainting all 360x360 at 25fps costs ~259KB
+ * over QSPI and a full software render each time.
+ *
+ * ast_touch_everything() is called on both sides of the tick: once
+ * over where things were, once over where they are now, so each
+ * sprite's trail is repainted with it.
+ *
+ * The margins are generous on purpose. A rock's outline reaches 108%
+ * of its nominal radius at its longest spike (ast_rock_jag), the ship
+ * is drawn longer than its collision radius, and a thing that moves
+ * faster than its own margin leaves a trail nothing repaints - the one
+ * failure this optimisation can produce, and one no screenshot shows,
+ * since a screenshot takes the full repaint. */
+#define AST_TOUCH_PAD 8
+
+static void ast_touch_everything(void)
+{
+    int i;
+
+    minigame_invalidate_box(screen_asteroids, (int)ast_ship_x, (int)ast_ship_y,
+                            AST_SHIP_R * 2 + AST_TOUCH_PAD);
+    for (i = 0; i < AST_ROCK_MAX; i++) {
+        if (!ast_rocks[i].active) continue;
+        minigame_invalidate_box(screen_asteroids,
+                                (int)ast_rocks[i].x, (int)ast_rocks[i].y,
+                                ast_rock_radius[ast_rocks[i].size] * 5 / 4
+                                    + AST_TOUCH_PAD);
+    }
+    for (i = 0; i < AST_SHOT_MAX; i++) {
+        if (!ast_shots[i].active) continue;
+        minigame_invalidate_box(screen_asteroids,
+                                (int)ast_shots[i].x, (int)ast_shots[i].y,
+                                (int)AST_SHOT_SPEED + AST_TOUCH_PAD);
+    }
+}
 
 static int ast_norm_angle(int a)
 {
@@ -205,6 +246,7 @@ static void ast_spawn_rock(int size, float x, float y)
    the centre would drop one on the ship before the player had moved. */
 static void ast_start_wave(void)
 {
+    if (screen_asteroids != NULL) lv_obj_invalidate(screen_asteroids);
     int count = AST_WAVE_START + ast_wave - 1;
     int i;
 
@@ -265,6 +307,9 @@ static void ast_break_rock(minigame_t *g, int idx)
 
 static void ast_lose_life(minigame_t *g)
 {
+    /* The ship jumps to the centre and a life leaves the HUD; too much
+       scattered change to enumerate. */
+    if (screen_asteroids != NULL) lv_obj_invalidate(screen_asteroids);
     if (--ast_lives <= 0) {
         minigame_over(g);
         return;
@@ -275,6 +320,8 @@ static void ast_lose_life(minigame_t *g)
 static void asteroids_tick(minigame_t *g)
 {
     int i, j;
+
+    ast_touch_everything();   /* where everything was */
 
     if (ast_respawn_ticks > 0) ast_respawn_ticks--;
 
@@ -334,6 +381,8 @@ static void asteroids_tick(minigame_t *g)
         return;
     }
 
+    ast_touch_everything();   /* and where it is now */
+
     if (ast_rocks_left() == 0) {
         ast_wave++;
         ast_start_wave();
@@ -341,6 +390,7 @@ static void asteroids_tick(minigame_t *g)
            it has earned the breathing room, and a forced respawn in the
            middle would be a punishment for clearing. */
         ast_respawn_ticks = AST_RESPAWN_TICKS;
+        if (screen_asteroids != NULL) lv_obj_invalidate(screen_asteroids);
     }
 }
 
@@ -351,7 +401,8 @@ void asteroids_turn(int dir)
     /* The whole point of the game on this device: knob degrees become
        ship degrees. */
     ast_heading = ast_norm_angle(ast_heading + dir * AST_TURN_DEG);
-    lv_obj_invalidate(screen_asteroids);
+    minigame_invalidate_box(screen_asteroids, (int)ast_ship_x, (int)ast_ship_y,
+                            AST_SHIP_R * 2 + AST_TOUCH_PAD);
 }
 
 void asteroids_handle_tap(void)
@@ -372,6 +423,11 @@ void asteroids_handle_tap(void)
            backwards does not hang in front of you. */
         ast_shots[i].vx = ast_ship_vx + cosf(rad) * AST_SHOT_SPEED;
         ast_shots[i].vy = ast_ship_vy + sinf(rad) * AST_SHOT_SPEED;
+        /* The shot exists between ticks; nothing else asks for those
+           pixels until it has already moved on. */
+        minigame_invalidate_box(screen_asteroids,
+                                (int)ast_shots[i].x, (int)ast_shots[i].y,
+                                (int)AST_SHOT_SPEED + AST_TOUCH_PAD);
         return;
     }
 }

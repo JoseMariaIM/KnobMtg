@@ -133,7 +133,57 @@ static minigame_t invaders_game = {
     .on_draw  = invaders_draw,
     .on_tap   = invaders_handle_tap,
     .tap_on_press = true,     /* an action game: fire on finger-down */
+    .partial_redraw = true,   /* see inv_touch_formation() */
 };
+
+/* ---------- partial redraw ----------
+ *
+ * The formation is the only large thing on screen and it moves in
+ * discrete steps, not every tick: between marches it changes just
+ * twice a second, when the sprites flip to their other animation
+ * frame. Shots, bombs and the ship are a few hundred pixels between
+ * them. Repainting all 360x360 every frame meant ~259KB over QSPI and
+ * a full software render 25 times a second, nearly all of it black
+ * background that had not changed.
+ *
+ * Each of these is called with the thing where it WAS and again where
+ * it is now, so the trail gets repainted too. */
+static void inv_touch_formation(void)
+{
+    /* The whole grid's footprint, alive or not: one rectangle is
+       cheaper to invalidate than eighteen, and the dead ones have to
+       be repainted as background anyway. */
+    minigame_invalidate_rect(screen_invaders,
+        inv_form_x - 2, inv_form_y - 2,
+        inv_form_x + (INV_COLS - 1) * INV_COL_PITCH + INV_ALIEN_W + 2,
+        inv_form_y + (INV_ROWS - 1) * INV_ROW_PITCH + INV_ALIEN_H + 2);
+}
+
+static void inv_touch_ship(void)
+{
+    minigame_invalidate_rect(screen_invaders,
+        inv_ship_x - INV_SHIP_W / 2 - 3, INV_SHIP_Y - 3,
+        inv_ship_x + INV_SHIP_W / 2 + 3, INV_SHIP_Y + INV_SHIP_H + 3);
+}
+
+static void inv_touch_shots_and_bombs(void)
+{
+    int i;
+    for (i = 0; i < INV_SHOT_MAX; i++) {
+        if (!inv_shots[i].active) continue;
+        minigame_invalidate_rect(screen_invaders,
+            (int)inv_shots[i].x - 2, (int)inv_shots[i].y - 2,
+            (int)inv_shots[i].x + INV_SHOT_W + 2,
+            (int)inv_shots[i].y + INV_SHOT_H + 2);
+    }
+    for (i = 0; i < INV_BOMB_MAX; i++) {
+        if (!inv_bombs[i].active) continue;
+        minigame_invalidate_rect(screen_invaders,
+            (int)inv_bombs[i].x - 2, (int)inv_bombs[i].y - 2,
+            (int)inv_bombs[i].x + INV_BOMB_W + 2,
+            (int)inv_bombs[i].y + INV_BOMB_H + 2);
+    }
+}
 
 static void inv_alien_rect(int idx, int *x1, int *y1, int *x2, int *y2)
 {
@@ -168,6 +218,9 @@ static void inv_start_wave(void)
     inv_march_countdown = inv_march_ticks();
     memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
+    /* A new wave replaces everything; cheaper to say so than to
+       enumerate where the old one was. */
+    if (screen_invaders != NULL) lv_obj_invalidate(screen_invaders);
 }
 
 static void invaders_reset(minigame_t *g)
@@ -245,6 +298,9 @@ static void inv_lose_life(minigame_t *g)
     inv_hit_flash = 8;
     memset(inv_shots, 0, sizeof(inv_shots));
     memset(inv_bombs, 0, sizeof(inv_bombs));
+    /* Everything in flight is gone and a life has left the HUD; too
+       much scattered change to be worth enumerating. */
+    if (screen_invaders != NULL) lv_obj_invalidate(screen_invaders);
     if (--inv_lives <= 0) minigame_over(g);
 }
 
@@ -253,11 +309,21 @@ static void invaders_tick(minigame_t *g)
     int i;
     int left, right, bottom;
 
+    inv_touch_shots_and_bombs();   /* where they were */
+
+    /* The sprites flip between two frames every 8 ticks; on the tick
+       they flip, the whole formation is genuinely new pixels. */
+    if ((inv_anim_tick / 8) != ((inv_anim_tick + 1) / 8)) inv_touch_formation();
     inv_anim_tick++;
-    if (inv_hit_flash > 0) inv_hit_flash--;
+
+    if (inv_hit_flash > 0) {
+        inv_hit_flash--;
+        inv_touch_ship();   /* the ship blinks while it burns */
+    }
 
     /* ---- formation march ---- */
     if (--inv_march_countdown <= 0) {
+        inv_touch_formation();   /* where it was */
         inv_formation_extent(&left, &right, &bottom);
         if ((inv_form_dir > 0 && right + INV_MARCH_PX > INV_FIELD_RIGHT) ||
             (inv_form_dir < 0 && left - INV_MARCH_PX < INV_FIELD_LEFT)) {
@@ -267,6 +333,7 @@ static void invaders_tick(minigame_t *g)
             inv_form_x += inv_form_dir * INV_MARCH_PX;
         }
         inv_march_countdown = inv_march_ticks();
+        inv_touch_formation();   /* and where it is now */
 
         inv_formation_extent(NULL, NULL, &bottom);
         if (bottom >= INV_INVASION_Y) {
@@ -295,6 +362,7 @@ static void invaders_tick(minigame_t *g)
                 inv_alive[i] = false;
                 inv_aliens_left--;
                 inv_shots[sh].active = false;
+                minigame_invalidate_rect(screen_invaders, x1 - 2, y1 - 2, x2 + 2, y2 + 2);
                 minigame_add_score(g, INV_ALIEN_POINTS);
                 break;
             }
@@ -320,6 +388,8 @@ static void invaders_tick(minigame_t *g)
         }
     }
 
+    inv_touch_shots_and_bombs();   /* and where they are now */
+
     /* ---- wave cleared ---- */
     if (inv_aliens_left == 0) {
         minigame_add_score(g, INV_WAVE_BONUS);
@@ -332,12 +402,13 @@ void invaders_turn(int dir)
 {
     if (minigame_handle_turn_start(&invaders_game)) return;
 
+    inv_touch_ship();                       /* where it was */
     inv_ship_x += dir * INV_SHIP_STEP;
     if (inv_ship_x < INV_FIELD_LEFT + INV_SHIP_W / 2)
         inv_ship_x = INV_FIELD_LEFT + INV_SHIP_W / 2;
     if (inv_ship_x > INV_FIELD_RIGHT - INV_SHIP_W / 2)
         inv_ship_x = INV_FIELD_RIGHT - INV_SHIP_W / 2;
-    lv_obj_invalidate(screen_invaders);
+    inv_touch_ship();                       /* and where it is now */
 }
 
 void invaders_handle_tap(void)
@@ -351,6 +422,12 @@ void invaders_handle_tap(void)
         inv_shots[sh].active = true;
         inv_shots[sh].x = (float)(inv_ship_x - INV_SHOT_W / 2);
         inv_shots[sh].y = (float)(INV_SHIP_Y - INV_SHOT_H);
+        /* A new shot appears between ticks; nothing else would ask for
+           those pixels until it had already moved on. */
+        minigame_invalidate_rect(screen_invaders,
+            (int)inv_shots[sh].x - 2, (int)inv_shots[sh].y - 2,
+            (int)inv_shots[sh].x + INV_SHOT_W + 2,
+            (int)inv_shots[sh].y + INV_SHOT_H + 2);
         return;
     }
     /* Every slot full: a physical ceiling, not a designed no-op. */

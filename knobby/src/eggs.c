@@ -69,11 +69,60 @@ static minigame_t eggs_game = {
     .hint     = STR_EGGS_HINT,
     .tick_ms  = EGGS_TICK_MS,
     .pausable = true,
+    .partial_redraw = true,   /* see eggs_touch_everything_moving() */
     .on_reset = eggs_reset,
     .on_tick  = eggs_tick,
     .on_draw  = eggs_draw,
     .on_tap   = eggs_handle_tap,
 };
+
+/* ---------- partial redraw ----------
+ *
+ * Five eggs, a basket and three life dots on an otherwise empty
+ * screen: about 3500 changing pixels out of 129600. Repainting the
+ * lot 25 times a second cost ~259KB of QSPI and a full software render
+ * per frame for scenery that never moves.
+ *
+ * eggs_touch_everything_moving() is called on both sides of the tick -
+ * once over where things were, once over where they now are - so each
+ * sprite's trail is repainted along with the sprite. Missing the first
+ * call leaves a column of egg behind every egg. */
+static void eggs_touch_egg(const egg_t *e)
+{
+    minigame_invalidate_rect(screen_eggs, (int)e->x - 2, (int)e->y - 2,
+                             (int)e->x + EGGS_EGG_W + 2,
+                             (int)e->y + EGGS_EGG_H + 2);
+}
+
+static void eggs_touch_basket(void)
+{
+    int half = EGGS_BASKET_W / 2;
+    minigame_invalidate_rect(screen_eggs,
+                             eggs_basket_x - half - 3, EGGS_BASKET_Y - 3,
+                             eggs_basket_x + half + 3,
+                             EGGS_BASKET_Y + EGGS_BASKET_H + 3);
+}
+
+/* The life dots and the miss flash - small, and only repainted on the
+   ticks that can change them. */
+static void eggs_touch_hud(void)
+{
+    minigame_invalidate_rect(screen_eggs, 118, 72, 120 + 3 * 16 + 12, 90);
+}
+
+static void eggs_touch_flash(void)
+{
+    minigame_invalidate_rect(screen_eggs, 58, 338, 302, 346);
+}
+
+static void eggs_touch_everything_moving(void)
+{
+    int i;
+    for (i = 0; i < EGGS_EGG_MAX; i++) {
+        if (eggs_items[i].active) eggs_touch_egg(&eggs_items[i]);
+    }
+    eggs_touch_basket();
+}
 
 static void eggs_spawn(void)
 {
@@ -100,6 +149,9 @@ static void eggs_reset(minigame_t *g)
     eggs_spawn_countdown = EGGS_SPAWN_TICKS_MIN;
     eggs_lives = EGGS_LIVES;
     eggs_flash = 0;
+    /* Everything moved at once; cheaper to say so than to enumerate
+       where each thing used to be. */
+    if (screen_eggs != NULL) lv_obj_invalidate(screen_eggs);
 }
 
 /* Caught when the egg's base reaches the basket's rim while its centre
@@ -119,8 +171,14 @@ static bool eggs_caught(const egg_t *e)
 static void eggs_tick(minigame_t *g)
 {
     int i;
+    int lives_before = eggs_lives;
 
-    if (eggs_flash > 0) eggs_flash--;
+    eggs_touch_everything_moving();   /* where they were */
+
+    if (eggs_flash > 0) {
+        eggs_flash--;
+        eggs_touch_flash();
+    }
     if (eggs_fall_speed < EGGS_FALL_MAX) eggs_fall_speed += EGGS_FALL_RAMP;
 
     if (--eggs_spawn_countdown <= 0) eggs_spawn();
@@ -137,22 +195,28 @@ static void eggs_tick(minigame_t *g)
         if (eggs_items[i].y > 360.0f) {
             eggs_items[i].active = false;
             eggs_flash = 6;
+            eggs_touch_flash();
             if (--eggs_lives <= 0) {
+                eggs_touch_hud();
                 minigame_over(g);
                 return;
             }
         }
     }
+
+    eggs_touch_everything_moving();   /* and where they are now */
+    if (eggs_lives != lives_before) eggs_touch_hud();
 }
 
 void eggs_turn(int dir)
 {
     if (minigame_handle_turn_start(&eggs_game)) return;
 
+    eggs_touch_basket();
     eggs_basket_x += dir * EGGS_BASKET_STEP;
     if (eggs_basket_x < EGGS_TRACK_LEFT)  eggs_basket_x = EGGS_TRACK_LEFT;
     if (eggs_basket_x > EGGS_TRACK_RIGHT) eggs_basket_x = EGGS_TRACK_RIGHT;
-    lv_obj_invalidate(screen_eggs);
+    eggs_touch_basket();
 }
 
 void eggs_handle_tap(void)

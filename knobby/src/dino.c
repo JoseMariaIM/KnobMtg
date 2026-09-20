@@ -1,4 +1,5 @@
 #include "dino.h"
+#include "minigame.h"
 #include "settings.h"
 #include "lang.h"
 #include "game.h"
@@ -235,6 +236,51 @@ static bool dino_hits(const dino_obstacle_t *ob)
     return rx1 < ox2 && rx2 > ox1 && ry1 < oy2 && ry2 > oy1;
 }
 
+/* ---------- partial redraw ----------
+ *
+ * A side-scroller repaints more than the other games here - the ground
+ * dashes scroll every frame - but the sky above the ground line is
+ * two thirds of the panel and never changes at all. Repainting all
+ * 360x360 cost ~259KB over QSPI and a full software render 25 times a
+ * second for that empty sky.
+ *
+ * The runner is at a fixed x and only moves vertically, so its box is
+ * the jump arc; the obstacles are touched where they were and where
+ * they now are, so their trails come with them. */
+static void dino_touch_runner(void)
+{
+    int gy = DINO_GROUND_Y - (int)dino_y;
+    minigame_invalidate_rect(screen_dino,
+                             DINO_X - 14, gy - DINO_TOTAL_H - 8,
+                             DINO_X + DINO_BODY_W + DINO_HEAD_W + 10, gy + 6);
+}
+
+static void dino_touch_obstacle(const dino_obstacle_t *ob)
+{
+    minigame_invalidate_rect(screen_dino,
+                             (int)ob->x - 4, ob->top - 4,
+                             (int)ob->x + ob->w + 4, DINO_GROUND_Y + 4);
+}
+
+/* The scrolling dashes, as one band across the field. They move every
+   frame and there are six of them, so a single strip is both cheaper
+   to invalidate and cheaper to reason about than six boxes. */
+static void dino_touch_ground(void)
+{
+    minigame_invalidate_rect(screen_dino,
+                             DINO_FIELD_LEFT - 2, DINO_GROUND_Y + 3,
+                             DINO_FIELD_RIGHT + 2, DINO_GROUND_Y + 8);
+}
+
+static void dino_touch_moving_things(void)
+{
+    int i;
+    dino_touch_runner();
+    for (i = 0; i < DINO_OBSTACLE_MAX; i++) {
+        if (dino_obstacles[i].active) dino_touch_obstacle(&dino_obstacles[i]);
+    }
+}
+
 static void dino_tick_cb(lv_timer_t *timer)
 {
     int i;
@@ -246,6 +292,7 @@ static void dino_tick_cb(lv_timer_t *timer)
     }
     if (dino_state != DINO_STATE_PLAYING) return;
 
+    dino_touch_moving_things();   /* where they were */
     dino_anim_tick++;
 
     /* Runner */
@@ -280,7 +327,8 @@ static void dino_tick_cb(lv_timer_t *timer)
         }
     }
 
-    lv_obj_invalidate(screen_dino);
+    dino_touch_moving_things();   /* and where they are now */
+    dino_touch_ground();
 }
 
 static void dino_start(void)

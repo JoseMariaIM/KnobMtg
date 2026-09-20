@@ -1,4 +1,5 @@
 #include "minigame.h"
+#include <math.h>
 #include "settings.h"
 #include "game.h"
 #include <string.h>
@@ -98,6 +99,52 @@ static void minigame_tick_cb(lv_timer_t *timer)
 
     g->on_tick(g);
     if (!g->partial_redraw) lv_obj_invalidate(*g->screen);
+}
+
+void minigame_invalidate_rect(lv_obj_t *screen, int x1, int y1, int x2, int y2)
+{
+    lv_area_t a;
+
+    if (screen == NULL) return;
+    if (x1 > x2 || y1 > y2) return;
+    a.x1 = (lv_coord_t)((x1 < 0) ? 0 : x1);
+    a.y1 = (lv_coord_t)((y1 < 0) ? 0 : y1);
+    a.x2 = (lv_coord_t)((x2 > 359) ? 359 : x2);
+    a.y2 = (lv_coord_t)((y2 > 359) ? 359 : y2);
+    if (a.x1 > a.x2 || a.y1 > a.y2) return;
+    lv_obj_invalidate_area(screen, &a);
+}
+
+void minigame_invalidate_box(lv_obj_t *screen, int cx, int cy, int half)
+{
+    minigame_invalidate_rect(screen, cx - half, cy - half, cx + half, cy + half);
+}
+
+void minigame_invalidate_arc(lv_obj_t *screen, int cx, int cy,
+                             int r_in, int r_out, int start_deg, int end_deg)
+{
+    int span = end_deg - start_deg;
+    int steps, i;
+    int min_x = 10000, min_y = 10000, max_x = -10000, max_y = -10000;
+
+    while (span < 0) span += 360;
+    steps = span / 4 + 2;
+
+    for (i = 0; i <= steps; i++) {
+        float a = (float)(start_deg + span * i / steps) * 0.017453292f;
+        float ca = cosf(a), sa = sinf(a);
+        int k;
+        for (k = 0; k < 2; k++) {
+            int r = k ? r_out : r_in;
+            int x = cx + (int)(ca * (float)r);
+            int y = cy + (int)(sa * (float)r);
+            if (x < min_x) min_x = x;
+            if (x > max_x) max_x = x;
+            if (y < min_y) min_y = y;
+            if (y > max_y) max_y = y;
+        }
+    }
+    minigame_invalidate_rect(screen, min_x - 3, min_y - 3, max_x + 3, max_y + 3);
 }
 
 static void event_minigame_draw(lv_event_t *e)

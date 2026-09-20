@@ -1,4 +1,5 @@
 #include "pong.h"
+#include "minigame.h"
 #include "settings.h"
 #include "lang.h"
 #include "game.h"
@@ -253,6 +254,9 @@ static void pong_check_peg_collisions(void)
 
 static void pong_on_game_over(void)
 {
+    /* The ball and the message both change at once; a full repaint is
+       cheaper to reason about than enumerating either. */
+    if (screen_pong != NULL) lv_obj_invalidate(screen_pong);
     pong_state = PONG_STATE_GAME_OVER;
     lv_timer_pause(pong_timer);
     pong_is_new_best = (pong_player >= 0 && pong_score > 0 &&
@@ -262,6 +266,34 @@ static void pong_on_game_over(void)
         settings_save();
     }
     pong_refresh_message();
+}
+
+/* ---------- partial redraw ----------
+ *
+ * The arena rim and the two pegs never move; the ball and the paddle
+ * are a few hundred pixels between them. Repainting all 360x360 every
+ * frame cost ~259KB over QSPI and a full software render, almost all
+ * of it rim and background that had not changed.
+ *
+ * Each of these is called over where a thing was and again over where
+ * it is, so its trail is repainted with it. The paddle is an arc, so
+ * its box is walked round the sweep rather than taken from the two end
+ * points - a paddle straddling 3 o'clock would otherwise leave the
+ * bulge between them behind. */
+static void pong_touch_ball(void)
+{
+    minigame_invalidate_box(screen_pong, (int)pong_ball_x, (int)pong_ball_y,
+                            PONG_BALL_RADIUS + 4);
+}
+
+static void pong_touch_paddle(void)
+{
+    int hw = pong_current_half_width();
+    minigame_invalidate_arc(screen_pong, PONG_CX, PONG_CY,
+                            PONG_ARENA_RADIUS - PONG_PADDLE_THICKNESS - 2,
+                            PONG_ARENA_RADIUS + 2,
+                            pong_paddle_angle - hw - 2,
+                            pong_paddle_angle + hw + 2);
 }
 
 static void pong_tick_cb(lv_timer_t *timer)
@@ -274,6 +306,7 @@ static void pong_tick_cb(lv_timer_t *timer)
     }
     if (pong_state != PONG_STATE_PLAYING) return;
 
+    pong_touch_ball();            /* where it was */
     pong_ball_x += pong_ball_vx;
     pong_ball_y += pong_ball_vy;
     pong_check_peg_collisions();
@@ -301,7 +334,12 @@ static void pong_tick_cb(lv_timer_t *timer)
             float offset_ratio = (float)diff / (float)half_width;
             float rmag;
 
+            /* Scoring shrinks the paddle, so the band it occupied is
+               repainted at its OLD width before the new one is drawn -
+               otherwise the tips it just lost stay on screen. */
+            pong_touch_paddle();
             pong_score++;
+            pong_touch_paddle();
             pong_ball_speed = LV_MIN(PONG_BALL_SPEED_MAX, pong_ball_speed * PONG_BALL_SPEED_GROWTH);
 
             rvx += tx * offset_ratio * PONG_STEER_FACTOR;
@@ -326,7 +364,7 @@ static void pong_tick_cb(lv_timer_t *timer)
         }
     }
 
-    lv_obj_invalidate(screen_pong);
+    pong_touch_ball();            /* and where it is now */
 }
 
 static void pong_start(void)
@@ -341,10 +379,11 @@ void pong_turn(int dir)
 {
     if (pong_state == PONG_STATE_READY) pong_start();
     if (pong_state != PONG_STATE_PLAYING) return;
-    pong_paddle_angle = pong_norm_angle(pong_paddle_angle + (dir > 0 ? PONG_PADDLE_STEP_DEG : -PONG_PADDLE_STEP_DEG));
     /* Immediate redraw: the paddle should visibly slide on every single
        detent, not wait for the next 30ms tick. */
-    lv_obj_invalidate(screen_pong);
+    pong_touch_paddle();          /* where it was */
+    pong_paddle_angle = pong_norm_angle(pong_paddle_angle + (dir > 0 ? PONG_PADDLE_STEP_DEG : -PONG_PADDLE_STEP_DEG));
+    pong_touch_paddle();          /* and where it is now */
 }
 
 void pong_handle_tap(void)

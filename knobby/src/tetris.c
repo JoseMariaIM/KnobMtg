@@ -82,6 +82,7 @@ static minigame_t tetris_game = {
     .hint     = STR_TETRIS_HINT,
     .tick_ms  = TET_TICK_MS,
     .pausable = true,
+    .partial_redraw = true,   /* see tet_touch_piece() */
     .on_reset = tetris_reset,
     .on_tick  = tetris_tick,
     .on_draw  = tetris_draw,
@@ -116,6 +117,51 @@ static bool tet_collides(int piece, int rot, int col, int row)
     return false;
 }
 
+/* ---------- partial redraw ----------
+ *
+ * The well is the one part of this game that is nearly always still:
+ * between one row of falling and the next, not a pixel changes. Yet
+ * the whole 360x360 panel was being repainted 25 times a second -
+ * about 259KB over QSPI and a full software render each time, which on
+ * this device is the single largest thing it does while a game is up.
+ *
+ * So only two things get repainted as the piece moves: the piece
+ * itself and its landing ghost, each as a 4x4-cell box swept from
+ * where it was to where it is. The well behind them is repainted only
+ * when it actually changes - a piece locking, lines clearing, a reset.
+ *
+ * tet_touch_piece() is called on both sides of every move: once to
+ * mark where the piece was, once to mark where it now is. Forgetting
+ * the first call leaves a trail of the piece behind it. */
+static void tet_invalidate_cells(int col, int row, int rows)
+{
+    minigame_invalidate_rect(screen_tetris,
+                             TET_WELL_X + col * TET_CELL,
+                             TET_WELL_Y + row * TET_CELL,
+                             TET_WELL_X + (col + 4) * TET_CELL,
+                             TET_WELL_Y + (row + rows) * TET_CELL);
+}
+
+/* The piece and the ghost it casts, at the current position. */
+static void tet_touch_piece(void)
+{
+    int ghost_row = tet_row;
+
+    while (!tet_collides(tet_piece, tet_rot, tet_col, ghost_row + 1)) ghost_row++;
+    tet_invalidate_cells(tet_col, tet_row, 4);
+    tet_invalidate_cells(tet_col, ghost_row, 4);
+}
+
+/* The well, its frame and the next-piece preview under it: everything
+   this game draws that is not the falling piece. */
+static void tet_touch_board(void)
+{
+    minigame_invalidate_rect(screen_tetris,
+                             TET_WELL_X - 5, TET_WELL_Y - 5,
+                             TET_WELL_X + TET_WELL_W + 5,
+                             TET_WELL_Y + TET_WELL_H + 40);
+}
+
 static void tet_spawn(minigame_t *g)
 {
     tet_piece = tet_next_piece;
@@ -124,6 +170,7 @@ static void tet_spawn(minigame_t *g)
     tet_col = (TET_COLS - 4) / 2;
     tet_row = -1;
     tet_fall_countdown = 0;
+    tet_touch_piece();
 
     /* No room for the new piece means the stack has reached the top. */
     if (tet_collides(tet_piece, tet_rot, tet_col, tet_row)) {
@@ -140,6 +187,7 @@ static void tetris_reset(minigame_t *g)
     tet_clear_mask = 0;
     tet_next_piece = (int)(esp_random() % TET_PIECE_COUNT);
     tet_spawn(g);
+    tet_touch_board();
     /* tet_spawn can declare game over on a full well; on a reset the
        well is empty, so the state it just set stands. */
     g->state = MINIGAME_READY;
@@ -199,6 +247,7 @@ static void tet_settle(minigame_t *g)
     int cleared;
 
     tet_lock_piece();
+    tet_touch_board();
     cleared = tet_clear_lines();
     if (cleared > 0) {
         minigame_add_score(g, line_score[cleared] * tet_level);
@@ -212,7 +261,9 @@ static void tet_settle(minigame_t *g)
 static void tet_step_down(minigame_t *g)
 {
     if (!tet_collides(tet_piece, tet_rot, tet_col, tet_row + 1)) {
+        tet_touch_piece();
         tet_row++;
+        tet_touch_piece();
         return;
     }
     tet_settle(g);
@@ -220,7 +271,10 @@ static void tet_step_down(minigame_t *g)
 
 static void tetris_tick(minigame_t *g)
 {
-    if (tet_clear_flash > 0) tet_clear_flash--;
+    if (tet_clear_flash > 0) {
+        tet_clear_flash--;
+        tet_touch_board();   /* the highlight is on the well itself */
+    }
 
     if (--tet_fall_countdown > 0) return;
     tet_fall_countdown = tet_fall_ticks();
@@ -230,11 +284,14 @@ static void tetris_tick(minigame_t *g)
 static void tet_move(int dir)
 {
     if (tet_collides(tet_piece, tet_rot, tet_col + dir, tet_row)) return;
+    tet_touch_piece();
     tet_col += dir;
+    tet_touch_piece();
 }
 
 static void tet_hard_drop(minigame_t *g)
 {
+    tet_touch_piece();
     while (!tet_collides(tet_piece, tet_rot, tet_col, tet_row + 1)) tet_row++;
     tet_settle(g);
 }
@@ -258,9 +315,10 @@ void tetris_turn(int dir)
        reads as the knob being broken. */
     for (i = 0; i < 5; i++) {
         if (!tet_collides(tet_piece, next_rot, tet_col + kicks[i], tet_row)) {
+            tet_touch_piece();
             tet_col += kicks[i];
             tet_rot = next_rot;
-            lv_obj_invalidate(screen_tetris);
+            tet_touch_piece();
             return;
         }
     }
@@ -278,7 +336,6 @@ static void tet_tap_zone(int x)
     } else {
         tet_hard_drop(&tetris_game);
     }
-    lv_obj_invalidate(screen_tetris);
 }
 
 void tetris_handle_tap(void)
