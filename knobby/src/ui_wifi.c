@@ -1,4 +1,5 @@
 #include "ui_wifi.h"
+#include "quad_screen.h"
 #include "wifi_ota.h"
 #include "storage.h"
 #include "lang.h"

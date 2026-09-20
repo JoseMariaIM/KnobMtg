@@ -1,4 +1,5 @@
 #include "game_mode.h"
+#include "quad_screen.h"
 #include "storage.h"
 #include "settings.h"
 #include "ui_mp.h"

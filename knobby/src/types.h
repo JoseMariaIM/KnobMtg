@@ -17,16 +17,6 @@ typedef struct {
     knob_event_t event;
 } knob_input_event_t;
 
-typedef struct {
-    const char *label;
-    lv_event_cb_t cb;
-    bool enabled;
-    lv_event_code_t event;
-    const char *icon;
-    const lv_font_t *icon_font;
-    void *user_data;            /* passed to cb via lv_event_get_user_data */
-} quad_item_t;
-
 // ---------- life colors (lv_color_t - see game_types.h for the pure tier math) ----------
 static inline lv_color_t get_life_color(int value, int max_life)
 {
