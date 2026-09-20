@@ -543,7 +543,7 @@ static const screen_desc_t screen_registry[] = {
     /* Built on first open (open_partners_screen), not at boot: a quad
        page is ~3.6KB of the 128KB LVGL pool, and most sessions never
        open this one. */
-    { &screen_partners,            NULL,                              NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    { &screen_partners,            NULL,                              NULL,                 NULL,                    &screen_game_mode_menu, false },
     { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
     { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
     { &screen_game_mode_menu,      build_game_mode_menu_screen,       change_num_players,   NULL,                    &screen_quad_menu,      false },

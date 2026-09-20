@@ -698,7 +698,6 @@ static const setting_item_t settings_items[] = {
     { .id = "auto-eliminate", .label = auto_eliminate_label,   .color = toggle_color,      .get = nvs_get_auto_eliminate,   .set = nvs_set_auto_eliminate,   .count = 2 },
     { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
     { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
-    { .id = "partners",       .fixed_label_id = STR_SETTING_PARTNERS, .navigate = open_partners_screen, .nav_screen = &screen_partners },
     { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
     { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES, .navigate = open_minigames_menu, .nav_screen = &screen_minigames_menu },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },

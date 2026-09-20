@@ -1,4 +1,5 @@
 #include "hw.h"
+#include "game_state.h"
 #include "storage.h"
 #include "net_sync.h"
 #include "lang.h"
@@ -480,6 +481,9 @@ void knob_hw_init(void)
 {
     knob_nvs_init();
     lang_init(); /* must run before any build_*_screen() call below */
+    /* And this before the screens too: they bake the names into their
+       labels as they are built. */
+    player_names_restore();
     brightness_init();
     brightness_percent = nvs_get_brightness();
     last_activity_tick = lv_tick_get();

@@ -722,6 +722,34 @@ void start_all_damage_flash(int delta, const bool *targets)
     notify_refresh_player_ui();
 }
 
+void player_names_restore(void)
+{
+    char stored[PLAYER_NAME_COUNT][PLAYER_NAME_LEN];
+    int i;
+
+    if (!nvs_has_player_names()) return;
+    nvs_get_player_names(stored);
+    for (i = 0; i < MAX_GAME_PLAYERS && i < PLAYER_NAME_COUNT; i++) {
+        /* An empty slot means that player was never renamed; leave the
+           P1..P8 default rather than blanking their panel. */
+        if (stored[i][0] == '\0') continue;
+        snprintf(player_names[i], sizeof(player_names[i]), "%s", stored[i]);
+    }
+}
+
+void player_names_persist(void)
+{
+    char out[PLAYER_NAME_COUNT][PLAYER_NAME_LEN];
+    int i;
+
+    for (i = 0; i < PLAYER_NAME_COUNT; i++) {
+        snprintf(out[i], PLAYER_NAME_LEN, "%s",
+                 (i < MAX_GAME_PLAYERS) ? player_names[i] : "");
+    }
+    nvs_set_player_names(out);
+    settings_save();
+}
+
 bool player_has_partner(int player)
 {
     if (player < 0 || player >= MAX_GAME_PLAYERS) return false;

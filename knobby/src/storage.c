@@ -31,6 +31,8 @@ static int cached_language = 0; /* 0=English (default), 1=Espanol - see lang_t *
    not the rule, and a player who does not have one should never see a
    partner control at all. */
 static uint8_t cached_partners = 0;
+static char cached_player_names[PLAYER_NAME_COUNT][PLAYER_NAME_LEN];
+static bool cached_player_names_set = false;
 static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
 static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
@@ -107,6 +109,14 @@ void knob_nvs_init(void)
         int8_t partner_val = 0;
         nvs_get_i8(handle, "partners", &partner_val);
         cached_partners = (uint8_t)partner_val;
+
+        size_t pn_size = sizeof(cached_player_names);
+        if (nvs_get_blob(handle, "pl_names", cached_player_names, &pn_size) == ESP_OK) {
+            int i;
+            for (i = 0; i < PLAYER_NAME_COUNT; i++)
+                cached_player_names[i][PLAYER_NAME_LEN - 1] = '\0';
+            cached_player_names_set = true;
+        }
 
         size_t nl_size = sizeof(cached_name_list);
         nvs_get_blob(handle, "name_list", cached_name_list, &nl_size);
@@ -326,6 +336,23 @@ void nvs_set_multi_select(int value)
 }
 
 // ---------- name list ----------
+void nvs_get_player_names(char (*out)[PLAYER_NAME_LEN])
+{
+    memcpy(out, cached_player_names, sizeof(cached_player_names));
+}
+
+void nvs_set_player_names(const char (*names)[PLAYER_NAME_LEN])
+{
+    memcpy(cached_player_names, names, sizeof(cached_player_names));
+    cached_player_names_set = true;
+    settings_dirty = true;
+}
+
+bool nvs_has_player_names(void)
+{
+    return cached_player_names_set;
+}
+
 void nvs_get_name_list(char (*out)[NAME_LIST_LEN])
 {
     memcpy(out, cached_name_list, sizeof(cached_name_list));
@@ -410,6 +437,10 @@ void settings_save(void)
         nvs_set_i8(handle, "menu_face", (int8_t)cached_menu_facing);
         nvs_set_i8(handle, "language", (int8_t)cached_language);
         nvs_set_i8(handle, "partners", (int8_t)cached_partners);
+        if (cached_player_names_set) {
+            nvs_set_blob(handle, "pl_names", cached_player_names,
+                         sizeof(cached_player_names));
+        }
         nvs_set_blob(handle, "name_list", cached_name_list, sizeof(cached_name_list));
         nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));

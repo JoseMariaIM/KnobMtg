@@ -117,6 +117,10 @@ static void apply_name_and_return(const char *name)
     if (strcmp(player_names[menu_player], name) != 0) {
         snprintf(player_names[menu_player],
                  sizeof(player_names[menu_player]), "%s", name);
+        /* The one place a name changes on purpose, so the one place it
+           is written down. A game reset and a power cycle both leave
+           the table's names alone. */
+        player_names_persist();
         net_sync_commit_names();
     }
     if (!is_default_name(name))
@@ -447,3 +451,5 @@ void build_rename_screen(void)
 
     mru_load();
 }
+
+void rename_test_apply(const char *name) { apply_name_and_return(name); }

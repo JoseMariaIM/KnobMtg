@@ -89,6 +89,14 @@ extern bool player_eliminated[MAX_DISPLAY_PLAYERS];
  * second commander mode. Most games have no partners in them at all,
  * and showing those controls to everyone made the device look like it
  * was tracking something the table was not. */
+/* Loads the stored player names over the P1..P8 defaults. Called once
+   at boot; a no-op until somebody has actually renamed someone. */
+void player_names_restore(void);
+/* Stores the current names. Called from the rename screen only - the
+   names are the table's, not the game's, so a reset or a power cycle
+   must not touch them. */
+void player_names_persist(void);
+
 bool player_has_partner(int player);
 void set_player_has_partner(int player, bool has);
 /* True if ANY player in the current game fields one - the question a

@@ -140,6 +140,12 @@ static void event_gm_apply(lv_event_t *e)
 }
 
 // ---------- screen builders ----------
+static void event_gm_partners(lv_event_t *e)
+{
+    (void)e;
+    open_partners_screen();
+}
+
 void build_game_mode_menu_screen(void)
 {
     lv_obj_t *btn;
@@ -149,13 +155,17 @@ void build_game_mode_menu_screen(void)
     snprintf(buf_players, sizeof(buf_players), t(STR_GAME_MODE_PLAYERS_FMT), 4);
     snprintf(buf_life, sizeof(buf_life), t(STR_GAME_MODE_LIFE_FMT), 40);
 
-    /* Slot 2 is a disabled placeholder (same look as an empty
-       settings-page slot) left by merging the old "Track" tile into
-       Players; Apply stays in slot 3 where it has always been. */
+    /* Slot 2 was a disabled placeholder left by merging the old "Track"
+       tile into Players. Partners lives there now: who fields two
+       commanders is the same kind of decision as how many players and
+       what life they start on - you make it once while setting the
+       table up, and it belongs beside them rather than buried in the
+       device's own settings. Apply stays in slot 3, where it has
+       always been. */
     quad_item_t items[4] = {
         {buf_players,           event_gm_num_players, true,  LV_EVENT_CLICKED},
         {buf_life,              event_gm_life_cycle,  true,  LV_EVENT_SHORT_CLICKED},
-        {"",                    NULL,                 false, LV_EVENT_CLICKED},
+        {t(STR_SETTING_PARTNERS), event_gm_partners,  true,  LV_EVENT_CLICKED},
         {t(STR_GAME_MODE_APPLY_HOLD), event_gm_apply, true,  LV_EVENT_LONG_PRESSED},
     };
     build_quad_screen(&screen_game_mode_menu, items);

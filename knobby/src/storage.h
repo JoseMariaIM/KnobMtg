@@ -48,6 +48,20 @@ void nvs_set_multi_select(int value);
 int  nvs_get_partner_mask(void);
 void nvs_set_partner_mask(int mask);
 
+/* The players' own names, as last set from the rename screen.
+ *
+ * Distinct from the name LIST above, which is the pool of remembered
+ * names offered when renaming. This is who is actually sitting at the
+ * table, and it survives a power cycle and a game reset - only the
+ * rename screen changes it. */
+#define PLAYER_NAME_COUNT MAX_GAME_PLAYERS
+#define PLAYER_NAME_LEN   16
+void nvs_get_player_names(char (*out)[PLAYER_NAME_LEN]);
+void nvs_set_player_names(const char (*names)[PLAYER_NAME_LEN]);
+/* True once a rename has been stored, so boot can tell "nobody has
+   ever renamed anyone" from "everybody is called P1..P8 on purpose". */
+bool nvs_has_player_names(void);
+
 void nvs_get_name_list(char (*out)[NAME_LIST_LEN]);
 void nvs_set_name_list(const char (*list)[NAME_LIST_LEN]);
 

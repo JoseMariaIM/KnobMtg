@@ -98,16 +98,22 @@ static const int attack_mode_alt_labels[ATTACK_MODE_COUNT] = {
 #define ATTACK_CY 180
 /* The mode sectors are an annulus from ATTACK_HUB_R out to
    ATTACK_RING_R; the hub inside it is the amount and the Resolve
-   target. Both are well inside the 180px glass.
+   target.
  *
- * The hub is as small as its own contents allow, because every pixel
- * taken off it is a pixel of width for the mode names - and the names
- * are what run out of room. 88 is set by the amount at its widest:
- * "99" in the 116pt face spans a half-diagonal of 85px, so a smaller
- * hub would mean a smaller number, and the number is the thing this
- * screen exists to set. */
-#define ATTACK_HUB_R     88
-#define ATTACK_RING_R   176
+ * These two numbers trade against each other, and both sides are
+ * tight. Every pixel given to the hub is a pixel of width taken from
+ * the mode names, and "Comandante" is 94px wide at the smallest face
+ * this screen uses. Every pixel given to the ring is a name the hub
+ * cannot show: the players' names sit side by side up there, and at 88
+ * the boxes were 48px - narrow enough that "Chema" came out clipped.
+ *
+ * 96 and 178 is where they meet. The hub holds a 62px name box each
+ * side, which covers ordinary first names on one line; the ring still
+ * holds every mode name centred on its own diagonal, at 14pt. Pushing
+ * the ring past 178 would put paint under the bezel, and pushing the
+ * hub past 96 leaves no size at which all four mode names fit. */
+#define ATTACK_HUB_R     96
+#define ATTACK_RING_R   178
 #define ATTACK_SECTOR_GAP_DEG 3
 /* Where a sector's label sits: the middle of the band, not its inner
    edge - at the inner edge a label reads as floating over the hub
@@ -410,21 +416,39 @@ static const lv_font_t *const attack_label_fonts[] = {
    antialiased edge never touches bare background. */
 #define ATTACK_LABEL_MARGIN 2
 
-static bool attack_label_fits(int cx, int cy, int half_w, int half_h, int mid_deg)
+/* The box lv_obj_align(LV_ALIGN_CENTER, dx, dy) will actually give a
+ * label of this size.
+ *
+ * Computed rather than approximated from a centre and a half-extent:
+ * LVGL's centring truncates, so a label of odd width sits half a pixel
+ * off the point it was asked for, and this screen's geometry is tight
+ * enough that half a pixel decides whether a word clears the ring. The
+ * first version of this rounded its own way and placed "Comandante"
+ * 0.2px outside the paint - invisible on screen, but the difference
+ * between a layout that is right and one that happens to look right. */
+static void attack_label_box(const lv_point_t *size, int dx, int dy, lv_area_t *a)
+{
+    a->x1 = (lv_coord_t)((360 - (int)size->x) / 2 + dx);
+    a->y1 = (lv_coord_t)((360 - (int)size->y) / 2 + dy);
+    a->x2 = (lv_coord_t)(a->x1 + (lv_coord_t)size->x - 1);
+    a->y2 = (lv_coord_t)(a->y1 + (lv_coord_t)size->y - 1);
+}
+
+static bool attack_box_fits(const lv_area_t *a, int mid_deg)
 {
     int sx, sy;
 
-    for (sx = -1; sx <= 1; sx += 2) {
-        for (sy = -1; sy <= 1; sy += 2) {
-            float dx = (float)(cx + sx * half_w) - (float)ATTACK_CX;
-            float dy = (float)(cy + sy * half_h) - (float)ATTACK_CY;
-            float r = sqrtf(dx * dx + dy * dy);
+    for (sx = 0; sx <= 1; sx++) {
+        for (sy = 0; sy <= 1; sy++) {
+            float fx = (float)(sx ? a->x2 : a->x1) - (float)ATTACK_CX;
+            float fy = (float)(sy ? a->y2 : a->y1) - (float)ATTACK_CY;
+            float r = sqrtf(fx * fx + fy * fy);
             int deg, diff;
 
             if (r < (float)(ATTACK_HUB_R + ATTACK_LABEL_MARGIN)) return false;
             if (r > (float)(ATTACK_RING_R - ATTACK_LABEL_MARGIN)) return false;
 
-            deg = (int)(atan2f(dy, dx) / ATTACK_DEG2RAD);
+            deg = (int)(atan2f(fy, fx) / ATTACK_DEG2RAD);
             if (deg < 0) deg += 360;
             diff = deg - mid_deg;
             while (diff > 180) diff -= 360;
@@ -441,13 +465,14 @@ static bool attack_label_fits_at(const char *text, const lv_font_t *font,
                                  int mid_deg, int radius)
 {
     float rad = (float)mid_deg * ATTACK_DEG2RAD;
-    int x = ATTACK_CX + (int)lroundf(cosf(rad) * (float)radius);
-    int y = ATTACK_CY + (int)lroundf(sinf(rad) * (float)radius);
+    int dx = (int)lroundf(cosf(rad) * (float)radius);
+    int dy = (int)lroundf(sinf(rad) * (float)radius);
     lv_point_t size;
+    lv_area_t box;
 
     lv_txt_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    return attack_label_fits(x, y, ((int)size.x + 1) / 2, ((int)size.y + 1) / 2,
-                             mid_deg);
+    attack_label_box(&size, dx, dy, &box);
+    return attack_box_fits(&box, mid_deg);
 }
 
 /* Lays out all four mode names together: one size, one radius, each
@@ -557,15 +582,15 @@ void build_attack_screen(void)
     /* Fixed-width and ellipsised, so a long name cannot push the row
        out over the sector ring - and narrow enough that the FULL box,
        not just today's "P1", stays inside the hub. */
-    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 48);
-    lv_obj_align(label_source, LV_ALIGN_CENTER, -29, -54);
+    label_source = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
+    lv_obj_align(label_source, LV_ALIGN_CENTER, -36, -54);
 
     label_arrow = attack_make_label(screen_attack, &lv_font_es_16, ATTACK_TILE_TEXT, 0);
     lv_label_set_text(label_arrow, ">");
     lv_obj_align(label_arrow, LV_ALIGN_CENTER, 0, -54);
 
-    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 48);
-    lv_obj_align(label_target, LV_ALIGN_CENTER, 29, -54);
+    label_target = attack_make_label(screen_attack, &lv_font_es_16, 0xFFFFFF, 62);
+    lv_obj_align(label_target, LV_ALIGN_CENTER, 36, -54);
 
     /* The amount, at life-counter scale - it is the number the knob is
        editing and the reason the screen exists. */
