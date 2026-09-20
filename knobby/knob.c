@@ -9,6 +9,7 @@
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
 #include "src/nav.h"
+#include "src/ota_notice.h"
 #include "src/minigames_menu.h"
 #include "src/ui_battery.h"
 #include "src/ui_partners.h"
@@ -705,6 +706,11 @@ void knob_gui(void)
        right below only resets pure state, it no longer touches LVGL -
        see the comment at its call site in game_state.c). */
     game_bridge_init();
+
+    /* hw.c owns a timer whose period the low-battery indicator already
+       varies; the OTA check rides it rather than waking the CPU on a
+       second one. Which check that is belongs here, not in hw.c. */
+    hw_set_idle_poll_hook(ota_notice_poll);
 
     knob_life_init();
     knob_intro_init();

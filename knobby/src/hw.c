@@ -3,8 +3,6 @@
 #include "storage.h"
 #include "net_sync.h"
 #include "lang.h"
-#include "wifi_ota.h"
-#include "ui_wifi.h"
 #include "../knob.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
@@ -169,143 +167,28 @@ static void battery_icon_apply(bool visible)
     }
 }
 
-// ---------- update-available notice ----------
-#define UPDATE_TOAST_MS 5000
+/* Anything wanting a cheap periodic check can register here rather
+   than create a timer of its own. The low-battery indicator already
+   owns one whose period the device is paying for either way, and a
+   second timer is a second light-sleep wake: on this device that is
+   the dominant idle power cost, not the work the callback does.
 
-static lv_obj_t *s_toast = NULL;
-static lv_timer_t *s_toast_timer = NULL;
+   hw.c is the wrong place to know WHAT gets polled - the first caller
+   was the OTA update check, which is how a backlight-and-battery file
+   came to include wifi_ota.h and ui_wifi.h. One hook, set at boot by
+   knob.c; NULL means nothing to poll. */
+static void (*idle_poll_hook)(void) = NULL;
 
-static void dismiss_update_toast(void)
+void hw_set_idle_poll_hook(void (*fn)(void))
 {
-    if (s_toast_timer != NULL) {
-        lv_timer_del(s_toast_timer);
-        s_toast_timer = NULL;
-    }
-    if (s_toast != NULL) {
-        lv_obj_del(s_toast);
-        s_toast = NULL;
-    }
-}
-
-static void update_toast_timer_cb(lv_timer_t *timer)
-{
-    (void)timer;
-    s_toast_timer = NULL; /* one-shot timer deletes itself on return */
-    dismiss_update_toast();
-}
-
-static void update_toast_click_cb(lv_event_t *e)
-{
-    (void)e;
-    dismiss_update_toast();
-    /* The OTA screen's back gesture returns to whatever screen sent it
-       there (see settings_handle_back()'s chain back to screen_quad_menu,
-       then knob.c's previous_screen check) - normally that's only ever
-       reached via the settings menu, which sets this itself. Tapping the
-       toast is a shortcut around that whole chain, so it has to set the
-       breadcrumb too, or back leaves the user stranded in settings with
-       no way to reach the life counter again. */
-    knob_remember_return_screen(lv_scr_act());
-    open_ota_update_screen();
-}
-
-/* Rather than a persistent icon (too easy to miss on a screen this
-   size), this drops a self-dismissing banner on lv_layer_top() (renders
-   above whatever screen is active, independent of which one that is)
-   spelling out a message in words; tapping it runs click_cb, which owns
-   navigating wherever that message points to. Shared by the "update
-   available" and "just updated" toasts below. */
-static void show_toast(const char *msg, lv_event_cb_t click_cb)
-{
-    dismiss_update_toast(); /* replace any still-showing toast rather than stack them */
-
-    s_toast = lv_label_create(lv_layer_top());
-    lv_label_set_text(s_toast, msg);
-    lv_obj_set_style_text_font(s_toast, &lv_font_es_16, 0);
-    lv_obj_set_style_text_align(s_toast, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(s_toast, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(s_toast, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(s_toast, LV_OPA_80, 0);
-    lv_obj_set_style_radius(s_toast, 12, 0);
-    lv_obj_set_style_pad_all(s_toast, 10, 0);
-    lv_obj_set_width(s_toast, 220);
-    lv_obj_align(s_toast, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_add_flag(s_toast, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(s_toast, click_cb, LV_EVENT_CLICKED, NULL);
-
-    s_toast_timer = lv_timer_create(update_toast_timer_cb, UPDATE_TOAST_MS, NULL);
-    lv_timer_set_repeat_count(s_toast_timer, 1);
-}
-
-/* The moment an update is first seen this shows the update-available
-   toast; tapping it jumps straight to the update screen. */
-static void show_update_toast(void)
-{
-    char msg[64];
-    snprintf(msg, sizeof(msg), t(STR_OTA_AVAILABLE_FMT), ota_get_latest_version());
-    show_toast(msg, update_toast_click_cb);
-}
-
-static void update_applied_toast_click_cb(lv_event_t *e)
-{
-    (void)e;
-    dismiss_update_toast();
-    /* Straight to the QR (release notes), skipping the Updates screen -
-       open_ota_qr_screen_from_toast() marks the visit so knob.c's back
-       handler sends back to the life counter instead of Updates, which
-       this toast never went through. */
-    open_ota_qr_screen_from_toast();
-}
-
-/* Shown once, right after boot, when the running firmware version
-   differs from the one stored at the previous boot (see
-   check_firmware_update_toast) - i.e. an OTA update just landed.
-   Tapping it shows the QR code to the release notes. */
-static void show_update_applied_toast(const char *version)
-{
-    char msg[64];
-    snprintf(msg, sizeof(msg), t(STR_OTA_UPDATED_FMT), version);
-    show_toast(msg, update_applied_toast_click_cb);
-}
-
-void check_firmware_update_toast(void)
-{
-    char last[FW_VERSION_LEN];
-    const char *current = get_firmware_version();
-
-    nvs_get_last_fw_version(last, sizeof(last));
-    if (last[0] != '\0' && strcmp(last, current) != 0) {
-        show_update_applied_toast(current);
-    }
-    if (strcmp(last, current) != 0) {
-        nvs_set_last_fw_version(current);
-        /* Must commit right now, not just mark dirty: this runs once at
-           boot and nothing else is guaranteed to call settings_save()
-           before the next reboot (e.g. if the user never opens
-           Settings), so without this the stored version never actually
-           advances and the toast re-fires on every single boot. */
-        settings_save();
-    }
-}
-
-static void update_notice_check(void)
-{
-    static bool s_toast_shown = false;
-    bool available = (ota_get_state() == OTA_STATE_AVAILABLE);
-
-    if (available && !s_toast_shown) {
-        s_toast_shown = true;
-        show_update_toast();
-    } else if (!available) {
-        s_toast_shown = false;
-    }
+    idle_poll_hook = fn;
 }
 
 static void battery_icon_timer_cb(lv_timer_t *timer)
 {
     int pct = read_battery_percent();
 
-    update_notice_check();
+    if (idle_poll_hook != NULL) idle_poll_hook();
     if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
         /* Icon stays hidden essentially the entire time the device is
            used - falling back to a slow check instead of waking every

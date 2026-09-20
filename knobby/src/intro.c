@@ -1,6 +1,7 @@
 #include "intro.h"
 #include "assets_intro.h"
 #include "hw.h"
+#include "ota_notice.h"
 
 // Forward declarations
 extern void back_to_main(void);
@@ -51,7 +52,7 @@ static void intro_finish_timer_cb(lv_timer_t *timer)
     /* Same reasoning: boot is the one moment to check whether this is
        the first time this firmware has run, so the "just updated" toast
        (see hw.c) can't show mid-animation or repeat on every reset. */
-    check_firmware_update_toast();
+    ota_notice_check_after_boot();
 }
 
 static void comics_pop_ready_cb(lv_anim_t *a)
