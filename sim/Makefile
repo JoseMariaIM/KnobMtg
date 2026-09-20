@@ -113,12 +113,25 @@ generate-matrix: $(BIN)
 TEST_SRCS  := $(wildcard tests/*.c)
 TEST_BUILD := $(BUILD)/tests
 
-test: $(ALL_OBJS_NOMAIN)
+# Spelling the objects out inline makes the link line below ~21KB, and make
+# hands a whole recipe to the shell as ONE command-line argument - which on
+# Windows meets the 32KB CreateProcess ceiling, so sh receives the for-loop
+# cut in half and dies with "unexpected end of file from `if' command". A
+# response file keeps the line short (gcc and clang both take @file
+# everywhere), and $(file ...) writes it without going through a shell, so
+# the list never has to fit in a command line at all.
+OBJS_RSP := $(BUILD)/objs_nomain.rsp
+
+$(OBJS_RSP): $(ALL_OBJS_NOMAIN) | $(BUILD)
+	$(file >$@,$(ALL_OBJS_NOMAIN))
+	@echo "[rsp] $@ - $(words $(ALL_OBJS_NOMAIN)) objects"
+
+test: $(OBJS_RSP)
 	@mkdir -p $(TEST_BUILD)
 	@failed=0; \
 	for src in $(TEST_SRCS); do \
 		name=$$(basename $$src .c); \
-		if ! $(CC) $(CFLAGS) -Itests $$src $(ALL_OBJS_NOMAIN) -o $(TEST_BUILD)/$$name $(LDFLAGS) 2>&1; then \
+		if ! $(CC) $(CFLAGS) -Itests $$src @$(OBJS_RSP) -o $(TEST_BUILD)/$$name $(LDFLAGS) 2>&1; then \
 			echo "FAIL: $$name did not compile"; failed=1; continue; \
 		fi; \
 		echo "---- $$name ----"; \

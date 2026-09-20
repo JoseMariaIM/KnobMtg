@@ -23,8 +23,11 @@ ifeq ($(OS),Windows_NT)
         MAKE := make
     endif
     
-    # LVGL path — Windows default
-    LVGL_PATH ?= $(USERPROFILE)/Documents/Arduino/libraries/lvgl
+    # LVGL path — Windows default. USERPROFILE arrives with backslashes
+    # (C:\Users\name), which survive the / -> __ mangling in sim/Makefile's
+    # obj_name and become directories that do not exist, so gcc dies on the
+    # .d file before it ever writes the .o. Normalise to forward slashes.
+    LVGL_PATH ?= $(subst \,/,$(USERPROFILE))/Documents/Arduino/libraries/lvgl
     
     # Python — Windows prefers 'python' over 'python3'
     PYTHON    ?= python
