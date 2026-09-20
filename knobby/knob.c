@@ -10,6 +10,7 @@
 #include "src/settings.h"
 #include "src/nav.h"
 #include "src/ota_notice.h"
+#include "src/game_bridge.h"
 #include "src/minigames_menu.h"
 #include "src/ui_battery.h"
 #include "src/ui_partners.h"
