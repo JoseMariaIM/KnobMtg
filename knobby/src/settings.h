@@ -18,8 +18,9 @@ typedef struct {
     int (*get)(void);            /* NULL => navigation item */
     void (*set)(int v);          /* writes NVS + side effects */
     int count;                   /* cycle modulo (2 for ON/OFF toggles) */
-    void (*navigate)(void);      /* non-NULL => click opens a sub-screen */
-    lv_obj_t **nav_screen;       /* sub-screen global, for generic back-nav */
+    /* A row with no .get is a navigation row: what it opens, and which
+       screen it opens, are bound at boot by settings_bind_screen()
+       rather than named here. */
     lv_event_code_t event;       /* trigger; 0 = LV_EVENT_CLICKED (use
                                     LV_EVENT_LONG_PRESSED for "Hold" items) */
 } setting_item_t;
@@ -46,8 +47,19 @@ settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page);
 bool settings_screen_needs_save(lv_obj_t *screen);
 void settings_show_page(int page);
 void build_settings_pages(void);
+
+/* Point a navigation row at the screen it opens. Called once at boot,
+   from knob.c, for every row with no .get - see the comment on
+   item_open[] in settings.c for why the binding is not in the table.
+   An unknown id is ignored. */
+void settings_bind_screen(const char *id, void (*open)(void), lv_obj_t **screen);
 bool settings_knob_page(int dir);
 int settings_item_page(const char *id);
+
+/* ---------- read-only accessors (unit tests) ---------- */
+/* The id of the first navigation row nobody bound, or NULL when every
+   one is wired. See settings_bind_screen(). */
+const char *settings_test_unbound_item(void);
 
 void open_settings_screen(void);
 

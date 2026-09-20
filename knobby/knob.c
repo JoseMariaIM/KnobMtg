@@ -682,6 +682,24 @@ void knob_gui(void)
     for (i = 0; i < SCREEN_REGISTRY_COUNT; i++) {
         if (screen_registry[i].build != NULL) screen_registry[i].build();
     }
+    /* Settings rows that open somebody else.s screen are pointed at it
+       here rather than named in settings_items[]. That table used to
+       spell out open_wifi_settings_screen and &screen_ota_update and
+       five more like them, which made the settings subsystem depend on
+       every feature reachable from its menu - and on this device the
+       WiFi screens depend on navigation, which depends on settings.
+       Binding from the composition root breaks that ring: settings now
+       names no screen it does not own. Must run before
+       build_quad_menus() below, which builds the pages and draws an
+       unbound row dimmed. */
+    settings_bind_screen("brightness", open_settings_screen,        &screen_settings);
+    settings_bind_screen("battery",    open_battery_screen,         &screen_battery);
+    settings_bind_screen("table-sync", open_table_sync_screen,      &screen_table_sync);
+    settings_bind_screen("minigames",  open_minigames_menu,         &screen_minigames_menu);
+    settings_bind_screen("language",   open_language_picker_screen, &screen_language_picker);
+    settings_bind_screen("wifi",       open_wifi_settings_screen,   &screen_wifi_settings);
+    settings_bind_screen("updates",    open_ota_update_screen,      &screen_ota_update);
+
     build_quad_menus();
 
     menu_facing_hook_screens();

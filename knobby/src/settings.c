@@ -1,16 +1,10 @@
 #include "settings.h"
-#include "ui_battery.h"
-#include "ui_partners.h"
-#include "ui_table_sync.h"
-#include "ui_language.h"
-#include "minigames_menu.h"
 #include "quad_screen.h"
 #include "hw.h"
 #include "storage.h"
 #include <string.h>
 #include "lang.h"
 #include "game.h"
-#include "ui_wifi.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_settings = NULL;
@@ -170,27 +164,48 @@ static void multi_select_set(int v)
 
 
 static const setting_item_t settings_items[] = {
-    { .id = "brightness",     .fixed_label_id = STR_SETTING_BRIGHTNESS, .navigate = open_settings_screen, .nav_screen = &screen_settings },
+    { .id = "brightness",     .fixed_label_id = STR_SETTING_BRIGHTNESS },
     { .id = "autodim",        .label = autodim_label,          .color = autodim_color,     .get = autodim_get,              .set = autodim_set,              .count = AUTO_DIM_COUNT },
-    { .id = "battery",        .fixed_label_id = STR_SETTING_BATTERY, .navigate = open_battery_screen, .nav_screen = &screen_battery },
+    { .id = "battery",        .fixed_label_id = STR_SETTING_BATTERY },
     { .id = "color-mode",     .label = color_mode_label,       .color = color_mode_color,  .get = nvs_get_color_mode,       .set = nvs_set_color_mode,       .count = COLOR_MODE_COUNT },
     { .id = "deselect",       .label = deselect_label,         .color = deselect_color,    .get = nvs_get_deselect_timeout, .set = nvs_set_deselect_timeout, .count = DESELECT_COUNT },
     { .id = "orientation",    .label = orientation_mode_label, .color = orientation_color, .get = nvs_get_orientation,      .set = nvs_set_orientation,      .count = ORIENTATION_MODE_COUNT },
     { .id = "auto-eliminate", .label = auto_eliminate_label,   .color = toggle_color,      .get = nvs_get_auto_eliminate,   .set = nvs_set_auto_eliminate,   .count = 2 },
     { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
     { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
-    { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC, .navigate = open_table_sync_screen, .nav_screen = &screen_table_sync },
-    { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES, .navigate = open_minigames_menu, .nav_screen = &screen_minigames_menu },
+    { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC },
+    { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES },
     { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
-    { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE, .navigate = open_language_picker_screen, .nav_screen = &screen_language_picker },
-    { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI, .navigate = open_wifi_settings_screen, .nav_screen = &screen_wifi_settings },
-    { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES, .navigate = open_ota_update_screen, .nav_screen = &screen_ota_update },
+    { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE },
+    { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI },
+    { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES },
 };
 #define SETTINGS_ITEM_COUNT ((int)(sizeof(settings_items) / sizeof(settings_items[0])))
 #define MAX_SETTINGS_PAGES  ((SETTINGS_ITEM_COUNT + 2) / 3)
 
 lv_obj_t *settings_pages[MAX_SETTINGS_PAGES];
 int settings_page_count = 0;
+/* The other half of a navigation row, filled at boot by
+   settings_bind_screen(). Kept beside the table rather than in it so
+   settings_items[] stays const - and so this file does not have to
+   name a single screen it does not own. A row nobody binds draws
+   dimmed and does nothing, which is what a missing binding should look
+   like. */
+static void (*item_open[SETTINGS_ITEM_COUNT])(void);
+static lv_obj_t **item_screen[SETTINGS_ITEM_COUNT];
+
+void settings_bind_screen(const char *id, void (*open)(void), lv_obj_t **screen)
+{
+    int i;
+    for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
+        if (strcmp(settings_items[i].id, id) == 0) {
+            item_open[i] = open;
+            item_screen[i] = screen;
+            return;
+        }
+    }
+}
+
 static lv_obj_t *setting_btns[SETTINGS_ITEM_COUNT];
 static lv_obj_t *setting_lbls[SETTINGS_ITEM_COUNT];
 static int setting_page_of[SETTINGS_ITEM_COUNT];
@@ -210,10 +225,16 @@ void refresh_settings_pages_ui(void)
 
 static void event_setting_item(lv_event_t *e)
 {
-    const setting_item_t *it = lv_event_get_user_data(e);
-    if (it == NULL) return;
-    if (it->navigate != NULL) {
-        it->navigate();
+    /* user_data is the row index plus one, so that row 0 is
+       distinguishable from an event that carries nothing. */
+    int i = (int)(intptr_t)lv_event_get_user_data(e) - 1;
+    const setting_item_t *it;
+
+    if (i < 0 || i >= SETTINGS_ITEM_COUNT) return;
+    it = &settings_items[i];
+
+    if (it->get == NULL) {
+        if (item_open[i] != NULL) item_open[i]();
         return;
     }
     it->set((it->get() + 1) % it->count);
@@ -249,9 +270,9 @@ void build_settings_pages(void)
             const setting_item_t *it = &settings_items[idx];
             q[s].label = (it->label != NULL) ? it->label(it->get()) : t(it->fixed_label_id);
             q[s].cb = event_setting_item;
-            q[s].enabled = true;
+            q[s].enabled = (it->get != NULL) || (item_open[idx] != NULL);
             q[s].event = (it->event != 0) ? it->event : LV_EVENT_CLICKED;
-            q[s].user_data = (void *)it;
+            q[s].user_data = (void *)(intptr_t)(idx + 1);
             setting_page_of[idx] = page;
         }
         q[3].label = t(STR_SETTINGS_MORE);
@@ -279,7 +300,7 @@ settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page)
     int i;
 
     for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
-        if (settings_items[i].nav_screen != NULL && screen == *settings_items[i].nav_screen) {
+        if (item_screen[i] != NULL && screen == *item_screen[i]) {
             if (page != NULL) *page = setting_page_of[i];
             return SETTINGS_SCREEN_CHILD;
         }
@@ -318,6 +339,20 @@ bool settings_knob_page(int dir)
         }
     }
     return false;
+}
+
+/* Test-only: the id of the first navigation row nobody bound, or NULL
+   when every one of them is wired. An unbound row draws dimmed and does
+   nothing, which is easy to miss in a screenshot and impossible to miss
+   here. */
+const char *settings_test_unbound_item(void)
+{
+    int i;
+    for (i = 0; i < SETTINGS_ITEM_COUNT; i++) {
+        if (settings_items[i].get == NULL && item_open[i] == NULL)
+            return settings_items[i].id;
+    }
+    return NULL;
 }
 
 int settings_item_page(const char *id)
