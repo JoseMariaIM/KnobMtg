@@ -145,8 +145,12 @@ typedef enum {
     /* game.c: counters and player-facing log sentences */
     STR_COUNTER_COMMANDER_TAX,
     STR_COUNTER_COMMANDER_TAX_MENU,
+    /* Short forms, for the event log: a row there is one line on a
+       round screen, and "Impuesto de Comandante" alone is most of it. */
+    STR_COUNTER_COMMANDER_TAX_LOG,
     STR_COUNTER_PARTNER_TAX,
     STR_COUNTER_PARTNER_TAX_MENU,
+    STR_COUNTER_PARTNER_TAX_LOG,
     STR_COUNTER_POISON,
     STR_COUNTER_EXPERIENCE,
 

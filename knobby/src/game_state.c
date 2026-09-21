@@ -183,15 +183,16 @@ void net_sync_reset_versions(void)
 static const struct {
     string_id_t menu_label_id;
     string_id_t display_name_id;
+    string_id_t log_name_id;
     const char *badge_text;
     const char *icon_text;
     uint32_t accent_color;
     bool enabled;
 } counter_definitions[COUNTER_TYPE_COUNT] = {
-    {STR_COUNTER_COMMANDER_TAX_MENU, STR_COUNTER_COMMANDER_TAX, "C", MANA_ICON_COMMANDER, 0xA84300, true},
-    {STR_COUNTER_PARTNER_TAX_MENU, STR_COUNTER_PARTNER_TAX, "P", MANA_ICON_PARTY, 0x1565C0, true},
-    {STR_COUNTER_POISON, STR_COUNTER_POISON, "!", MANA_ICON_SKULL, 0x2E7D32, true},
-    {STR_COUNTER_EXPERIENCE, STR_COUNTER_EXPERIENCE, "E", MANA_ICON_LEVEL, 0x6A1B9A, true},
+    {STR_COUNTER_COMMANDER_TAX_MENU, STR_COUNTER_COMMANDER_TAX, STR_COUNTER_COMMANDER_TAX_LOG, "C", MANA_ICON_COMMANDER, 0xA84300, true},
+    {STR_COUNTER_PARTNER_TAX_MENU,   STR_COUNTER_PARTNER_TAX,   STR_COUNTER_PARTNER_TAX_LOG,   "P", MANA_ICON_PARTY,     0x1565C0, true},
+    {STR_COUNTER_POISON,             STR_COUNTER_POISON,        STR_COUNTER_POISON,            "!", MANA_ICON_SKULL,     0x2E7D32, true},
+    {STR_COUNTER_EXPERIENCE,         STR_COUNTER_EXPERIENCE,    STR_COUNTER_EXPERIENCE,        "E", MANA_ICON_LEVEL,     0x6A1B9A, true},
 };
 
 static void clear_player_elimination_action(int player)
@@ -365,6 +366,7 @@ const counter_definition_t *get_counter_definition(counter_type_t type)
     if (type < 0 || type >= COUNTER_TYPE_COUNT) return NULL;
     resolved.menu_label = t(counter_definitions[type].menu_label_id);
     resolved.display_name = t(counter_definitions[type].display_name_id);
+    resolved.log_name = t(counter_definitions[type].log_name_id);
     resolved.badge_text = counter_definitions[type].badge_text;
     resolved.icon_text = counter_definitions[type].icon_text;
     resolved.accent_color = counter_definitions[type].accent_color;

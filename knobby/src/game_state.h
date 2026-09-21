@@ -51,6 +51,9 @@ typedef enum {
 typedef struct {
 	const char *menu_label;
 	const char *display_name;
+	/* Short form for the event log, where a row must stay on one line.
+	   Same text as display_name when there is nothing to shorten. */
+	const char *log_name;
 	const char *badge_text;
 	const char *icon_text;
 	uint32_t accent_color;
