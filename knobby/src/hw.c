@@ -1,6 +1,6 @@
 #include "hw.h"
 #include "game_state.h"
-#include "storage.h"
+#include "prefs_display.h"
 #include "net_sync.h"
 #include "lang.h"
 #include "../knob.h"
@@ -247,7 +247,7 @@ void brightness_apply(void)
 void change_brightness(int delta)
 {
     brightness_percent = clamp_brightness(brightness_percent + delta);
-    nvs_set_brightness(brightness_percent);
+    prefs_set_brightness(brightness_percent);
     brightness_apply();
 }
 
@@ -331,7 +331,7 @@ static void auto_dim_timer_cb(lv_timer_t *timer)
     // dim/blank state.  update_battery_measurement() has its own 60s throttle.
     update_battery_measurement(false);
 
-    dim_setting = nvs_get_auto_dim();
+    dim_setting = prefs_get_auto_dim();
     if (dim_setting == AUTO_DIM_OFF) return; /* also holds the blank stage off */
     timeout = auto_dim_ms[dim_setting];
 
@@ -366,13 +366,13 @@ static void auto_dim_timer_cb(lv_timer_t *timer)
 // ---------- init ----------
 void knob_hw_init(void)
 {
-    knob_nvs_init();
+    prefs_init();
     lang_init(); /* must run before any build_*_screen() call below */
     /* And this before the screens too: they bake the names into their
        labels as they are built. */
     player_names_restore();
     brightness_init();
-    brightness_percent = nvs_get_brightness();
+    brightness_percent = prefs_get_brightness();
     last_activity_tick = lv_tick_get();
     auto_dim_timer = lv_timer_create(auto_dim_timer_cb, AUTO_DIM_CHECK_PERIOD_MS, NULL);
     battery_icon_timer = lv_timer_create(battery_icon_timer_cb, BATTERY_BLINK_PERIOD_MS, NULL);

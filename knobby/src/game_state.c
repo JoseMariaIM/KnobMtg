@@ -5,7 +5,8 @@
  * this file calls through (never directly) - game_hooks.h. */
 #include "game_state.h"
 #include "damage_log.h"
-#include "storage.h"
+#include "prefs_table.h"
+#include "prefs_roster.h"
 #include "esp_random.h"
 #include "lang.h"
 #include <string.h>
@@ -245,7 +246,7 @@ void check_player_elimination(int player)
     /* Elimination is a multiplayer concept: with a single tracked player
        there is no eliminated-menu route in the 1p UI, so eliminating
        player 0 would brick the counter until reset. */
-    if (nvs_get_auto_eliminate() && nvs_get_players_to_track() > 1) {
+    if (prefs_get_auto_eliminate() && prefs_get_players_to_track() > 1) {
         if (player_life[player] <= 0) {
             now_eliminated = true;
         } else {
@@ -287,7 +288,7 @@ void manual_eliminate_player(int player)
     if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
     if (player_eliminated[player]) return;
     /* Same solo-mode exemption as check_player_elimination. */
-    if (nvs_get_players_to_track() <= 1) return;
+    if (prefs_get_players_to_track() <= 1) return;
     player_eliminated[player] = true;
     player_manually_eliminated[player] = true;
     clear_player_elimination_action(player);
@@ -315,7 +316,7 @@ void manual_uneliminate_player(int player)
        auto-elimination would actually re-fire (same gate as
        check_player_elimination): with it off, life <= 0 or poison >=
        10 are legitimate alive states that must not be rewritten. */
-    if (nvs_get_auto_eliminate() && nvs_get_players_to_track() > 1) {
+    if (prefs_get_auto_eliminate() && prefs_get_players_to_track() > 1) {
         if (player_life[player] < 1) player_life[player] = 1;
         if (player_counters[player][COUNTER_TYPE_POISON] > 9)
             player_counters[player][COUNTER_TYPE_POISON] = 9;
@@ -333,7 +334,7 @@ void manual_uneliminate_player(int player)
 int get_cmd_target_player_index(int row)
 {
     int skip_player;
-    int num = nvs_get_num_players();
+    int num = prefs_get_num_players();
     int count = 0;
     int i;
 
@@ -503,7 +504,7 @@ void apply_life_delta(int player, int delta)
    whatever's pending when it's called. */
 void game_life_preview_commit(void)
 {
-    int track = nvs_get_players_to_track();
+    int track = prefs_get_players_to_track();
     int i;
 
     if (!life_preview_active || selection_count() == 0) {
@@ -523,7 +524,7 @@ void game_life_preview_commit(void)
     /* Applying a life change ends the operation: in multi-select mode clear
        the selection so the next tap starts a fresh selection. Otherwise
        sequential per-player damage keeps stacking players into the set. */
-    if (nvs_get_multi_select()) {
+    if (prefs_get_multi_select()) {
         selection_clear();
         notify_select_kick_timer();
     }
@@ -657,7 +658,7 @@ void change_player_life(int delta)
        to the headroom of the selected set so the previewed totals always
        equal what the commit will store and overshoot detents at the life
        cap are absorbed instead of accumulating. */
-    int track = nvs_get_players_to_track();
+    int track = prefs_get_players_to_track();
     int max_up = LIFE_MAX;
     int min_down = LIFE_MIN;
     int i;
@@ -727,8 +728,8 @@ void player_names_restore(void)
     char stored[PLAYER_NAME_COUNT][PLAYER_NAME_LEN];
     int i;
 
-    if (!nvs_has_player_names()) return;
-    nvs_get_player_names(stored);
+    if (!prefs_has_player_names()) return;
+    prefs_get_player_names(stored);
     for (i = 0; i < MAX_GAME_PLAYERS && i < PLAYER_NAME_COUNT; i++) {
         /* An empty slot means that player was never renamed; leave the
            P1..P8 default rather than blanking their panel. */
@@ -746,13 +747,13 @@ void player_names_persist(void)
         snprintf(out[i], PLAYER_NAME_LEN, "%s",
                  (i < MAX_GAME_PLAYERS) ? player_names[i] : "");
     }
-    nvs_set_player_names(out);
+    prefs_set_player_names(out);
 }
 
 bool player_has_partner(int player)
 {
     if (player < 0 || player >= MAX_GAME_PLAYERS) return false;
-    return (nvs_get_partner_mask() & (1 << player)) != 0;
+    return (prefs_get_partner_mask() & (1 << player)) != 0;
 }
 
 void set_player_has_partner(int player, bool has)
@@ -760,15 +761,15 @@ void set_player_has_partner(int player, bool has)
     int mask;
 
     if (player < 0 || player >= MAX_GAME_PLAYERS) return;
-    mask = nvs_get_partner_mask();
+    mask = prefs_get_partner_mask();
     if (has) mask |= (1 << player);
     else     mask &= ~(1 << player);
-    nvs_set_partner_mask(mask);
+    prefs_set_partner_mask(mask);
 }
 
 bool any_player_has_partner(void)
 {
-    int i, num = nvs_get_num_players();
+    int i, num = prefs_get_num_players();
 
     for (i = 0; i < num; i++) {
         if (player_has_partner(i)) return true;
@@ -779,7 +780,7 @@ bool any_player_has_partner(void)
 void prepare_cmd_damage_for_player(int target)
 {
     int i, row = 0;
-    int num = nvs_get_num_players();
+    int num = prefs_get_num_players();
 
     cmd_damage_target = target;
     cmd_damage_slot = 0; /* always open on the primary commander */
@@ -799,7 +800,7 @@ void prepare_cmd_damage_for_player(int target)
 void refresh_cmd_damage_slot(void)
 {
     int i, row = 0;
-    int num = nvs_get_num_players();
+    int num = prefs_get_num_players();
 
     if (cmd_damage_target < 0) return;
 
@@ -867,8 +868,8 @@ void undo_counter_change(int player, int counter_type, int delta)
 // ---------- reset ----------
 void knob_life_reset(void)
 {
-    int starting_life = nvs_get_life_total();
-    int num = nvs_get_num_players();
+    int starting_life = prefs_get_life_total();
+    int num = prefs_get_num_players();
     int i;
 
     active_enemy_count = num - 1;
@@ -914,8 +915,8 @@ void knob_life_reset(void)
 // ---------- init ----------
 void knob_life_init(void)
 {
-    int starting_life = nvs_get_life_total();
-    int num = nvs_get_num_players();
+    int starting_life = prefs_get_life_total();
+    int num = prefs_get_num_players();
     int i;
 
     active_enemy_count = num - 1;
@@ -947,7 +948,7 @@ static bool player_select_anim_running = false;
    the bridge should pause it instead. */
 int game_player_select_anim_step(void)
 {
-    int track = nvs_get_players_to_track();
+    int track = prefs_get_players_to_track();
 
     if (track <= 1) {
         player_select_anim_running = false;
@@ -977,11 +978,11 @@ int game_player_select_anim_step(void)
 
 void start_player_selection_animation(void)
 {
-    int track = nvs_get_players_to_track();
+    int track = prefs_get_players_to_track();
     int random_stops;
 
     if (track <= 1) return;
-    if (!nvs_get_random_first()) return;
+    if (!prefs_get_random_first()) return;
 
     // Randomize length to ensure random landing
     random_stops = (int)(esp_random() % track) + (track * 3);

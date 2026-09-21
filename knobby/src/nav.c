@@ -4,7 +4,8 @@
 #include "types.h"
 #include "settings.h"
 #include "minigames_menu.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include "hw.h"
 #include "lang.h"
 #include "dice.h"
@@ -82,9 +83,9 @@ static bool screen_is_player_menu(lv_obj_t *screen)
 void menu_facing_refresh(void)
 {
     static int applied = -1;
-    int target = nvs_get_display_rotation();
+    int target = prefs_get_display_rotation();
 
-    if (nvs_get_menu_facing() && screen_is_player_menu(lv_scr_act()))
+    if (prefs_get_menu_facing() && screen_is_player_menu(lv_scr_act()))
         target = (target + mp_player_seat_rotation(menu_player)) & 3;
     if (target == applied) return;
     applied = target;
@@ -163,7 +164,7 @@ void build_quad_menus(void)
    two halves are apart. */
 void nav_refresh_player_ui(void)
 {
-    if (nvs_get_players_to_track() == 1)
+    if (prefs_get_players_to_track() == 1)
         refresh_main_ui();
     else
         refresh_multiplayer_ui();
@@ -171,7 +172,7 @@ void nav_refresh_player_ui(void)
 
 void nav_go_home(void)
 {
-    int track = nvs_get_players_to_track();
+    int track = prefs_get_players_to_track();
     cmd_damage_target = -1;
 
     /* A batch life/counter change (All Damage, a counter edit) can

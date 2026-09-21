@@ -1,7 +1,7 @@
 #ifndef _PREFS_AUTOSAVE_H
 #define _PREFS_AUTOSAVE_H
 
-/* The clock behind storage.h's write scheduler.
+/* The clock behind prefs.h's write scheduler.
  *
  * Preferences are cached in RAM and written to flash as one blob, so
  * writing on every setter would burn erase cycles for a knob turn that

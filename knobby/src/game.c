@@ -4,7 +4,8 @@
  * game_state.c's game_hooks up to real UI refresh functions and owns
  * the 3 lv_timer_t objects those hooks schedule. */
 #include "game.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 
 // ---------- player colors ----------
 static const uint32_t player_color_table[MAX_GAME_PLAYERS][LIFE_VIB_COUNT] = {
@@ -100,7 +101,7 @@ lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy)
     if (player_has_override[player_i]) {
         if (player_life_color[player_i]) {
             int life = player_life[player_i];
-            int max_life = nvs_get_life_total();
+            int max_life = prefs_get_life_total();
             int tier = get_life_tier(life, max_life);
             return get_life_color_vib(tier, vibrancy);
         }
@@ -108,9 +109,9 @@ lv_color_t get_effective_player_color(int player_i, int color_i, int vibrancy)
     }
 
     /* No override: use global mode */
-    if (nvs_get_color_mode() == COLOR_MODE_LIFE) {
+    if (prefs_get_color_mode() == COLOR_MODE_LIFE) {
         int life = player_life[player_i];
-        int max_life = nvs_get_life_total();
+        int max_life = prefs_get_life_total();
         int tier = get_life_tier(life, max_life);
         return get_life_color_vib(tier, vibrancy);
     }

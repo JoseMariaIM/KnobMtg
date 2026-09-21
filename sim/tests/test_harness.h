@@ -12,7 +12,12 @@
 #include <lvgl.h>
 #include "knob.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
+#include "prefs_roster.h"
+#include "prefs_network.h"
+#include "prefs_scores.h"
 #include "hw.h"
 #include "sim_stubs.h"
 #include <string.h>
@@ -103,10 +108,10 @@ static void test_harness_settle_intro(void)
 /* Resets to a known 4-player multiplayer game, the shape most rules
  * (commander damage, auto-elimination, table sync) assume. Individual
  * tests that need a different player count call
- * nvs_set_num_players()/nvs_set_players_to_track() first.
+ * prefs_set_num_players()/prefs_set_players_to_track() first.
  *
  * "Random first player" is switched off here: it's ON by default (see
- * cached_random_first in storage.c), and boot's intro sequence starts
+ * cached_random_first in prefs.c), and boot's intro sequence starts
  * a roulette-style selection animation for it a few hundred ms after
  * the logo screen (see start_player_selection_animation() in intro.c) -
  * which change_player_life() deliberately locks out life changes
@@ -117,9 +122,9 @@ static void test_harness_settle_intro(void)
  * a no-op with no assertion failure pointing at why. */
 static void test_harness_reset_4p(void)
 {
-    nvs_set_num_players(4);
-    nvs_set_players_to_track(4);
-    nvs_set_random_first(0);
+    prefs_set_num_players(4);
+    prefs_set_players_to_track(4);
+    prefs_set_random_first(0);
     stop_player_selection_animation();
     knob_life_reset();
 }

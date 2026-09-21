@@ -1,7 +1,7 @@
 #include "ota_notice.h"
 #include "toast.h"
 #include "types.h"
-#include "storage.h"
+#include "prefs_network.h"
 #include "lang.h"
 #include "wifi_ota.h"
 #include "ui_wifi.h"
@@ -70,7 +70,7 @@ void ota_notice_check_after_boot(void)
     char last[FW_VERSION_LEN];
     const char *current = get_firmware_version();
 
-    nvs_get_last_fw_version(last, sizeof(last));
+    prefs_get_last_fw_version(last, sizeof(last));
     if (last[0] != '\0' && strcmp(last, current) != 0) {
         show_update_applied_toast(current);
     }
@@ -80,7 +80,7 @@ void ota_notice_check_after_boot(void)
            nothing else would commit, so the stored version never
            advanced and the toast re-fired on every single boot.
            Writing now schedules its own flush. */
-        nvs_set_last_fw_version(current);
+        prefs_set_last_fw_version(current);
     }
 }
 

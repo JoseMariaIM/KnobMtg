@@ -1,7 +1,7 @@
 #include "snake.h"
 #include "lang.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_scores.h"
 #include "esp_random.h"
 #include <string.h>
 
@@ -206,7 +206,7 @@ static size_t snake_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (snake_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), prefs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -258,9 +258,9 @@ static void snake_on_game_over(void)
     snake_state = SNAKE_STATE_GAME_OVER;
     lv_timer_pause(snake_timer);
     snake_is_new_best = (snake_player >= 0 && snake_score > 0 &&
-                          snake_score > nvs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
+                          snake_score > prefs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
     if (snake_is_new_best) {
-        nvs_set_game_high_score(GAME_SCORE_SNAKE, snake_player, snake_score);
+        prefs_set_game_high_score(GAME_SCORE_SNAKE, snake_player, snake_score);
     }
     snake_refresh_message();
 }

@@ -1,6 +1,6 @@
 #include "src/types.h"
 #include "src/hw.h"
-#include "src/storage.h"
+#include "src/prefs_display.h"
 #include "src/game.h"
 #include "src/dice.h"
 #include "src/intro.h"
@@ -616,7 +616,7 @@ void reset_all_values(void)
 {
     knob_life_reset();
 
-    brightness_percent = nvs_get_brightness();
+    brightness_percent = prefs_get_brightness();
     brightness_apply();
 
     refresh_main_ui();
@@ -663,7 +663,7 @@ void knob_gui(void)
     size_t i;
 
     knob_hw_init();
-    display_apply_rotation(nvs_get_display_rotation());
+    display_apply_rotation(prefs_get_display_rotation());
     ensure_swipe_hint();
 
     build_intro_screen();

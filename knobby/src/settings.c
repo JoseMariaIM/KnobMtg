@@ -1,7 +1,8 @@
 #include "settings.h"
 #include "quad_screen.h"
 #include "hw.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include <string.h>
 #include "lang.h"
 #include "game.h"
@@ -123,10 +124,10 @@ static const char *auto_eliminate_label(int val)
    lv_label_set_text may copy — never switch the refresh to
    lv_label_set_text_static. */
 
-static int autodim_get(void) { return nvs_get_auto_dim(); }
+static int autodim_get(void) { return prefs_get_auto_dim(); }
 static void autodim_set(int v)
 {
-    nvs_set_auto_dim(v);
+    prefs_set_auto_dim(v);
     if (v == AUTO_DIM_OFF && dimmed) {
         dimmed = false;
         brightness_apply();
@@ -154,7 +155,7 @@ static const char *multi_select_label(int val)
 
 static void multi_select_set(int v)
 {
-    nvs_set_multi_select(v);
+    prefs_set_multi_select(v);
     if (v == 0) {
         /* Turning multi-select off: drop any lingering multi-selection so the
            single-select rules apply cleanly on return to the life screen. */
@@ -167,15 +168,15 @@ static const setting_item_t settings_items[] = {
     { .id = "brightness",     .fixed_label_id = STR_SETTING_BRIGHTNESS },
     { .id = "autodim",        .label = autodim_label,          .color = autodim_color,     .get = autodim_get,              .set = autodim_set,              .count = AUTO_DIM_COUNT },
     { .id = "battery",        .fixed_label_id = STR_SETTING_BATTERY },
-    { .id = "color-mode",     .label = color_mode_label,       .color = color_mode_color,  .get = nvs_get_color_mode,       .set = nvs_set_color_mode,       .count = COLOR_MODE_COUNT },
-    { .id = "deselect",       .label = deselect_label,         .color = deselect_color,    .get = nvs_get_deselect_timeout, .set = nvs_set_deselect_timeout, .count = DESELECT_COUNT },
-    { .id = "orientation",    .label = orientation_mode_label, .color = orientation_color, .get = nvs_get_orientation,      .set = nvs_set_orientation,      .count = ORIENTATION_MODE_COUNT },
-    { .id = "auto-eliminate", .label = auto_eliminate_label,   .color = toggle_color,      .get = nvs_get_auto_eliminate,   .set = nvs_set_auto_eliminate,   .count = 2 },
-    { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = nvs_get_random_first,     .set = nvs_set_random_first,     .count = 2 },
-    { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = nvs_get_multi_select,     .set = multi_select_set,         .count = 2 },
+    { .id = "color-mode",     .label = color_mode_label,       .color = color_mode_color,  .get = prefs_get_color_mode,       .set = prefs_set_color_mode,       .count = COLOR_MODE_COUNT },
+    { .id = "deselect",       .label = deselect_label,         .color = deselect_color,    .get = prefs_get_deselect_timeout, .set = prefs_set_deselect_timeout, .count = DESELECT_COUNT },
+    { .id = "orientation",    .label = orientation_mode_label, .color = orientation_color, .get = prefs_get_orientation,      .set = prefs_set_orientation,      .count = ORIENTATION_MODE_COUNT },
+    { .id = "auto-eliminate", .label = auto_eliminate_label,   .color = toggle_color,      .get = prefs_get_auto_eliminate,   .set = prefs_set_auto_eliminate,   .count = 2 },
+    { .id = "random-first",   .label = random_first_label,     .color = toggle_color,      .get = prefs_get_random_first,     .set = prefs_set_random_first,     .count = 2 },
+    { .id = "multi-select",   .label = multi_select_label,     .color = toggle_color,      .get = prefs_get_multi_select,     .set = multi_select_set,         .count = 2 },
     { .id = "table-sync",     .fixed_label_id = STR_SETTING_TABLE_SYNC },
     { .id = "minigames",      .fixed_label_id = STR_SETTING_MINIGAMES },
-    { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = nvs_get_menu_facing,      .set = nvs_set_menu_facing,      .count = 2 },
+    { .id = "menu-facing",    .label = menu_facing_label,      .color = toggle_color,      .get = prefs_get_menu_facing,      .set = prefs_set_menu_facing,      .count = 2 },
     { .id = "language",       .fixed_label_id = STR_SETTING_LANGUAGE },
     { .id = "wifi",           .fixed_label_id = STR_SETTING_WIFI },
     { .id = "updates",        .fixed_label_id = STR_SETTING_UPDATES },

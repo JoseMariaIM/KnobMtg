@@ -12,7 +12,8 @@
 #include "test_harness.h"
 #include "sim_stubs.h"
 #include "game_state.h"
-#include "storage.h"
+#include "prefs_roster.h"
+#include "prefs_table.h"
 #include "rename.h"
 #include "ui_player_menu.h"
 #include "attack.h"
@@ -35,7 +36,7 @@ static void simulate_reboot(void)
     for (i = 0; i < MAX_GAME_PLAYERS; i++) {
         snprintf(player_names[i], sizeof(player_names[i]), "%s", defaults[i]);
     }
-    knob_nvs_init();
+    prefs_init();
     player_names_restore();
 }
 
@@ -78,14 +79,14 @@ static void test_a_game_reset_leaves_the_table_alone(void)
     printf("PASS: resetting the game keeps the names\n");
 
     /* Nor does re-shaping the game. */
-    nvs_set_num_players(6);
-    nvs_set_life_total(20);
+    prefs_set_num_players(6);
+    prefs_set_life_total(20);
     reset_all_values();
     simulate_reboot();
     assert(strcmp(player_names[0], "Chema") == 0);
     assert(strcmp(player_names[2], "Marta") == 0);
-    nvs_set_num_players(4);
-    nvs_set_life_total(40);
+    prefs_set_num_players(4);
+    prefs_set_life_total(40);
     printf("PASS: changing the player count and starting life keeps them too\n");
 }
 

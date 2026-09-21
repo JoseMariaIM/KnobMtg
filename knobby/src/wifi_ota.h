@@ -23,7 +23,7 @@ typedef enum {
     OTA_STATE_ERROR,
 } ota_state_t;
 
-/* Call once at startup (after storage init): if a network was saved,
+/* Call once at startup (after prefs_init()): if a network was saved,
  * kicks off a non-blocking auto-connect attempt (boot stays instant
  * either way) so the device is online without the user having to
  * revisit WiFi settings every time. Also usable for an explicit

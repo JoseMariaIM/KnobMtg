@@ -76,7 +76,7 @@ int main(void)
     /* ---- special-cased screen_1p knob wrapper (selection_set_single(0)
        + change_player_life, not a plain table row) ---- */
     test_harness_reset_4p();
-    nvs_set_players_to_track(1);
+    prefs_set_players_to_track(1);
     back_to_main();
     assert(lv_scr_act() == screen_1p);
     turn_knob(KNOB_RIGHT);
@@ -88,7 +88,7 @@ int main(void)
     /* ---- plain table-driven knob handler: screen_multiplayer's row
        points straight at change_player_life, no wrapper needed ---- */
     test_harness_reset_4p();
-    nvs_set_players_to_track(4);
+    prefs_set_players_to_track(4);
     back_to_main();
     assert(lv_scr_act() == screen_multiplayer);
     selection_toggle(2);

@@ -11,7 +11,8 @@
 #include <lvgl.h>
 #include "knob.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include "settings.h"
 #include "nav.h"
 #include "home.h"
@@ -95,8 +96,8 @@ int main(void)
     lv_disp_drv_register(&disp_drv);
     knob_gui();
 
-    nvs_set_num_players(4);
-    nvs_set_players_to_track(4);
+    prefs_set_num_players(4);
+    prefs_set_players_to_track(4);
     knob_life_reset();
 
     int page = settings_item_page("language");
@@ -133,7 +134,7 @@ int main(void)
 
     /* 4-player game, eliminate 3 of the 4 to trigger the victory screen
        for whoever's left. */
-    nvs_set_players_to_track(4);
+    prefs_set_players_to_track(4);
     rebuild_multiplayer_layout(4);
     manual_eliminate_player(0);
     manual_eliminate_player(1);

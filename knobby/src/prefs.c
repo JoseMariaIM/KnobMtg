@@ -1,4 +1,10 @@
-#include "storage.h"
+#include "prefs.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
+#include "prefs_roster.h"
+#include "prefs_network.h"
+#include "prefs_scores.h"
+#include "types.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <string.h>
@@ -32,7 +38,7 @@ static int cached_brightness = DEFAULT_BRIGHTNESS_PERCENT;
    CPU idles at a measured 0.15% duty cycle), so leaving it lit at full
    brightness forever is what actually flattens the battery. Dimming
    after 30s of no input is the default; any explicitly saved choice
-   still wins, see knob_nvs_init(). */
+   still wins, see prefs_init(). */
 static int cached_auto_dim = AUTO_DIM_30S;
 static int cached_color_mode = 0;
 static int cached_deselect_timeout = 0; /* index: 0=never, 1=5s, 2=15s, 3=30s */
@@ -62,7 +68,7 @@ static char cached_last_fw_version[FW_VERSION_LEN] = "";
 static int cached_game_high_score[GAME_SCORE_COUNT][MAX_GAME_PLAYERS] = {{0}};
 
 // ---------- init ----------
-void knob_nvs_init(void)
+void prefs_init(void)
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -182,51 +188,51 @@ void knob_nvs_init(void)
 }
 
 // ---------- getters ----------
-int nvs_get_brightness(void)
+int prefs_get_brightness(void)
 {
     return cached_brightness;
 }
 
-int nvs_get_auto_dim(void)
+int prefs_get_auto_dim(void)
 {
     return cached_auto_dim;
 }
 
 // ---------- setters ----------
-void nvs_set_brightness(int value)
+void prefs_set_brightness(int value)
 {
     cached_brightness = clamp_brightness(value);
     mark_dirty();
 }
 
-void nvs_set_auto_dim(int value)
+void prefs_set_auto_dim(int value)
 {
     cached_auto_dim = (value < 0) ? AUTO_DIM_OFF : (value >= AUTO_DIM_COUNT) ? AUTO_DIM_OFF : value;
     mark_dirty();
 }
 
-int nvs_get_color_mode(void)
+int prefs_get_color_mode(void)
 {
     return cached_color_mode;
 }
 
-void nvs_set_color_mode(int value)
+void prefs_set_color_mode(int value)
 {
     cached_color_mode = (value < 0) ? COLOR_MODE_PLAYER : (value >= COLOR_MODE_COUNT) ? COLOR_MODE_PLAYER : value;
     mark_dirty();
 }
 
-int nvs_get_language(void)
+int prefs_get_language(void)
 {
     return cached_language;
 }
 
-int nvs_get_partner_mask(void)
+int prefs_get_partner_mask(void)
 {
     return (int)cached_partners;
 }
 
-void nvs_set_partner_mask(int mask)
+void prefs_set_partner_mask(int mask)
 {
     uint8_t next = (uint8_t)(mask & 0xFF);
     if (next == cached_partners) return;
@@ -234,29 +240,29 @@ void nvs_set_partner_mask(int mask)
     mark_dirty();
 }
 
-void nvs_set_language(int value)
+void prefs_set_language(int value)
 {
     cached_language = (value != 0) ? 1 : 0;
     mark_dirty();
 }
 
-int nvs_get_deselect_timeout(void)
+int prefs_get_deselect_timeout(void)
 {
     return cached_deselect_timeout;
 }
 
-void nvs_set_deselect_timeout(int value)
+void prefs_set_deselect_timeout(int value)
 {
     cached_deselect_timeout = (value < 0) ? 0 : (value > 3) ? 3 : value;
     mark_dirty();
 }
 
-int nvs_get_orientation(void)
+int prefs_get_orientation(void)
 {
     return cached_orientation;
 }
 
-void nvs_set_orientation(int value)
+void prefs_set_orientation(int value)
 {
     cached_orientation = (value < 0) ? ORIENTATION_MODE_ABSOLUTE
                                       : (value >= ORIENTATION_MODE_COUNT) ? ORIENTATION_MODE_ABSOLUTE
@@ -264,156 +270,156 @@ void nvs_set_orientation(int value)
     mark_dirty();
 }
 
-int nvs_get_display_rotation(void)
+int prefs_get_display_rotation(void)
 {
     return cached_display_rotation;
 }
 
-void nvs_set_display_rotation(int value)
+void prefs_set_display_rotation(int value)
 {
     cached_display_rotation = (value < 0 || value >= DISPLAY_ROTATION_COUNT) ? 0 : value;
     mark_dirty();
 }
 
 // ---------- menu facing ----------
-int nvs_get_menu_facing(void)
+int prefs_get_menu_facing(void)
 {
     return cached_menu_facing;
 }
 
-void nvs_set_menu_facing(int value)
+void prefs_set_menu_facing(int value)
 {
     cached_menu_facing = (value != 0) ? 1 : 0;
     mark_dirty();
 }
 
 // ---------- game mode getters/setters ----------
-int nvs_get_num_players(void)
+int prefs_get_num_players(void)
 {
     return cached_num_players;
 }
 
-void nvs_set_num_players(int value)
+void prefs_set_num_players(int value)
 {
     cached_num_players = (value < 1) ? 1 : (value > MAX_GAME_PLAYERS) ? MAX_GAME_PLAYERS : value;
     mark_dirty();
 }
 
-int nvs_get_players_to_track(void)
+int prefs_get_players_to_track(void)
 {
     return cached_players_to_track;
 }
 
-void nvs_set_players_to_track(int value)
+void prefs_set_players_to_track(int value)
 {
     cached_players_to_track = (value < 1) ? 1 : (value > MAX_DISPLAY_PLAYERS) ? MAX_DISPLAY_PLAYERS : value;
     mark_dirty();
 }
 
-int nvs_get_life_total(void)
+int prefs_get_life_total(void)
 {
     return cached_life_total;
 }
 
-void nvs_set_life_total(int value)
+void prefs_set_life_total(int value)
 {
     cached_life_total = (value < 1) ? 1 : (value > LIFE_MAX) ? LIFE_MAX : value;
     mark_dirty();
 }
 
 // ---------- auto-eliminate ----------
-int nvs_get_auto_eliminate(void)
+int prefs_get_auto_eliminate(void)
 {
     return cached_auto_eliminate;
 }
 
-void nvs_set_auto_eliminate(int value)
+void prefs_set_auto_eliminate(int value)
 {
     cached_auto_eliminate = (value != 0) ? 1 : 0;
     mark_dirty();
 }
 
 // ---------- random first-player pick ----------
-int nvs_get_random_first(void)
+int prefs_get_random_first(void)
 {
     return cached_random_first;
 }
 
-void nvs_set_random_first(int value)
+void prefs_set_random_first(int value)
 {
     cached_random_first = (value != 0) ? 1 : 0;
     mark_dirty();
 }
 
 // ---------- multi-select ----------
-int nvs_get_multi_select(void)
+int prefs_get_multi_select(void)
 {
     return cached_multi_select;
 }
 
-void nvs_set_multi_select(int value)
+void prefs_set_multi_select(int value)
 {
     cached_multi_select = (value != 0) ? 1 : 0;
     mark_dirty();
 }
 
 // ---------- name list ----------
-void nvs_get_player_names(char (*out)[PLAYER_NAME_LEN])
+void prefs_get_player_names(char (*out)[PLAYER_NAME_LEN])
 {
     memcpy(out, cached_player_names, sizeof(cached_player_names));
 }
 
-void nvs_set_player_names(const char (*names)[PLAYER_NAME_LEN])
+void prefs_set_player_names(const char (*names)[PLAYER_NAME_LEN])
 {
     memcpy(cached_player_names, names, sizeof(cached_player_names));
     cached_player_names_set = true;
     mark_dirty();
 }
 
-bool nvs_has_player_names(void)
+bool prefs_has_player_names(void)
 {
     return cached_player_names_set;
 }
 
-void nvs_get_name_list(char (*out)[NAME_LIST_LEN])
+void prefs_get_name_list(char (*out)[NAME_LIST_LEN])
 {
     memcpy(out, cached_name_list, sizeof(cached_name_list));
 }
 
-void nvs_set_name_list(const char (*list)[NAME_LIST_LEN])
+void prefs_set_name_list(const char (*list)[NAME_LIST_LEN])
 {
     memcpy(cached_name_list, list, sizeof(cached_name_list));
     mark_dirty();
 }
 
-void nvs_get_wifi_ssid(char *out, size_t out_len)
+void prefs_get_wifi_ssid(char *out, size_t out_len)
 {
     snprintf(out, out_len, "%s", cached_wifi_ssid);
 }
 
-void nvs_set_wifi_ssid(const char *ssid)
+void prefs_set_wifi_ssid(const char *ssid)
 {
     snprintf(cached_wifi_ssid, sizeof(cached_wifi_ssid), "%s", ssid);
     mark_dirty();
 }
 
-void nvs_get_wifi_pass(char *out, size_t out_len)
+void prefs_get_wifi_pass(char *out, size_t out_len)
 {
     snprintf(out, out_len, "%s", cached_wifi_pass);
 }
 
-void nvs_set_wifi_pass(const char *pass)
+void prefs_set_wifi_pass(const char *pass)
 {
     snprintf(cached_wifi_pass, sizeof(cached_wifi_pass), "%s", pass);
     mark_dirty();
 }
 
-void nvs_get_last_fw_version(char *out, size_t out_len)
+void prefs_get_last_fw_version(char *out, size_t out_len)
 {
     snprintf(out, out_len, "%s", cached_last_fw_version);
 }
 
-void nvs_set_last_fw_version(const char *version)
+void prefs_set_last_fw_version(const char *version)
 {
     snprintf(cached_last_fw_version, sizeof(cached_last_fw_version), "%s", version);
     mark_dirty();
@@ -425,13 +431,13 @@ static bool game_score_slot_valid(game_score_id_t game, int player)
            player >= 0 && player < MAX_GAME_PLAYERS;
 }
 
-int nvs_get_game_high_score(game_score_id_t game, int player)
+int prefs_get_game_high_score(game_score_id_t game, int player)
 {
     if (!game_score_slot_valid(game, player)) return 0;
     return cached_game_high_score[game][player];
 }
 
-void nvs_set_game_high_score(game_score_id_t game, int player, int score)
+void prefs_set_game_high_score(game_score_id_t game, int player, int score)
 {
     if (!game_score_slot_valid(game, player)) return;
     cached_game_high_score[game][player] = score;

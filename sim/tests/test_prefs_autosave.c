@@ -8,7 +8,7 @@
  * next power cycle, which is exactly what net_sync_apply_names() did
  * with a name typed on the device next to you.
  *
- * Now storage.c asks for the flush itself and prefs_autosave.c waits
+ * Now prefs.c asks for the flush itself and prefs_autosave.c waits
  * for the writes to stop. That trade is only worth anything if BOTH
  * halves hold, so both are asserted here: the value does reach flash
  * without anyone asking, and a burst of writes still costs one erase
@@ -35,7 +35,7 @@ static void let_the_dust_settle(void)
 }
 
 /* What is actually ON "flash" - read back through the NVS API rather
-   than through storage.c's getters, which would happily answer from
+   than through prefs.c's getters, which would happily answer from
    the RAM cache and tell us nothing. */
 static int stored_i8(const char *key)
 {
@@ -67,7 +67,7 @@ static void test_a_write_reaches_flash_with_nobody_asking(void)
 {
     unsigned before = sim_nvs_commit_count();
 
-    nvs_set_life_total(31);
+    prefs_set_life_total(31);
     /* Still only in RAM: the whole point of the delay is that a knob
        still in the player's fingers has not cost an erase cycle. */
     assert(sim_nvs_commit_count() == before);
@@ -89,7 +89,7 @@ static void test_a_burst_costs_one_erase_cycle(void)
 
     /* Twenty detents of the brightness knob, the way a player turns it. */
     for (i = 0; i < 20; i++) {
-        nvs_set_brightness(20 + i);
+        prefs_set_brightness(20 + i);
         sim_tick_advance(40);
         lv_timer_handler();
     }
@@ -109,7 +109,7 @@ static void test_prefs_flush_does_not_wait(void)
 {
     unsigned before = sim_nvs_commit_count();
 
-    nvs_set_num_players(6);
+    prefs_set_num_players(6);
     prefs_flush(); /* the reboot / deep-sleep / OTA path */
     assert(sim_nvs_commit_count() == before + 1);
     assert(stored_i8("num_players") == 6);

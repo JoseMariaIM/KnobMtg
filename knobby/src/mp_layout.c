@@ -1,5 +1,6 @@
 #include "mp_layout.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 
 /* ---------- wedge geometry, derived once per layout rebuild ----------
    Everything that depends on the slice angles (label anchors, text
@@ -211,8 +212,8 @@ const mp_layout_spec_t *get_layout(int track)
    single-player, or for a player without a panel. */
 int mp_player_seat_rotation(int player)
 {
-    int track = nvs_get_players_to_track();
-    int mode = nvs_get_orientation();
+    int track = prefs_get_players_to_track();
+    int mode = prefs_get_orientation();
     const mp_layout_spec_t *layout;
     int i;
 

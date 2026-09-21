@@ -13,9 +13,9 @@ int main(void)
 
     /* ---- auto-elimination requires >1 tracked player (see
        check_player_elimination's solo-mode exemption comment) ---- */
-    nvs_set_num_players(4);
-    nvs_set_players_to_track(4);
-    nvs_set_auto_eliminate(1);
+    prefs_set_num_players(4);
+    prefs_set_players_to_track(4);
+    prefs_set_auto_eliminate(1);
     knob_life_reset();
 
     /* ---- life-based elimination + undo ---- */

@@ -2,7 +2,7 @@
 #include "minigame.h"
 #include "lang.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_scores.h"
 #include "esp_random.h"
 #include <string.h>
 
@@ -160,7 +160,7 @@ static size_t dino_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (dino_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_DINO, dino_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), prefs_get_game_high_score(GAME_SCORE_DINO, dino_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -208,9 +208,9 @@ static void dino_on_game_over(void)
     dino_state = DINO_STATE_GAME_OVER;
     lv_timer_pause(dino_timer);
     dino_is_new_best = (dino_player >= 0 && dino_score > 0 &&
-                        dino_score > nvs_get_game_high_score(GAME_SCORE_DINO, dino_player));
+                        dino_score > prefs_get_game_high_score(GAME_SCORE_DINO, dino_player));
     if (dino_is_new_best) {
-        nvs_set_game_high_score(GAME_SCORE_DINO, dino_player, dino_score);
+        prefs_set_game_high_score(GAME_SCORE_DINO, dino_player, dino_score);
     }
     dino_refresh_message();
 }

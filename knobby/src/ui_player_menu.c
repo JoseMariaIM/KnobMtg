@@ -5,7 +5,7 @@
 #include "game.h"
 #include "rename.h"
 #include "lang.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "ui_cmd_damage.h"
 
 // ---------- screens ----------
@@ -208,7 +208,7 @@ static void event_counter_experience(lv_event_t *e) {
 
 static void event_all_damage_apply(lv_event_t *e) {
   int i;
-  int track = nvs_get_players_to_track();
+  int track = prefs_get_players_to_track();
   bool include_myself = false;
   bool targets[MAX_DISPLAY_PLAYERS] = {0};
   bool any_target = false;

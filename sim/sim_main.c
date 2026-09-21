@@ -6,7 +6,8 @@
 #include <lvgl.h>
 #include "knob.h"
 #include "hw.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include "game.h"
 #include "ui_1p.h"
 #include "ui_cmd_damage.h"
@@ -133,10 +134,10 @@ typedef struct {
 } screen_entry_t;
 
 static void nav_main(void)       { back_to_main(); }
-static void nav_1p(void)         { nvs_set_players_to_track(1); reset_all_values(); back_to_main(); }
-static void nav_2p(void)         { nvs_set_players_to_track(2); reset_all_values(); back_to_main(); }
-static void nav_3p(void)         { nvs_set_players_to_track(3); reset_all_values(); back_to_main(); }
-static void nav_4p(void)         { nvs_set_players_to_track(4); reset_all_values(); back_to_main(); }
+static void nav_1p(void)         { prefs_set_players_to_track(1); reset_all_values(); back_to_main(); }
+static void nav_2p(void)         { prefs_set_players_to_track(2); reset_all_values(); back_to_main(); }
+static void nav_3p(void)         { prefs_set_players_to_track(3); reset_all_values(); back_to_main(); }
+static void nav_4p(void)         { prefs_set_players_to_track(4); reset_all_values(); back_to_main(); }
 static void nav_intro(void)      { lv_scr_load(screen_intro); }
 static void nav_menu(void)       { open_quad_menu(); }
 static void nav_tools(void)      { lv_scr_load(screen_tools_menu); }
@@ -193,7 +194,7 @@ static void nav_color_picker(void) {
 }
 static void nav_mana(void) { open_mana_screen(); }
 static void nav_attack(void) {
-    nvs_set_players_to_track(4);
+    prefs_set_players_to_track(4);
     reset_all_values();
     open_attack_screen(0, 0, 1, 1);
 }

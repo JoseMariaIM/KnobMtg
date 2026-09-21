@@ -2,7 +2,7 @@
 #include "quad_screen.h"
 #include "types.h"
 #include "net_sync.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "lang.h"
 #include <string.h>
 
@@ -31,7 +31,7 @@ void refresh_table_sync_ui(void)
         default:
             /* Sync is mirror-mode: a 1p view can't represent the shared
                game, so pairing refuses below and the tile says why. */
-            if (nvs_get_players_to_track() <= 1)
+            if (prefs_get_players_to_track() <= 1)
                 snprintf(status_buf, sizeof(status_buf), "%s", t(STR_TABLE_SYNC_1P_NO_SYNC));
             else
                 snprintf(status_buf, sizeof(status_buf), "%s",
@@ -49,7 +49,7 @@ void refresh_table_sync_ui(void)
 static void event_table_sync_start(lv_event_t *e)
 {
     (void)e;
-    if (nvs_get_players_to_track() <= 1) return;
+    if (prefs_get_players_to_track() <= 1) return;
     table_sync_radio_error = !net_sync_start_game();
     refresh_table_sync_ui();
 }
@@ -57,7 +57,7 @@ static void event_table_sync_start(lv_event_t *e)
 static void event_table_sync_join(lv_event_t *e)
 {
     (void)e;
-    if (nvs_get_players_to_track() <= 1) return;
+    if (prefs_get_players_to_track() <= 1) return;
     table_sync_radio_error = !net_sync_join_game();
     refresh_table_sync_ui();
 }

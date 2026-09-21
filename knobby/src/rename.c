@@ -3,7 +3,8 @@
 #include "ui_mp.h"
 #include "ui_cmd_damage.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_table.h"
+#include "prefs_roster.h"
 #include "net_sync.h"
 #include "lang.h"
 #include "custom_keyboard.h"
@@ -57,7 +58,7 @@ static bool is_default_name(const char *name)
 
 static void mru_load(void)
 {
-    nvs_get_name_list(mru_names);
+    prefs_get_name_list(mru_names);
     mru_count = 0;
     for (int i = 0; i < NAME_LIST_COUNT; i++) {
         if (mru_names[i][0] == '\0') break;
@@ -87,7 +88,7 @@ static void mru_use_name(const char *name)
     }
     /* found == 0: already at front, nothing to do */
 
-    nvs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
+    prefs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
 }
 
 // ---------- return target ----------
@@ -191,7 +192,7 @@ static void event_mru_delete(lv_event_t *e)
     mru_count--;
     mru_names[mru_count][0] = '\0';
 
-    nvs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
+    prefs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
 
     /* Clamp selection */
     int total = 1 + mru_count + 1;
@@ -405,7 +406,7 @@ void open_rename_all_screen(void)
 {
     rename_all_active = true;
     rename_all_start = menu_player;
-    rename_all_count = nvs_get_num_players();
+    rename_all_count = prefs_get_num_players();
     rename_all_done = 0;
     open_rename_screen();
 }

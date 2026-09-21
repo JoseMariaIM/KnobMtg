@@ -1,5 +1,5 @@
 #include "wifi_ota.h"
-#include "storage.h"
+#include "prefs_network.h"
 #include "version.h"
 #include "hw.h"
 #include "lang.h"
@@ -72,7 +72,7 @@ void wifi_ota_init(void)
     /* Mirrors the real firmware: just remembers the saved SSID for
        display, doesn't auto-connect. Connecting is always an explicit
        user action (see wifi_connect() below / wifi_ota_esp32.cpp). */
-    nvs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
+    prefs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
 }
 
 int wifi_scan_start(void)
@@ -89,8 +89,8 @@ int wifi_scan_start(void)
 
 void wifi_connect(const char *ssid, const char *pass)
 {
-    nvs_set_wifi_ssid(ssid);
-    nvs_set_wifi_pass(pass);
+    prefs_set_wifi_ssid(ssid);
+    prefs_set_wifi_pass(pass);
     snprintf(g_saved_ssid, sizeof(g_saved_ssid), "%s", ssid);
     g_wifi_state = WIFI_STATE_CONNECTED;
     snprintf(g_wifi_ip, sizeof(g_wifi_ip), "127.0.0.1");

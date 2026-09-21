@@ -2,7 +2,7 @@
 #include "minigame.h"
 #include "lang.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_scores.h"
 #include "esp_random.h"
 #include <math.h>
 
@@ -173,7 +173,7 @@ static size_t pong_append_best_line(char *buf, size_t buf_len, size_t pos)
     char best_buf[24];
 
     if (pong_player < 0) return pos;
-    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), nvs_get_game_high_score(GAME_SCORE_PONG, pong_player));
+    snprintf(best_buf, sizeof(best_buf), t(STR_GAME_BEST_FMT), prefs_get_game_high_score(GAME_SCORE_PONG, pong_player));
     return pos + (size_t)snprintf(buf + pos, buf_len - pos, "\n%s", best_buf);
 }
 
@@ -259,9 +259,9 @@ static void pong_on_game_over(void)
     pong_state = PONG_STATE_GAME_OVER;
     lv_timer_pause(pong_timer);
     pong_is_new_best = (pong_player >= 0 && pong_score > 0 &&
-                         pong_score > nvs_get_game_high_score(GAME_SCORE_PONG, pong_player));
+                         pong_score > prefs_get_game_high_score(GAME_SCORE_PONG, pong_player));
     if (pong_is_new_best) {
-        nvs_set_game_high_score(GAME_SCORE_PONG, pong_player, pong_score);
+        prefs_set_game_high_score(GAME_SCORE_PONG, pong_player, pong_score);
     }
     pong_refresh_message();
 }

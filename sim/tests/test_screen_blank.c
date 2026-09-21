@@ -26,7 +26,7 @@ int main(void)
     test_harness_reset_4p();
 
     /* AUTO_DIM_15S so the test doesn't need to pump a full minute. */
-    nvs_set_auto_dim(AUTO_DIM_15S);
+    prefs_set_auto_dim(AUTO_DIM_15S);
     activity_kick(); /* establish a known last_activity_tick baseline */
     assert(!dimmed);
     assert(!screen_blanked);
@@ -62,7 +62,7 @@ int main(void)
     /* ---- AUTO_DIM_OFF disables dim, and therefore blank too (blank only
        ever triggers from the already-dimmed branch) ---- */
     test_harness_reset_4p();
-    nvs_set_auto_dim(AUTO_DIM_OFF);
+    prefs_set_auto_dim(AUTO_DIM_OFF);
     activity_kick();
     pump(auto_dim_ms[AUTO_DIM_15S] + BLANK_AFTER_DIM_MS + 2000);
     assert(!dimmed);

@@ -1,5 +1,5 @@
 #include "prefs_autosave.h"
-#include "storage.h"
+#include "prefs.h"
 #include "types.h"
 
 /* See prefs_autosave.h. */
@@ -13,7 +13,7 @@ static void autosave_timer_cb(lv_timer_t *timer)
     prefs_flush();
 }
 
-/* Called by storage.c on every write. Restarting the timer rather than
+/* Called by prefs.c on every write. Restarting the timer rather than
    letting it run means a knob held down through twenty brightness
    steps still costs one flash write, at the end. */
 static void autosave_arm(void)

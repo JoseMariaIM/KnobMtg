@@ -1,5 +1,6 @@
 #include "lang.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include <stddef.h>
 
 #ifndef SIMULATOR
 #include "esp_system.h"
@@ -457,7 +458,7 @@ static const char *strings_es[STR_COUNT] = {
 
 void lang_init(void)
 {
-    current_language = (nvs_get_language() != 0) ? LANG_ES : LANG_EN;
+    current_language = (prefs_get_language() != 0) ? LANG_ES : LANG_EN;
 }
 
 lang_t lang_get(void)
@@ -468,7 +469,7 @@ lang_t lang_get(void)
 void lang_set(lang_t lang)
 {
     if (lang < 0 || lang >= LANG_COUNT) return;
-    nvs_set_language(lang);
+    prefs_set_language(lang);
     /* Straight into esp_restart() below, so there is no quiet period
        for the autosave to wait out. */
     prefs_flush();

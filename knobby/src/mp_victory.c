@@ -3,7 +3,7 @@
 #include "ui_mp_internal.h"
 #include "ui_1p.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "lang.h"
 
 extern void reset_all_values(void);
@@ -72,7 +72,7 @@ void check_for_winner(void)
     int i, alive_count = 0, alive_index = -1;
 
     if (victory_shown || layout == NULL) return;
-    if (nvs_get_players_to_track() <= 1) return;
+    if (prefs_get_players_to_track() <= 1) return;
 
     for (i = 0; i < layout->panel_count; i++) {
         int p = layout->panels[i].player_index;

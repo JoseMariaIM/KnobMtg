@@ -4,7 +4,8 @@
 #include "board_detect.h"
 #include "knob.h"
 #include "hw.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include "game.h"
 #include "ui_1p.h"
 
@@ -162,7 +163,7 @@ int main(int argc, char *argv[])
     knob_gui();
 
     // Set some defaults if needed
-    nvs_set_players_to_track(4);
+    prefs_set_players_to_track(4);
     if (do_random_log) sim_populate_random_log();
     back_to_main();
 

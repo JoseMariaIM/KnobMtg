@@ -38,7 +38,7 @@ static size_t minigame_append_best(minigame_t *g, char *buf, size_t len, size_t 
     char best[24];
     if (g->player < 0) return pos;
     snprintf(best, sizeof(best), t(STR_GAME_BEST_FMT),
-             nvs_get_game_high_score(g->score_id, g->player));
+             prefs_get_game_high_score(g->score_id, g->player));
     return pos + (size_t)snprintf(buf + pos, len - pos, "\n%s", best);
 }
 
@@ -283,9 +283,9 @@ void minigame_over(minigame_t *g)
     g->state = MINIGAME_OVER;
     lv_timer_pause(g->timer);
     g->new_best = (g->player >= 0 && g->score > 0 &&
-                   g->score > nvs_get_game_high_score(g->score_id, g->player));
+                   g->score > prefs_get_game_high_score(g->score_id, g->player));
     if (g->new_best) {
-        nvs_set_game_high_score(g->score_id, g->player, g->score);
+        prefs_set_game_high_score(g->score_id, g->player, g->score);
     }
     minigame_refresh_message(g);
 }

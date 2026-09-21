@@ -1,7 +1,7 @@
 #include "game_mode.h"
 #include "home.h"
 #include "quad_screen.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "ui_partners.h"
 #include "ui_mp.h"
 #include "net_sync.h"
@@ -55,14 +55,14 @@ void refresh_custom_life_ui(void)
 // ---------- navigation ----------
 void open_game_mode_menu(void)
 {
-    temp_num_players = nvs_get_num_players();
+    temp_num_players = prefs_get_num_players();
     /* A config saved before the two player settings were merged could
        hold more players than there are panels; normalize it the moment
        the user opens this screen rather than showing a number the
        control can no longer reach. */
     if (temp_num_players > MAX_DISPLAY_PLAYERS) temp_num_players = MAX_DISPLAY_PLAYERS;
     if (temp_num_players < 1) temp_num_players = 1;
-    temp_life_total = nvs_get_life_total();
+    temp_life_total = prefs_get_life_total();
     refresh_game_mode_menu_ui();
     lv_scr_load(screen_game_mode_menu);
 }
@@ -130,9 +130,9 @@ static void event_gm_apply(lv_event_t *e)
        not synced.) */
     net_sync_leave_game();
     /* One control, both keys: see the comment on temp_num_players. */
-    nvs_set_num_players(temp_num_players);
-    nvs_set_players_to_track(temp_num_players);
-    nvs_set_life_total(temp_life_total);
+    prefs_set_num_players(temp_num_players);
+    prefs_set_players_to_track(temp_num_players);
+    prefs_set_life_total(temp_life_total);
     reset_all_values();
     rebuild_multiplayer_layout(temp_num_players);
     back_to_main();

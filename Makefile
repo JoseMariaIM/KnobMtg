@@ -11,7 +11,7 @@ MAKE ?= make
 FQBN        := esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,PartitionScheme=custom
 EXTRA_URLS  := https://espressif.github.io/arduino-esp32/package_esp32_index.json
 
-.PHONY: help firmware firmware-flash firmware-deps check-arduino \
+.PHONY: help firmware firmware-clean firmware-flash firmware-deps check-arduino \
         screenshot generate-matrix sim sim-gui sim-clean clean
 
 help:
@@ -20,6 +20,7 @@ help:
 	@echo "Firmware (via arduino-cli):"
 	@echo "  make firmware-deps                 - Install Arduino cores and libraries"
 	@echo "  make firmware                      - Compile firmware for ESP32-S3"
+	@echo "  make firmware-clean                - Recompile from scratch (after renaming a source)"
 	@echo "  make firmware-flash PORT=/dev/ttyACM0 - Flash firmware to device"
 	@echo ""
 	@echo "Screenshots (headless simulator):"
@@ -59,6 +60,14 @@ firmware-deps: check-arduino
 
 firmware: check-arduino
 	$(ARDUINO_CLI) compile --fqbn "$(FQBN)" knobby
+
+# arduino-cli caches one object per source under its own sketches
+# directory and never notices a source that went away: rename or delete
+# a file and the stale object stays in objs.a, so the next link reports
+# every symbol in it as a multiple definition. `make clean` does not
+# reach that cache - this does.
+firmware-clean: check-arduino
+	$(ARDUINO_CLI) compile --clean --fqbn "$(FQBN)" knobby
 
 firmware-flash: check-arduino
 	@if [ -z "$(PORT)" ]; then \

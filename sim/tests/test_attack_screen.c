@@ -25,7 +25,7 @@
 #include "attack.h"
 #include "game.h"
 #include "lang.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "game_state.h"
 #include <stdio.h>
 #include <assert.h>
@@ -410,7 +410,7 @@ static void test_labels_fit_in_every_language(void)
     /* Rebuilt rather than relabelled: the firmware only ever builds
        this screen once, in whatever language was stored at boot, so
        rebuilding is what a Spanish device actually does. */
-    nvs_set_language(1);
+    prefs_set_language(1);
     lang_init();
     build_attack_screen();
     open_attack();
@@ -418,7 +418,7 @@ static void test_labels_fit_in_every_language(void)
     check_labels_including_the_partner_swap("Spanish");
     printf("PASS: the four mode names share one size and fit their sectors (Spanish)\n");
 
-    nvs_set_language(0);
+    prefs_set_language(0);
     lang_init();
     build_attack_screen();
 }

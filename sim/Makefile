@@ -46,7 +46,7 @@ KNOBBY_TOP_SRCS := $(KNOBBY)/knob.c $(KNOBBY)/board_pins.c
 KNOBBY_SRC_SRCS := $(addprefix $(KNOBBY)/src/, \
 	ui_1p.c ui_cmd_damage.c ui_mp.c mp_layout.c mp_victory.c mp_attack_gesture.c ui_player_menu.c settings.c quad_screen.c minigames_menu.c ui_battery.c ui_partners.c ui_table_sync.c ui_language.c nav.c toast.c ota_notice.c game_bridge.c home.c \
 	intro.c assets_intro.c game.c game_state.c game_hooks.c damage_log.c attack.c \
-	game_mode.c rename.c dice.c hw.c storage.c prefs_autosave.c mana.c lang.c wifi_ota.c ui_wifi.c custom_keyboard.c round_safe.c minigame.c snake.c pong.c dino.c tetris.c breakout.c flappy.c eggs.c invaders.c rps.c asteroids.c)
+	game_mode.c rename.c dice.c hw.c prefs.c prefs_autosave.c mana.c lang.c wifi_ota.c ui_wifi.c custom_keyboard.c round_safe.c minigame.c snake.c pong.c dino.c tetris.c breakout.c flappy.c eggs.c invaders.c rps.c asteroids.c)
 
 # Sim files
 SIM_SRCS := sim_main.c sim_stubs.c

@@ -13,7 +13,7 @@
 #include "test_harness.h"
 #include "sim_stubs.h"
 #include "game_state.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "settings.h"
 #include "nav.h"
 #include "ui_partners.h"
@@ -44,9 +44,9 @@ static void test_the_flag_is_per_player_and_survives_a_save(void)
 
     /* Stored as a bitmask beside the other settings, so the mask a
        save writes has to be the mask the getters describe. */
-    assert(nvs_get_partner_mask() == ((1 << 2) | (1 << 5)));
+    assert(prefs_get_partner_mask() == ((1 << 2) | (1 << 5)));
     prefs_flush();
-    assert(nvs_get_partner_mask() == ((1 << 2) | (1 << 5)));
+    assert(prefs_get_partner_mask() == ((1 << 2) | (1 << 5)));
     printf("PASS: the mask survives a settings save\n");
 
     set_player_has_partner(2, false);
@@ -180,7 +180,7 @@ static void check_every_player_has_exactly_one_tile(int num)
 
 static void test_the_pages_chunk_like_the_other_menus(void)
 {
-    nvs_set_num_players(4);
+    prefs_set_num_players(4);
     open_partners_screen();
     tick_ms(20);
     assert(partners_test_page_count() == 1);
@@ -190,7 +190,7 @@ static void test_the_pages_chunk_like_the_other_menus(void)
     assert(partners_test_tile_player(3) == 3);
     printf("PASS: a four-player table is one page, one player per quarter\n");
 
-    nvs_set_num_players(8);
+    prefs_set_num_players(8);
     open_partners_screen();
     tick_ms(20);
     assert(partners_test_page_count() == 3);
@@ -205,7 +205,7 @@ static void test_the_pages_chunk_like_the_other_menus(void)
        failed the memory budget outright. */
     {
         lv_obj_t *at_eight = screen_partners;
-        nvs_set_num_players(4);
+        prefs_set_num_players(4);
         open_partners_screen();
         assert(screen_partners == at_eight);
         assert(partners_test_page_count() == 1);
@@ -215,12 +215,12 @@ static void test_the_pages_chunk_like_the_other_menus(void)
 
     /* Shrinking the table while parked on a page that no longer exists
        must not leave four empty quarters. */
-    nvs_set_num_players(8);
+    prefs_set_num_players(8);
     open_partners_screen();
     partners_knob_page(1);
     partners_knob_page(1);
     assert(partners_test_page() == 2);
-    nvs_set_num_players(4);
+    prefs_set_num_players(4);
     open_partners_screen();
     assert(partners_test_page() == 0);
     assert(partners_test_tile_player(0) == 0);
@@ -229,7 +229,7 @@ static void test_the_pages_chunk_like_the_other_menus(void)
 
 static void test_tapping_a_quarter_toggles_that_player(void)
 {
-    nvs_set_num_players(4);
+    prefs_set_num_players(4);
     open_partners_screen();
     tick_ms(20);
     assert(lv_scr_act() == screen_partners);
@@ -252,7 +252,7 @@ static void test_tapping_a_quarter_toggles_that_player(void)
    thing with a finger. */
 static void test_paging(void)
 {
-    nvs_set_num_players(8);
+    prefs_set_num_players(8);
     open_partners_screen();
     tick_ms(20);
     assert(partners_test_page() == 0);
@@ -283,7 +283,7 @@ static void test_paging(void)
     set_player_has_partner(3, false);
     printf("PASS: a tap on a later page toggles that page's player\n");
 
-    nvs_set_num_players(4);
+    prefs_set_num_players(4);
 }
 
 int main(void)

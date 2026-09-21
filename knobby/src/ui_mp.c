@@ -12,7 +12,8 @@
 #include "mp_attack_gesture.h"
 #include "ui_player_menu.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_display.h"
+#include "prefs_table.h"
 #include "hw.h"
 #include "lang.h"
 #include "attack.h"
@@ -268,7 +269,7 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
             lv_label_set_text(life_lbl, buf);
             {
                 lv_color_t preview_c;
-                if (nvs_get_color_mode() == COLOR_MODE_PLAYER && !player_has_override[i]) {
+                if (prefs_get_color_mode() == COLOR_MODE_PLAYER && !player_has_override[i]) {
                     preview_c = get_player_preview_color(color_i, shown_delta);
                     if (color_is_light(bg_color) && color_is_light(preview_c))
                         preview_c = lv_color_black();
@@ -309,7 +310,7 @@ void refresh_multiplayer_ui(void)
     int i;
 
     if (layout == NULL) return;
-    orientation_mode = nvs_get_orientation();
+    orientation_mode = prefs_get_orientation();
 
     for (i = 0; i < layout->panel_count; i++) {
         const mp_panel_spec_t *spec = &layout->panels[i];
@@ -425,7 +426,7 @@ static void event_multiplayer_select(lv_event_t *e)
         game_life_preview_commit();
     }
 
-    if (nvs_get_multi_select()) {
+    if (prefs_get_multi_select()) {
         if (had_pending) {
             /* A pending change was just applied (and the set cleared).
                Tapping a player that was part of the set ends the operation
@@ -505,7 +506,7 @@ static void select_timeout_cb(lv_timer_t *timer)
 
 void select_kick_timer(void)
 {
-    int idx = nvs_get_deselect_timeout();
+    int idx = prefs_get_deselect_timeout();
     int ms = deselect_ms[idx];
 
     if (select_timeout_timer == NULL) {
@@ -700,5 +701,5 @@ void build_multiplayer_screen(void)
     lv_obj_set_style_border_width(screen_multiplayer, 0, 0);
     lv_obj_set_scrollbar_mode(screen_multiplayer, LV_SCROLLBAR_MODE_OFF);
 
-    rebuild_multiplayer_layout(nvs_get_players_to_track());
+    rebuild_multiplayer_layout(prefs_get_players_to_track());
 }

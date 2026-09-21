@@ -8,7 +8,8 @@
 #include "version.h"
 
 extern "C" {
-#include "storage.h"
+#include "prefs.h"
+#include "prefs_network.h"
 #include "net_sync.h"
 #include "hw.h"
 #include "lang.h"
@@ -179,14 +180,14 @@ static void wifi_auto_connect_poll_cb(lv_timer_t *timer)
 
 extern "C" void wifi_ota_init(void)
 {
-    nvs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
+    prefs_get_wifi_ssid(g_saved_ssid, sizeof(g_saved_ssid));
     if (g_saved_ssid[0] == '\0') {
         Serial.println(F("[OTA] wifi_ota_init: no saved SSID, staying off"));
         return;
     }
 
     char pass[WIFI_PASS_LEN];
-    nvs_get_wifi_pass(pass, sizeof(pass));
+    prefs_get_wifi_pass(pass, sizeof(pass));
 
     Serial.printf("[OTA] wifi_ota_init: connecting to \"%s\"\n", g_saved_ssid);
     WiFi.mode(WIFI_STA);
@@ -249,8 +250,8 @@ static bool battery_ok_for_update(void)
 
 extern "C" void wifi_connect(const char *ssid, const char *pass)
 {
-    nvs_set_wifi_ssid(ssid);
-    nvs_set_wifi_pass(pass);
+    prefs_set_wifi_ssid(ssid);
+    prefs_set_wifi_pass(pass);
     snprintf(g_saved_ssid, sizeof(g_saved_ssid), "%s", ssid);
 
     /* Table Sync (ESP-NOW) and a connected WiFi station can conflict

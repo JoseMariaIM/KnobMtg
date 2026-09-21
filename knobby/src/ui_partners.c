@@ -2,7 +2,7 @@
 #include "quad_screen.h"
 #include "types.h"
 #include "game.h"
-#include "storage.h"
+#include "prefs_table.h"
 #include "lang.h"
 #include <string.h>
 
@@ -37,7 +37,7 @@ static int partners_page = 0;
 
 static int partners_page_count(void)
 {
-    int num = nvs_get_num_players();
+    int num = prefs_get_num_players();
     if (num <= 4) return 1;
     return (num + PARTNERS_PER_PAGE - 1) / PARTNERS_PER_PAGE;
 }
@@ -46,7 +46,7 @@ static int partners_page_count(void)
    the quarter is "More" or past the end of the table. */
 static int partners_tile_player(int slot)
 {
-    int num = nvs_get_num_players();
+    int num = prefs_get_num_players();
     int player;
 
     if (slot < 0 || slot >= 4) return -1;

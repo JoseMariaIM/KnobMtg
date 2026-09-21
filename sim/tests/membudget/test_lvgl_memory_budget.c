@@ -77,7 +77,7 @@ static void open_every_lazy_screen(void)
        eight needs three quad pages where the default four needs one -
        so it is opened at its worst, not at its default. Measuring it
        at four would have hidden two thirds of it. */
-    nvs_set_num_players(MAX_GAME_PLAYERS);
+    prefs_set_num_players(MAX_GAME_PLAYERS);
     open_partners_screen();
 }
 

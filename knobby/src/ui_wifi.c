@@ -2,7 +2,7 @@
 #include "nav.h"
 #include "quad_screen.h"
 #include "wifi_ota.h"
-#include "storage.h"
+#include "prefs_network.h"
 #include "lang.h"
 #include "custom_keyboard.h"
 #include "round_safe.h"
@@ -92,7 +92,7 @@ void refresh_wifi_settings_ui(void)
 {
     char buf[40];
     char ssid[WIFI_SSID_LEN];
-    nvs_get_wifi_ssid(ssid, sizeof(ssid));
+    prefs_get_wifi_ssid(ssid, sizeof(ssid));
 
     if (wifi_tile_ssid_label != NULL) {
         if (ssid[0] == '\0') {
@@ -188,7 +188,7 @@ static void open_text_entry(bool is_password)
         if (is_password) {
             char ssid[WIFI_SSID_LEN];
             char buf[64];
-            nvs_get_wifi_ssid(ssid, sizeof(ssid));
+            prefs_get_wifi_ssid(ssid, sizeof(ssid));
             snprintf(buf, sizeof(buf), t(STR_WIFI_ENTER_PASSWORD_FMT), ssid);
             lv_label_set_text(label_entry_title, buf);
         } else {
@@ -198,9 +198,9 @@ static void open_text_entry(bool is_password)
     if (textarea_entry != NULL) {
         lv_textarea_set_password_mode(textarea_entry, is_password);
         if (is_password) {
-            nvs_get_wifi_pass(current, sizeof(current));
+            prefs_get_wifi_pass(current, sizeof(current));
         } else {
-            nvs_get_wifi_ssid(current, sizeof(current));
+            prefs_get_wifi_ssid(current, sizeof(current));
         }
         lv_textarea_set_text(textarea_entry, current);
     }
@@ -230,7 +230,7 @@ static void event_scan_row_click(lv_event_t *e)
     if (wifi_scan_is_open(idx)) {
         attempt_connect_and_show_status(wifi_scan_get_ssid(idx), "");
     } else {
-        nvs_set_wifi_ssid(wifi_scan_get_ssid(idx));
+        prefs_set_wifi_ssid(wifi_scan_get_ssid(idx));
         open_text_entry(true);
     }
 }
@@ -350,8 +350,8 @@ static void event_wifi_connect(lv_event_t *e)
 
     char ssid[WIFI_SSID_LEN];
     char pass[WIFI_PASS_LEN];
-    nvs_get_wifi_ssid(ssid, sizeof(ssid));
-    nvs_get_wifi_pass(pass, sizeof(pass));
+    prefs_get_wifi_ssid(ssid, sizeof(ssid));
+    prefs_get_wifi_pass(pass, sizeof(pass));
     if (ssid[0] == '\0') return;
     attempt_connect_and_show_status(ssid, pass);
 }
@@ -359,8 +359,8 @@ static void event_wifi_connect(lv_event_t *e)
 static void event_wifi_forget(lv_event_t *e)
 {
     (void)e;
-    nvs_set_wifi_ssid("");
-    nvs_set_wifi_pass("");
+    prefs_set_wifi_ssid("");
+    prefs_set_wifi_pass("");
     refresh_wifi_settings_ui();
 }
 
@@ -389,10 +389,10 @@ static void event_entry_save(lv_event_t *e)
            do that immediately instead of silently saving and dumping
            the user back on the settings screen with no feedback. */
         char ssid[WIFI_SSID_LEN];
-        nvs_get_wifi_ssid(ssid, sizeof(ssid));
+        prefs_get_wifi_ssid(ssid, sizeof(ssid));
         attempt_connect_and_show_status(ssid, text);
     } else {
-        nvs_set_wifi_ssid(text);
+        prefs_set_wifi_ssid(text);
         /* A bare SSID still needs a password (or an explicit blank one
            for open networks) before it's useful - go straight there
            instead of a screen that doesn't do anything on its own. */

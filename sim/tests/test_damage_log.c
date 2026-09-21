@@ -51,7 +51,7 @@ int main(void)
        of tripping the elimination guard partway through (life clamps
        at LIFE_MIN long before this loop gets anywhere close to it). */
     test_harness_reset_4p();
-    nvs_set_auto_eliminate(0);
+    prefs_set_auto_eliminate(0);
     {
         int i;
         int extra = 20;

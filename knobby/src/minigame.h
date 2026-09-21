@@ -3,7 +3,7 @@
 
 #include "types.h"
 #include "lang.h"
-#include "storage.h"
+#include "prefs_scores.h"
 
 /* The parts every minigame on this device has in common.
  *
