@@ -69,6 +69,7 @@ node_modules/
 # Simulator
 sim/build/
 sim/knobby_sim
+sim/knobby_sim.exe
 sim/knobby_sim_gui.exe
 sim/screenshots/
 sim/screenshot_es
