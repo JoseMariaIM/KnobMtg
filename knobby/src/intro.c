@@ -1,10 +1,10 @@
 #include "intro.h"
+#include "home.h"
 #include "assets_intro.h"
 #include "hw.h"
 #include "ota_notice.h"
 
 // Forward declarations
-extern void back_to_main(void);
 extern void start_player_selection_animation(void);
 
 lv_obj_t *screen_intro = NULL;

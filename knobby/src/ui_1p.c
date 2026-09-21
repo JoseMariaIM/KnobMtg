@@ -1,4 +1,5 @@
 #include "ui_1p.h"
+#include "home.h"
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "game.h"
@@ -294,33 +295,6 @@ void refresh_damage_ui(void)
         lv_obj_clear_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
-// ---------- navigation ----------
-void back_to_main(void)
-{
-    int track = nvs_get_players_to_track();
-    cmd_damage_target = -1;
-
-    /* A batch life/counter change (All Damage, a counter edit) can
-       eliminate the second-to-last player and the caller's own final
-       apply_life_delta() call in the same breath - check_player_elimination()
-       notices synchronously and starts the victory screen's animated
-       fade right there, mid-call. Every one of those callers then turns
-       around and calls back_to_main() to return to the game screen; doing
-       that with lv_scr_load() while the fade's transition is still live
-       corrupts LVGL's transition state and crashes the device. Once the
-       victory screen owns the display, only a reset should navigate
-       away from it. */
-    if (mp_victory_active()) return;
-
-    if (track > 1) {
-        refresh_multiplayer_ui();
-        load_screen_if_needed(screen_multiplayer);
-    } else {
-        refresh_main_ui();
-        load_screen_if_needed(screen_1p);
     }
 }
 

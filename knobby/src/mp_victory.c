@@ -1,4 +1,5 @@
 #include "mp_victory.h"
+#include "home.h"
 #include "ui_mp_internal.h"
 #include "ui_1p.h"
 #include "game.h"

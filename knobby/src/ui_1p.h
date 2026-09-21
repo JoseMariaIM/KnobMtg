@@ -23,6 +23,5 @@ bool select_test_slot_tabs_visible(void);
 void refresh_damage_ui(void);
 
 void open_select_screen(void);
-void back_to_main(void);
 
 #endif // _UI_1P_H

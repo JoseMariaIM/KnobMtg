@@ -11,7 +11,6 @@
 #include "mp_victory.h"
 #include "mp_attack_gesture.h"
 #include "ui_player_menu.h"
-#include "ui_1p.h"
 #include "game.h"
 #include "storage.h"
 #include "hw.h"

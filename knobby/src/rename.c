@@ -1,4 +1,5 @@
 #include "rename.h"
+#include "home.h"
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "ui_1p.h"

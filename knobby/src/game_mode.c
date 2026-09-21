@@ -1,4 +1,5 @@
 #include "game_mode.h"
+#include "home.h"
 #include "quad_screen.h"
 #include "storage.h"
 #include "ui_partners.h"
@@ -8,7 +9,6 @@
 
 // Forward declarations
 extern void reset_all_values(void);
-extern void back_to_main(void);
 
 // ---------- screens ----------
 lv_obj_t *screen_game_mode_menu = NULL;

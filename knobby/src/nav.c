@@ -1,4 +1,5 @@
 #include "nav.h"
+#include "home.h"
 #include "quad_screen.h"
 #include "types.h"
 #include "settings.h"
@@ -15,12 +16,12 @@
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "rename.h"
+#include "mp_victory.h"
 
 /* See nav.h. */
 
-// Forward declarations for cross-module calls
+// Forward declaration for knob.c's reset, which has no header of its own
 extern void reset_all_values(void);
-extern void back_to_main(void);
 
 lv_obj_t *screen_quad_menu = NULL;
 lv_obj_t *screen_tools_menu = NULL;
@@ -158,4 +159,33 @@ void build_quad_menus(void)
        for a screen many sessions never open is ~3.5KB of the LVGL pool
        held permanently. open_minigames_menu() builds it on first
        entry, same as the games themselves. */
+}
+
+// ---------- navigation ----------
+/* Registered with back_to_main_register() at boot - see home.h for
+   why the two halves are apart. */
+void nav_go_home(void)
+{
+    int track = nvs_get_players_to_track();
+    cmd_damage_target = -1;
+
+    /* A batch life/counter change (All Damage, a counter edit) can
+       eliminate the second-to-last player and the caller's own final
+       apply_life_delta() call in the same breath - check_player_elimination()
+       notices synchronously and starts the victory screen's animated
+       fade right there, mid-call. Every one of those callers then turns
+       around and calls back_to_main() to return to the game screen; doing
+       that with lv_scr_load() while the fade's transition is still live
+       corrupts LVGL's transition state and crashes the device. Once the
+       victory screen owns the display, only a reset should navigate
+       away from it. */
+    if (mp_victory_active()) return;
+
+    if (track > 1) {
+        refresh_multiplayer_ui();
+        load_screen_if_needed(screen_multiplayer);
+    } else {
+        refresh_main_ui();
+        load_screen_if_needed(screen_1p);
+    }
 }

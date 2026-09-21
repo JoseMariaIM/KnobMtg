@@ -1,9 +1,9 @@
 #include "attack.h"
+#include "home.h"
 #include "game.h"
 #include "lang.h"
 #include <math.h>
 
-extern void back_to_main(void);
 
 /* The resolve screen for an attack drag.
  *

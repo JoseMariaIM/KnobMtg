@@ -9,6 +9,7 @@
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
 #include "src/nav.h"
+#include "src/home.h"
 #include "src/ota_notice.h"
 #include "src/game_bridge.h"
 #include "src/minigames_menu.h"
@@ -693,6 +694,7 @@ void knob_gui(void)
        names no screen it does not own. Must run before
        build_quad_menus() below, which builds the pages and draws an
        unbound row dimmed. */
+    back_to_main_register(nav_go_home);
     settings_bind_screen("brightness", open_settings_screen,        &screen_settings);
     settings_bind_screen("battery",    open_battery_screen,         &screen_battery);
     settings_bind_screen("table-sync", open_table_sync_screen,      &screen_table_sync);
