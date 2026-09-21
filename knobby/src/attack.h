@@ -35,6 +35,12 @@ void open_attack_screen(int source, int source_color,
                         int target, int target_color);
 void change_attack_amount(int delta);
 
+/* Which seat this screen is acting for, asked while it is up. The
+   drag that opens it starts on the attacker's own wedge, so the
+   attacker is who is holding the device - that is the seat the screen
+   faces when menu facing is on. -1 before the first attack. */
+int attack_acting_player(void);
+
 /* ---------- read-only accessors (unit tests) ---------- */
 attack_mode_t attack_test_mode(void);
 int attack_test_amount(void);

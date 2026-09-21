@@ -26,8 +26,10 @@
 #include "game.h"
 #include "lang.h"
 #include "prefs_table.h"
+#include "prefs_display.h"
+#include "ui_mp.h"
+#include "home.h"
 #include "game_state.h"
-#include <stdio.h>
 #include <assert.h>
 #include <math.h>
 #include <string.h>
@@ -571,6 +573,121 @@ static void test_the_commander_sector_carries_the_partner(void)
     set_player_has_partner(0, false);
 }
 
+
+/* Menu facing turns the display so a player-scoped screen reads the
+ * right way up for the player it is about. The attack screen is one -
+ * the player who dragged is holding the device - but it was reached by
+ * a drag rather than through the player menu, and the code asked "is
+ * this a player menu?" rather than "whose screen is this?", so it
+ * stayed the way the table was left. */
+static void test_the_attack_screen_faces_the_attacker(void)
+{
+    int seat_rotation;
+    int attacker = -1;
+    int i;
+
+    prefs_set_menu_facing(1);
+    prefs_set_orientation(ORIENTATION_MODE_CENTRIC);
+    prefs_set_display_rotation(0);
+
+    /* Any seat the layout turns away from the table's own orientation
+       will do; which index that is depends on the 4p panel layout, so
+       find one rather than hard-coding a seat that a layout change
+       could quietly make meaningless. */
+    for (i = 0; i < 4; i++) {
+        if (mp_player_seat_rotation(i) != 0) { attacker = i; break; }
+    }
+    assert(attacker >= 0); /* a 4p centric layout must turn somebody */
+    seat_rotation = mp_player_seat_rotation(attacker);
+
+    back_to_main();
+    tick_ms(20);
+    assert(sim_display_rotation == 0); /* the table's own orientation */
+
+    open_attack_screen(attacker, attacker, (attacker + 1) % 4, (attacker + 1) % 4);
+    tick_ms(20);
+    if (sim_display_rotation != seat_rotation) {
+        printf("FAIL: attack screen for seat %d is at rotation %d, expected %d\n",
+               attacker, sim_display_rotation, seat_rotation);
+        assert(0);
+    }
+    printf("PASS: the attack screen faces the player who dragged\n");
+
+    /* And gives the display back on the way out. */
+    back_to_main();
+    tick_ms(20);
+    assert(sim_display_rotation == 0);
+    printf("PASS: leaving the attack screen returns the display to the table\n");
+
+    prefs_set_menu_facing(0);
+    prefs_set_orientation(ORIENTATION_MODE_ABSOLUTE);
+}
+
+/* Resolving an attack changed the numbers while the player was looking
+ * at the attack screen, and then dropped them back onto the life
+ * counter with no sign of what had just happened. Every other way of
+ * changing life - the knob, All Damage - annotates the new total with
+ * the delta for a couple of seconds. This one did not. */
+static void test_resolving_flashes_the_change_on_the_life_screen(void)
+{
+    int before_target, before_source;
+
+    test_harness_reset_4p();
+
+    /* ---- plain damage: only the defender has something to show ---- */
+    before_target = player_life[1];
+    open_attack_screen(0, 0, 1, 1);
+    change_attack_amount(4); /* opens at 1 */
+    tap_at(180, 180);
+    tick_ms(20);
+
+    assert(player_life[1] == before_target - 5);
+    assert(life_flash_active);
+    assert(life_flash_delta[1] == -5);
+    assert(life_flash_delta[0] == 0); /* the attacker lost nothing */
+    printf("PASS: a resolved attack flashes the damage on the defender\n");
+
+    /* ---- lifelink: two players, two different numbers, which is why
+       the flash carries one delta per player rather than one for a
+       set of them ---- */
+    test_harness_reset_4p();
+    before_target = player_life[1];
+    before_source = player_life[0];
+    open_attack_screen(0, 0, 1, 1);
+    tap_sector(ATTACK_MODE_LIFELINK);
+    change_attack_amount(2); /* opens at 1 */
+    tap_at(180, 180);
+    tick_ms(20);
+
+    assert(player_life[1] == before_target - 3);
+    assert(player_life[0] == before_source + 3);
+    assert(life_flash_delta[1] == -3);
+    if (life_flash_delta[0] != 3) {
+        printf("FAIL: the lifelinking attacker's flash is %d, expected +3\n",
+               life_flash_delta[0]);
+        assert(0);
+    }
+    printf("PASS: lifelink flashes the drain and the gain, each on its own player\n");
+
+    /* ---- infect moves poison, not life: annotating a life total
+       nothing touched would name a change that did not happen ---- */
+    /* Let the lifelink flash above expire first, so what this asserts
+       is that infect starts no flash rather than that it cleared
+       somebody else's. */
+    tick_ms(3000);
+    assert(!life_flash_active);
+    test_harness_reset_4p();
+    before_target = player_life[1];
+    open_attack_screen(0, 0, 1, 1);
+    tap_sector(ATTACK_MODE_INFECT);
+    change_attack_amount(2);
+    tap_at(180, 180);
+    tick_ms(20);
+
+    assert(player_life[1] == before_target); /* life untouched */
+    assert(life_flash_delta[1] == 0);
+    printf("PASS: an infect attack leaves the life numbers unannotated\n");
+}
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -580,6 +697,12 @@ int main(void)
     test_harness_settle_intro();
     test_harness_reset_4p();
 
+    /* First: several tests below rebuild screen_attack to lay a label
+       out from scratch, and a rebuild drops the event callbacks
+       knob_gui() hooked onto the boot-time object. Menu facing rides
+       on one of those, so it can only be observed before then. */
+    test_the_attack_screen_faces_the_attacker();
+
     test_the_sectors_are_painted_where_they_are_pressed();
     test_labels_sit_inside_their_sector();
     test_tapping_a_sector_selects_its_mode();
@@ -588,6 +711,7 @@ int main(void)
     test_opening_resets_mode_and_amount();
     test_the_commander_sector_carries_the_partner();
     test_the_hub_holds_its_contents();
+    test_resolving_flashes_the_change_on_the_life_screen();
     test_labels_fit_in_every_language();
 
     printf("\nAll attack screen tests passed.\n");

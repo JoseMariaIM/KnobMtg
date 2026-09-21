@@ -18,7 +18,7 @@
  *     tick) and their raw LVGL callbacks - game.c's bridge layer owns
  *     creating/scheduling them; this file exposes the plain functions
  *     those callbacks call into (game_life_preview_commit(),
- *     game_all_damage_flash_end(), game_player_select_anim_step()) and
+ *     game_life_flash_end(), game_player_select_anim_step()) and
  *     the game_hooks_t scheduling requests (life_preview_schedule etc.,
  *     see game_hooks.h) that ask the bridge to arm/disarm them.
  *
@@ -132,11 +132,18 @@ void apply_life_delta(int player, int delta);
 void apply_attack_cmd_damage(int source, int target, int delta, int slot);
 void apply_attack_poison(int target, int delta);
 
-// ---------- all-damage flash (read-only post-commit feedback) ----------
-extern bool all_damage_flash_active;
-extern int all_damage_flash_delta;
-extern bool all_damage_flash_player[MAX_DISPLAY_PLAYERS];
-void start_all_damage_flash(int delta, const bool *targets);
+// ---------- life flash (read-only post-commit feedback) ----------
+/* What just happened to each player's life, shown for a couple of
+ * seconds after the change is already committed.
+ *
+ * Per-player rather than one delta for a set, because the changes it
+ * has to show are not all the same number: All Damage hits everyone
+ * for the same amount, but a lifelink attack takes life off the
+ * defender and gives it to the attacker in one action. A zero means
+ * that player has nothing to show. */
+extern bool life_flash_active;
+extern int life_flash_delta[MAX_DISPLAY_PLAYERS];
+void start_life_flash(const int *deltas);
 
 // ---------- player selection set ----------
 int selection_count(void);
@@ -167,9 +174,9 @@ bool player_selection_animation_active(void);
    Returns the delay in ms to reschedule the bridge's timer at, or 0 when
    the animation is done and the bridge should pause it instead. */
 int game_player_select_anim_step(void);
-/* The all-damage flash's auto-clear body (was all_damage_flash_end_cb).
+/* The life flash's auto-clear body (was all_damage_flash_end_cb).
    Called by the bridge's timer callback after it pauses itself. */
-void game_all_damage_flash_end(void);
+void game_life_flash_end(void);
 
 bool elimination_action_available(int player);
 void undo_elimination_action(int player);

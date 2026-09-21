@@ -49,9 +49,9 @@ typedef struct {
      * true = a delta is pending, (re)arm the 3s auto-commit; false =
      * nothing pending, pause it. */
     game_hook_bool_fn life_preview_schedule;
-    /* Replace all_damage_flash_timer's create-or-reset-then-resume: arm
+    /* Replace life_flash_timer's create-or-reset-then-resume: arm
      * (or re-arm) the flash's auto-clear countdown. */
-    game_hook_fn all_damage_flash_schedule;
+    game_hook_fn life_flash_schedule;
     /* Replace player_select_anim_timer's resume/pause: true = start or
      * keep running the roulette's per-step tick; false = pause it. */
     game_hook_bool_fn player_select_anim_schedule;

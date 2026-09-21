@@ -21,13 +21,13 @@ static lv_obj_t *counter_value_1p[COUNTER_TYPE_COUNT];
 // ---------- refresh functions ----------
 static void refresh_life_digits(void)
 {
-    bool flash_here = all_damage_flash_active && all_damage_flash_player[0];
+    bool flash_here = life_flash_active && life_flash_delta[0] != 0;
     bool showing_change = life_preview_active || flash_here;
     /* Live preview shows the still-pending delta; the flash is
        read-only feedback for a change already committed, so its delta
        is just for display and player_life[0] below is already final. */
     int display_value = life_preview_active ? pending_life_delta
-                       : flash_here ? all_damage_flash_delta
+                       : flash_here ? life_flash_delta[0]
                        : player_life[0];
     bool negative = (display_value < 0);
     lv_color_t c;

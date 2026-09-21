@@ -19,6 +19,7 @@
 #include "ui_player_menu.h"
 #include "rename.h"
 #include "mp_victory.h"
+#include "attack.h"
 
 /* See nav.h. */
 
@@ -61,32 +62,47 @@ bool nav_handle_back(lv_obj_t *screen)
 }
 
 // ---------- menu facing ----------
-/* Player-scoped menu screens that should face the acting player when
-   menu facing is enabled. screen_select/screen_damage are the commander
-   damage picker and editor: player-scoped in multiplayer (opened from the
-   player menu, which sets cmd_damage_target), and a no-op in 1-player
-   since mp_player_seat_rotation() returns 0 there. */
-static bool screen_is_player_menu(lv_obj_t *screen)
+/* Which seat a screen is acting for, or -1 when it is not scoped to
+   one.
+
+   This is the question menu facing actually asks. For everything the
+   player menu leads to the answer is menu_player, which is why this
+   used to be a plain "is this a player menu?" predicate - but the
+   attack screen is reached by dragging from one panel onto another,
+   never through that menu, so it has its own acting player and the
+   predicate had no way to say so. It stayed unrotated.
+
+   screen_select/screen_damage are the commander damage picker and
+   editor: player-scoped in multiplayer (opened from the player menu,
+   which sets cmd_damage_target), and a no-op in 1-player since
+   mp_player_seat_rotation() returns 0 there. */
+static int screen_facing_seat(lv_obj_t *screen)
 {
-    return screen == screen_player_menu ||
-           screen == screen_eliminated_player_menu ||
-           screen == screen_player_all_damage ||
-           screen == screen_counter_menu ||
-           screen == screen_counter_edit ||
-           screen == screen_player_color_menu ||
-           screen == screen_player_color_picker ||
-           screen == screen_player_name ||
-           screen == screen_select ||
-           screen == screen_damage;
+    /* The attacker is the one who reached over and dragged. */
+    if (screen == screen_attack) return attack_acting_player();
+
+    if (screen == screen_player_menu ||
+        screen == screen_eliminated_player_menu ||
+        screen == screen_player_all_damage ||
+        screen == screen_counter_menu ||
+        screen == screen_counter_edit ||
+        screen == screen_player_color_menu ||
+        screen == screen_player_color_picker ||
+        screen == screen_player_name ||
+        screen == screen_select ||
+        screen == screen_damage) {
+        return menu_player;
+    }
+    return -1;
 }
 
 void menu_facing_refresh(void)
 {
     static int applied = -1;
     int target = prefs_get_display_rotation();
+    int seat = prefs_get_menu_facing() ? screen_facing_seat(lv_scr_act()) : -1;
 
-    if (prefs_get_menu_facing() && screen_is_player_menu(lv_scr_act()))
-        target = (target + mp_player_seat_rotation(menu_player)) & 3;
+    if (seat >= 0) target = (target + mp_player_seat_rotation(seat)) & 3;
     if (target == applied) return;
     applied = target;
     display_apply_rotation(target);

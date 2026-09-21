@@ -46,9 +46,9 @@ static void notify_life_preview_schedule(bool active)
 {
     if (game_hooks_get()->life_preview_schedule != NULL) game_hooks_get()->life_preview_schedule(active);
 }
-static void notify_all_damage_flash_schedule(void)
+static void notify_life_flash_schedule(void)
 {
-    if (game_hooks_get()->all_damage_flash_schedule != NULL) game_hooks_get()->all_damage_flash_schedule();
+    if (game_hooks_get()->life_flash_schedule != NULL) game_hooks_get()->life_flash_schedule();
 }
 static void notify_player_select_anim_schedule(bool active)
 {
@@ -687,38 +687,39 @@ void change_player_life(int delta)
     notify_refresh_player_ui();
 }
 
-/* ---------- all-damage flash ---------- */
-/* All Damage applies instantly (like any other life change) and then
-   flashes the same "-N / = total" widgets the knob's live preview
-   uses, purely for a couple of seconds of read-only feedback - a first
-   version reused the knob's actual pending_life_delta/player_selected
-   preview state to get that rendering for free, but that left the
-   knob live during the flash: turning it kept piling more damage onto
-   everyone it had just hit, which is exactly the "should apply and
-   return to normal" behavior this replaces. This state is deliberately
-   separate from player_selected and never touched by change_player_life -
-   the numbers are already committed by the time this displays. */
-bool all_damage_flash_active = false;
-int all_damage_flash_delta = 0;
-bool all_damage_flash_player[MAX_DISPLAY_PLAYERS];
+/* ---------- life flash ---------- */
+/* A change that is already committed, shown for a couple of seconds so
+   the player can read what just happened: the same "-N / = total"
+   widgets the knob's live preview uses.
 
-/* Body of the bridge's all-damage-flash lv_timer_t callback (see
+   All Damage and the attack screen both apply instantly (like any
+   other life change) and then flash. A first version reused the knob's
+   actual pending_life_delta/player_selected preview state to get that
+   rendering for free, but that left the knob live during the flash:
+   turning it kept piling more damage onto everyone it had just hit,
+   which is exactly the "should apply and return to normal" behavior
+   this replaces. This state is deliberately separate from
+   player_selected and never touched by change_player_life - the
+   numbers are already committed by the time this displays. */
+bool life_flash_active = false;
+int life_flash_delta[MAX_DISPLAY_PLAYERS];
+
+/* Body of the bridge's life-flash lv_timer_t callback (see
    game_state.h). The bridge pauses its own timer before calling this;
    this just clears the flash state and asks for a repaint. */
-void game_all_damage_flash_end(void)
+void game_life_flash_end(void)
 {
-    all_damage_flash_active = false;
-    memset(all_damage_flash_player, 0, sizeof(all_damage_flash_player));
+    life_flash_active = false;
+    memset(life_flash_delta, 0, sizeof(life_flash_delta));
     notify_refresh_player_ui();
 }
 
-void start_all_damage_flash(int delta, const bool *targets)
+void start_life_flash(const int *deltas)
 {
-    memcpy(all_damage_flash_player, targets, sizeof(all_damage_flash_player));
-    all_damage_flash_delta = delta;
-    all_damage_flash_active = true;
+    memcpy(life_flash_delta, deltas, sizeof(life_flash_delta));
+    life_flash_active = true;
 
-    notify_all_damage_flash_schedule();
+    notify_life_flash_schedule();
 
     notify_refresh_player_ui();
 }

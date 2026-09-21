@@ -9,7 +9,7 @@
 /* See game_bridge.h. */
 
 static lv_timer_t *life_preview_timer = NULL;
-static lv_timer_t *all_damage_flash_timer = NULL;
+static lv_timer_t *life_flash_timer = NULL;
 static lv_timer_t *player_select_anim_timer = NULL;
 
 static void life_preview_timer_cb(lv_timer_t *timer)
@@ -18,15 +18,15 @@ static void life_preview_timer_cb(lv_timer_t *timer)
     game_life_preview_commit();
 }
 
-static void all_damage_flash_timer_cb(lv_timer_t *timer)
+static void life_flash_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
-    /* One-shot in effect: pause immediately, game_all_damage_flash_end()
+    /* One-shot in effect: pause immediately, game_life_flash_end()
        only clears state and asks for a repaint. Re-armed by the
-       all_damage_flash_schedule hook (see start_all_damage_flash() in
+       life_flash_schedule hook (see start_life_flash() in
        game_state.c) next time All Damage fires. */
-    lv_timer_pause(all_damage_flash_timer);
-    game_all_damage_flash_end();
+    lv_timer_pause(life_flash_timer);
+    game_life_flash_end();
 }
 
 static void player_select_anim_timer_cb(lv_timer_t *timer)
@@ -51,11 +51,11 @@ static void hook_life_preview_schedule(bool active)
     }
 }
 
-static void hook_all_damage_flash_schedule(void)
+static void hook_life_flash_schedule(void)
 {
-    if (all_damage_flash_timer == NULL) return;
-    lv_timer_reset(all_damage_flash_timer);
-    lv_timer_resume(all_damage_flash_timer);
+    if (life_flash_timer == NULL) return;
+    lv_timer_reset(life_flash_timer);
+    lv_timer_resume(life_flash_timer);
 }
 
 static void hook_player_select_anim_schedule(bool active)
@@ -85,7 +85,7 @@ void game_bridge_init(void)
         .refresh_rename_ui = refresh_rename_ui,
         .select_kick_timer = select_kick_timer,
         .life_preview_schedule = hook_life_preview_schedule,
-        .all_damage_flash_schedule = hook_all_damage_flash_schedule,
+        .life_flash_schedule = hook_life_flash_schedule,
         .player_select_anim_schedule = hook_player_select_anim_schedule,
     };
     game_hooks_register(&hooks);
@@ -97,8 +97,8 @@ void game_bridge_init(void)
     life_preview_timer = lv_timer_create(life_preview_timer_cb, 3000, NULL);
     if (life_preview_timer != NULL) lv_timer_pause(life_preview_timer);
 
-    all_damage_flash_timer = lv_timer_create(all_damage_flash_timer_cb, 2500, NULL);
-    if (all_damage_flash_timer != NULL) lv_timer_pause(all_damage_flash_timer);
+    life_flash_timer = lv_timer_create(life_flash_timer_cb, 2500, NULL);
+    if (life_flash_timer != NULL) lv_timer_pause(life_flash_timer);
 
     player_select_anim_timer = lv_timer_create(player_select_anim_timer_cb, 50, NULL);
     if (player_select_anim_timer != NULL) lv_timer_pause(player_select_anim_timer);

@@ -210,7 +210,7 @@ static void event_all_damage_apply(lv_event_t *e) {
   int i;
   int track = prefs_get_players_to_track();
   bool include_myself = false;
-  bool targets[MAX_DISPLAY_PLAYERS] = {0};
+  int flash[MAX_DISPLAY_PLAYERS] = {0};
   bool any_target = false;
 
   if (cb_include_myself != NULL) {
@@ -223,18 +223,18 @@ static void event_all_damage_apply(lv_event_t *e) {
      previewed the change for a couple of seconds before committing it,
      but that reused the knob's live-preview state, so turning the knob
      during the wait kept piling more damage onto everyone it had just
-     hit. Only the read-only flash afterward (start_all_damage_flash())
+     hit. Only the read-only flash afterward (start_life_flash())
      is left to show what happened. */
   for (i = 0; i < track; i++) {
     if (i == menu_player && !include_myself) continue;
     if (player_eliminated[i]) continue;
     apply_life_delta(i, -all_damage_value);
-    targets[i] = true;
+    flash[i] = -all_damage_value;
     any_target = true;
   }
 
   if (any_target && all_damage_value != 0) {
-    start_all_damage_flash(-all_damage_value, targets);
+    start_life_flash(flash);
   }
 
   back_to_main();

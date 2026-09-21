@@ -232,7 +232,7 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
     char buf[8];
     bool selected = is_player_selected(i);
     bool live_preview_here = life_preview_active && selected;
-    bool flash_here = all_damage_flash_active && all_damage_flash_player[i];
+    bool flash_here = life_flash_active && life_flash_delta[i] != 0;
     bool preview_here = live_preview_here || flash_here;
     lv_color_t bg_color;
     lv_color_t text_color;
@@ -264,7 +264,7 @@ static lv_color_t refresh_mp_panel(lv_obj_t *panel, lv_obj_t *life_lbl, lv_obj_t
                unchanged player_life[i]; the flash is read-only feedback
                for a change already committed, so its delta is just for
                display and player_life[i] below is already the result. */
-            int shown_delta = live_preview_here ? pending_life_delta : all_damage_flash_delta;
+            int shown_delta = live_preview_here ? pending_life_delta : life_flash_delta[i];
             snprintf(buf, sizeof(buf), "%+d", shown_delta);
             lv_label_set_text(life_lbl, buf);
             {

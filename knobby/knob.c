@@ -536,7 +536,7 @@ static const screen_desc_t screen_registry[] = {
     { &screen_1p,                  build_main_screen,                 NULL,                 NULL,                    NULL,                   false },
     { &screen_multiplayer,         build_multiplayer_screen,          change_player_life,   NULL,                    NULL,                   false },
     { &screen_victory,             build_victory_screen,              NULL,                 NULL,                    NULL,                   false },
-    { &screen_attack,              build_attack_screen,               change_attack_amount, back_attack,             NULL,                   false },
+    { &screen_attack,              build_attack_screen,               change_attack_amount, back_attack,             NULL,                   true  },
     { &screen_player_menu,         build_player_menu_screen,          NULL,                 back_player_menu,        NULL,                   true  },
     { &screen_eliminated_player_menu, build_eliminated_player_menu_screen, NULL,             NULL,                    NULL,                   true  },
     { &screen_player_name,         build_rename_screen,               name_screen_knob,     back_player_name,        NULL,                   true  },

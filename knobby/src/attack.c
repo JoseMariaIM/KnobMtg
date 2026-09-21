@@ -206,6 +206,11 @@ void change_attack_amount(int delta)
 }
 
 // ---------- navigation ----------
+int attack_acting_player(void)
+{
+    return attack_source;
+}
+
 void open_attack_screen(int source, int source_color,
                         int target, int target_color)
 {
@@ -227,30 +232,51 @@ void open_attack_screen(int source, int source_color,
 // ---------- events ----------
 static void event_attack_resolve(lv_event_t *e)
 {
+    /* What each player is about to see flashed on the life screen. The
+       attack applies instantly, like every other life change; this is
+       only the couple of seconds of "what just happened" that the knob
+       and All Damage already give, and that resolving an attack used
+       to skip - the numbers simply changed while the player was
+       looking at a different screen. */
+    int flash[MAX_DISPLAY_PLAYERS] = {0};
+    bool any = false;
+
     (void)e;
 
     if (attack_source >= 0 && attack_target >= 0 && attack_amount != 0) {
         switch (attack_mode) {
         case ATTACK_MODE_DAMAGE:
             apply_life_delta(attack_target, -attack_amount);
+            flash[attack_target] = -attack_amount;
+            any = true;
             break;
         case ATTACK_MODE_LIFELINK:
             /* Damage, and the attacker gains as much - which is exactly
                what the old Damage + lifelink tick box did. */
             apply_life_delta(attack_target, -attack_amount);
             apply_life_delta(attack_source, attack_amount);
+            flash[attack_target] = -attack_amount;
+            flash[attack_source] = attack_amount;
+            any = true;
             break;
         case ATTACK_MODE_CMDR:
             apply_attack_cmd_damage(attack_source, attack_target, attack_amount,
                                     attack_cmd_slot);
+            flash[attack_target] = -attack_amount;
+            any = true;
             break;
         case ATTACK_MODE_INFECT:
+            /* Poison counters, not life: there is no life number for
+               the flash to annotate, and showing one would name a
+               change that did not happen. */
             apply_attack_poison(attack_target, attack_amount);
             break;
         default:
             break;
         }
     }
+
+    if (any) start_life_flash(flash);
 
     back_to_main();
 }
