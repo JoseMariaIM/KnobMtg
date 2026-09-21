@@ -747,7 +747,6 @@ void player_names_persist(void)
                  (i < MAX_GAME_PLAYERS) ? player_names[i] : "");
     }
     nvs_set_player_names(out);
-    settings_save();
 }
 
 bool player_has_partner(int player)
@@ -1052,6 +1051,13 @@ void net_sync_apply_names(const net_sync_names_t *in, int wins_ties)
     /* Wire bytes are untrusted: every name must terminate. */
     for (i = 0; i < MAX_GAME_PLAYERS; i++)
         player_names[i][sizeof(player_names[i]) - 1] = '\0';
+    /* A name is a statement about who is sitting there, wherever it
+       was typed. A local rename persists it (player_names_persist in
+       rename.c) and an adopted one did not, so a name that arrived
+       from the phone next to you showed up on screen and was gone by
+       the next power cycle. */
+    player_names_persist();
+
     /* Same refresh set as a local rename (rename.c). */
     notify_refresh_player_ui();
     notify_refresh_select_ui();

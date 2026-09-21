@@ -126,6 +126,10 @@ void knob_enter_deep_sleep(void)
     ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, 0);
     ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
 
+    /* Deep sleep wakes as a fresh boot, so anything still sitting in
+       the preferences cache goes with it. */
+    prefs_flush();
+
     // Configure 15s timer wakeup to re-check voltage
     esp_sleep_enable_timer_wakeup(LOW_BATTERY_WAKE_US);
     esp_deep_sleep_start();

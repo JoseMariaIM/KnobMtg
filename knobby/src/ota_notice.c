@@ -75,13 +75,12 @@ void ota_notice_check_after_boot(void)
         show_update_applied_toast(current);
     }
     if (strcmp(last, current) != 0) {
+        /* Used to need a hand-written settings_save() here: this runs
+           once at boot, and if the player never opened Settings
+           nothing else would commit, so the stored version never
+           advanced and the toast re-fired on every single boot.
+           Writing now schedules its own flush. */
         nvs_set_last_fw_version(current);
-        /* Must commit right now, not just mark dirty: this runs once at
-           boot and nothing else is guaranteed to call settings_save()
-           before the next reboot (e.g. if the user never opens
-           Settings), so without this the stored version never actually
-           advances and the toast re-fires on every single boot. */
-        settings_save();
     }
 }
 

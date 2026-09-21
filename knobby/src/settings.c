@@ -314,13 +314,6 @@ settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page)
     return SETTINGS_SCREEN_NONE;
 }
 
-/* Brightness is applied live as the knob turns, so leaving its screen
-   is what commits it to NVS. */
-bool settings_screen_needs_save(lv_obj_t *screen)
-{
-    return screen == screen_settings;
-}
-
 void settings_show_page(int page)
 {
     if (page >= 0 && page < settings_page_count) lv_scr_load(settings_pages[page]);

@@ -44,7 +44,6 @@ typedef enum {
 } settings_screen_kind_t;
 
 settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page);
-bool settings_screen_needs_save(lv_obj_t *screen);
 void settings_show_page(int page);
 void build_settings_pages(void);
 

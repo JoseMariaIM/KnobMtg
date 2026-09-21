@@ -6,6 +6,7 @@
 #include "src/intro.h"
 #include "src/ui_1p.h"
 #include "src/ui_cmd_damage.h"
+#include "src/prefs_autosave.h"
 #include "src/ui_mp.h"
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
@@ -740,6 +741,7 @@ void knob_gui(void)
        varies; the OTA check rides it rather than waking the CPU on a
        second one. Which check that is belongs here, not in hw.c. */
     hw_set_idle_poll_hook(ota_notice_poll);
+    prefs_autosave_init();
 
     knob_life_init();
     knob_intro_init();

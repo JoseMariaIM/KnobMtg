@@ -45,7 +45,7 @@ static void test_the_flag_is_per_player_and_survives_a_save(void)
     /* Stored as a bitmask beside the other settings, so the mask a
        save writes has to be the mask the getters describe. */
     assert(nvs_get_partner_mask() == ((1 << 2) | (1 << 5)));
-    settings_save();
+    prefs_flush();
     assert(nvs_get_partner_mask() == ((1 << 2) | (1 << 5)));
     printf("PASS: the mask survives a settings save\n");
 

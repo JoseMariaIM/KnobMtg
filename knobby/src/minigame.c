@@ -286,7 +286,6 @@ void minigame_over(minigame_t *g)
                    g->score > nvs_get_game_high_score(g->score_id, g->player));
     if (g->new_best) {
         nvs_set_game_high_score(g->score_id, g->player, g->score);
-        settings_save();
     }
     minigame_refresh_message(g);
 }

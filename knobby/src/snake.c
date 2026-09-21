@@ -261,7 +261,6 @@ static void snake_on_game_over(void)
                           snake_score > nvs_get_game_high_score(GAME_SCORE_SNAKE, snake_player));
     if (snake_is_new_best) {
         nvs_set_game_high_score(GAME_SCORE_SNAKE, snake_player, snake_score);
-        settings_save();
     }
     snake_refresh_message();
 }

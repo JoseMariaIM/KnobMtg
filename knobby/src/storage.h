@@ -4,7 +4,28 @@
 #include "types.h"
 
 void knob_nvs_init(void);
-void settings_save(void);
+
+/* Writing is nobody's business but this module's.
+ *
+ * Every setter below marks the cache dirty and asks the scheduler for
+ * a flush, so a caller can write a preference and stop thinking about
+ * it. It used to be the other way round - the setter only marked, and
+ * twelve modules were each expected to remember a settings_save()
+ * afterwards. Some did it on the way out of a screen, which put the
+ * decision in navigation code; ota_notice.c had to call it by hand
+ * because nothing else would; and net_sync_apply_names() never did,
+ * so a name that arrived from another device at the table showed up
+ * on screen and was gone by the next power cycle. */
+
+/* Commit right now. Only for the moments that are about to lose RAM:
+   a reboot, deep sleep, an OTA flash. */
+void prefs_flush(void);
+
+/* Installed once at boot by prefs_autosave.c. storage calls arm() on
+   every write; the scheduler is expected to call prefs_flush() once
+   the writes stop. Nothing is written until one is installed, which
+   is what unit tests want - they flush explicitly. */
+void prefs_set_scheduler(void (*arm)(void));
 
 int nvs_get_brightness(void);
 void nvs_set_brightness(int value);

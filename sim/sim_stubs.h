@@ -17,6 +17,13 @@ void sim_nvs_preset_i8(const char *key, int8_t value);
 void sim_nvs_preset_i16(const char *key, int16_t value);
 void sim_nvs_preset_u32(const char *key, uint32_t value);
 
+/* How many times storage.c has committed to "flash".
+ *
+ * Preferences are cached in RAM and written as one blob, so "did this
+ * setting survive" and "how many erase cycles did it cost" are
+ * different questions and both matter. This answers the second. */
+unsigned sim_nvs_commit_count(void);
+
 /* Controllable battery voltage for screenshots */
 extern float sim_battery_voltage;
 

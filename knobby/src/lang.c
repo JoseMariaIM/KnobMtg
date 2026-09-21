@@ -469,7 +469,9 @@ void lang_set(lang_t lang)
 {
     if (lang < 0 || lang >= LANG_COUNT) return;
     nvs_set_language(lang);
-    settings_save();
+    /* Straight into esp_restart() below, so there is no quiet period
+       for the autosave to wait out. */
+    prefs_flush();
 #ifdef SIMULATOR
     /* The sim has no real reboot; screens are only ever built once at
        startup, same as firmware, so a language change here just won't

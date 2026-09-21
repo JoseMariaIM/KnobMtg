@@ -158,7 +158,6 @@ static void attempt_connect_and_show_status(const char *ssid, const char *pass)
     lv_refr_now(NULL);
 
     wifi_connect(ssid, pass);
-    settings_save();
 
     if (wifi_get_state() == WIFI_STATE_CONNECTED) {
         snprintf(buf, sizeof(buf), t(STR_WIFI_CONNECT_OK_FMT), ssid, wifi_get_ip());
@@ -232,7 +231,6 @@ static void event_scan_row_click(lv_event_t *e)
         attempt_connect_and_show_status(wifi_scan_get_ssid(idx), "");
     } else {
         nvs_set_wifi_ssid(wifi_scan_get_ssid(idx));
-        settings_save();
         open_text_entry(true);
     }
 }
@@ -363,7 +361,6 @@ static void event_wifi_forget(lv_event_t *e)
     (void)e;
     nvs_set_wifi_ssid("");
     nvs_set_wifi_pass("");
-    settings_save();
     refresh_wifi_settings_ui();
 }
 
@@ -396,7 +393,6 @@ static void event_entry_save(lv_event_t *e)
         attempt_connect_and_show_status(ssid, text);
     } else {
         nvs_set_wifi_ssid(text);
-        settings_save();
         /* A bare SSID still needs a password (or an explicit blank one
            for open networks) before it's useful - go straight there
            instead of a screen that doesn't do anything on its own. */

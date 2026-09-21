@@ -211,7 +211,6 @@ static void dino_on_game_over(void)
                         dino_score > nvs_get_game_high_score(GAME_SCORE_DINO, dino_player));
     if (dino_is_new_best) {
         nvs_set_game_high_score(GAME_SCORE_DINO, dino_player, dino_score);
-        settings_save();
     }
     dino_refresh_message();
 }

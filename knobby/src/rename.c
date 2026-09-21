@@ -88,7 +88,6 @@ static void mru_use_name(const char *name)
     /* found == 0: already at front, nothing to do */
 
     nvs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
-    settings_save();
 }
 
 // ---------- return target ----------
@@ -193,7 +192,6 @@ static void event_mru_delete(lv_event_t *e)
     mru_names[mru_count][0] = '\0';
 
     nvs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
-    settings_save();
 
     /* Clamp selection */
     int total = 1 + mru_count + 1;

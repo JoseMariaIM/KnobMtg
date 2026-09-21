@@ -47,15 +47,11 @@ bool nav_handle_back(lv_obj_t *screen)
 
     switch (settings_classify_screen(screen, &page)) {
     case SETTINGS_SCREEN_CHILD:
-        /* Brightness is live-applied, so leaving its screen is what
-           commits it. */
-        if (settings_screen_needs_save(screen)) settings_save();
         settings_show_page(page);
         return true;
     case SETTINGS_SCREEN_PAGE:
         /* Back from any settings page exits to the quad menu - back
            means "leave settings", not "previous page". */
-        settings_save();
         lv_scr_load(screen_quad_menu);
         return true;
     default:

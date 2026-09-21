@@ -3,8 +3,30 @@
 #include "nvs.h"
 #include <string.h>
 
-// ---------- cached state ----------
+// ---------- write scheduling ----------
 static bool settings_dirty = false;
+static void (*autosave_arm)(void) = NULL;
+
+/* Every write lands here. Marking the cache dirty and asking for a
+   flush are one act, so no setter can do the first and forget the
+   second - which is exactly what the scattered settings_save() calls
+   used to get wrong. */
+static void mark_dirty(void)
+{
+    settings_dirty = true;
+    if (autosave_arm != NULL) autosave_arm();
+}
+
+void prefs_set_scheduler(void (*arm)(void))
+{
+    autosave_arm = arm;
+    /* A write may already be pending from before the scheduler existed
+       - boot reads defaults into the cache and lang/OTA can write
+       before knob_gui() runs. */
+    if (settings_dirty && autosave_arm != NULL) autosave_arm();
+}
+
+// ---------- cached state ----------
 static int cached_brightness = DEFAULT_BRIGHTNESS_PERCENT;
 /* Backlight is this device's dominant power draw by a wide margin (the
    CPU idles at a measured 0.15% duty cycle), so leaving it lit at full
@@ -138,8 +160,8 @@ void knob_nvs_init(void)
         /* High scores: read the three pre-"game_hi" per-game blobs first,
            then let the combined blob overwrite them if it exists. A
            device upgrading from a build that only had snake/pong/dino
-           keeps its records that way, and the very next settings_save()
-           writes them back out as one blob; the legacy keys are then
+           keeps its records that way, and the next write of any preference
+           carries them back out as one blob; the legacy keys are then
            dead weight that NVS reclaims on its own. Order matters -
            swapping these two steps would let stale legacy values clobber
            current ones. */
@@ -174,13 +196,13 @@ int nvs_get_auto_dim(void)
 void nvs_set_brightness(int value)
 {
     cached_brightness = clamp_brightness(value);
-    settings_dirty = true;
+    mark_dirty();
 }
 
 void nvs_set_auto_dim(int value)
 {
     cached_auto_dim = (value < 0) ? AUTO_DIM_OFF : (value >= AUTO_DIM_COUNT) ? AUTO_DIM_OFF : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_color_mode(void)
@@ -191,7 +213,7 @@ int nvs_get_color_mode(void)
 void nvs_set_color_mode(int value)
 {
     cached_color_mode = (value < 0) ? COLOR_MODE_PLAYER : (value >= COLOR_MODE_COUNT) ? COLOR_MODE_PLAYER : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_language(void)
@@ -209,13 +231,13 @@ void nvs_set_partner_mask(int mask)
     uint8_t next = (uint8_t)(mask & 0xFF);
     if (next == cached_partners) return;
     cached_partners = next;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 void nvs_set_language(int value)
 {
     cached_language = (value != 0) ? 1 : 0;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_deselect_timeout(void)
@@ -226,7 +248,7 @@ int nvs_get_deselect_timeout(void)
 void nvs_set_deselect_timeout(int value)
 {
     cached_deselect_timeout = (value < 0) ? 0 : (value > 3) ? 3 : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_orientation(void)
@@ -239,7 +261,7 @@ void nvs_set_orientation(int value)
     cached_orientation = (value < 0) ? ORIENTATION_MODE_ABSOLUTE
                                       : (value >= ORIENTATION_MODE_COUNT) ? ORIENTATION_MODE_ABSOLUTE
                                                                        : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_display_rotation(void)
@@ -250,7 +272,7 @@ int nvs_get_display_rotation(void)
 void nvs_set_display_rotation(int value)
 {
     cached_display_rotation = (value < 0 || value >= DISPLAY_ROTATION_COUNT) ? 0 : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- menu facing ----------
@@ -262,7 +284,7 @@ int nvs_get_menu_facing(void)
 void nvs_set_menu_facing(int value)
 {
     cached_menu_facing = (value != 0) ? 1 : 0;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- game mode getters/setters ----------
@@ -274,7 +296,7 @@ int nvs_get_num_players(void)
 void nvs_set_num_players(int value)
 {
     cached_num_players = (value < 1) ? 1 : (value > MAX_GAME_PLAYERS) ? MAX_GAME_PLAYERS : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_players_to_track(void)
@@ -285,7 +307,7 @@ int nvs_get_players_to_track(void)
 void nvs_set_players_to_track(int value)
 {
     cached_players_to_track = (value < 1) ? 1 : (value > MAX_DISPLAY_PLAYERS) ? MAX_DISPLAY_PLAYERS : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 int nvs_get_life_total(void)
@@ -296,7 +318,7 @@ int nvs_get_life_total(void)
 void nvs_set_life_total(int value)
 {
     cached_life_total = (value < 1) ? 1 : (value > LIFE_MAX) ? LIFE_MAX : value;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- auto-eliminate ----------
@@ -308,7 +330,7 @@ int nvs_get_auto_eliminate(void)
 void nvs_set_auto_eliminate(int value)
 {
     cached_auto_eliminate = (value != 0) ? 1 : 0;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- random first-player pick ----------
@@ -320,7 +342,7 @@ int nvs_get_random_first(void)
 void nvs_set_random_first(int value)
 {
     cached_random_first = (value != 0) ? 1 : 0;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- multi-select ----------
@@ -332,7 +354,7 @@ int nvs_get_multi_select(void)
 void nvs_set_multi_select(int value)
 {
     cached_multi_select = (value != 0) ? 1 : 0;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- name list ----------
@@ -345,7 +367,7 @@ void nvs_set_player_names(const char (*names)[PLAYER_NAME_LEN])
 {
     memcpy(cached_player_names, names, sizeof(cached_player_names));
     cached_player_names_set = true;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 bool nvs_has_player_names(void)
@@ -361,7 +383,7 @@ void nvs_get_name_list(char (*out)[NAME_LIST_LEN])
 void nvs_set_name_list(const char (*list)[NAME_LIST_LEN])
 {
     memcpy(cached_name_list, list, sizeof(cached_name_list));
-    settings_dirty = true;
+    mark_dirty();
 }
 
 void nvs_get_wifi_ssid(char *out, size_t out_len)
@@ -372,7 +394,7 @@ void nvs_get_wifi_ssid(char *out, size_t out_len)
 void nvs_set_wifi_ssid(const char *ssid)
 {
     snprintf(cached_wifi_ssid, sizeof(cached_wifi_ssid), "%s", ssid);
-    settings_dirty = true;
+    mark_dirty();
 }
 
 void nvs_get_wifi_pass(char *out, size_t out_len)
@@ -383,7 +405,7 @@ void nvs_get_wifi_pass(char *out, size_t out_len)
 void nvs_set_wifi_pass(const char *pass)
 {
     snprintf(cached_wifi_pass, sizeof(cached_wifi_pass), "%s", pass);
-    settings_dirty = true;
+    mark_dirty();
 }
 
 void nvs_get_last_fw_version(char *out, size_t out_len)
@@ -394,7 +416,7 @@ void nvs_get_last_fw_version(char *out, size_t out_len)
 void nvs_set_last_fw_version(const char *version)
 {
     snprintf(cached_last_fw_version, sizeof(cached_last_fw_version), "%s", version);
-    settings_dirty = true;
+    mark_dirty();
 }
 
 static bool game_score_slot_valid(game_score_id_t game, int player)
@@ -413,11 +435,11 @@ void nvs_set_game_high_score(game_score_id_t game, int player, int score)
 {
     if (!game_score_slot_valid(game, player)) return;
     cached_game_high_score[game][player] = score;
-    settings_dirty = true;
+    mark_dirty();
 }
 
 // ---------- persist ----------
-void settings_save(void)
+void prefs_flush(void)
 {
     if (!settings_dirty) return;
     nvs_handle_t handle;

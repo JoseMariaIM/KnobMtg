@@ -419,6 +419,11 @@ extern "C" void ota_apply_update(void)
         return;
     }
 
+    /* Past this point the device may reboot into the new image without
+       coming back here, so commit anything still sitting in the
+       preferences cache while there is still a cache. */
+    prefs_flush();
+
     httpUpdate.rebootOnUpdate(false);
     if (s_progress_cb != NULL) {
         s_progress_cb(0);

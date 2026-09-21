@@ -108,7 +108,6 @@ static void event_partner_tile(lv_event_t *e)
     }
 
     set_player_has_partner(player, !player_has_partner(player));
-    settings_save();
     refresh_partners_ui();
 }
 

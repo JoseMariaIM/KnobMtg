@@ -262,7 +262,6 @@ static void pong_on_game_over(void)
                          pong_score > nvs_get_game_high_score(GAME_SCORE_PONG, pong_player));
     if (pong_is_new_best) {
         nvs_set_game_high_score(GAME_SCORE_PONG, pong_player, pong_score);
-        settings_save();
     }
     pong_refresh_message();
 }
