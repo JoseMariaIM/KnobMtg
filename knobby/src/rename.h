@@ -10,6 +10,11 @@ void refresh_rename_ui(void);
 void open_rename_screen(void);
 void open_rename_all_screen(void);
 
+/* Where "done renaming" lands. rename is a child screen: it knows when
+   it is finished, not what sits above it. knob.c wires the real
+   target at boot. */
+void rename_set_return_hook(void (*fn)(int player));
+
 void mru_select_next(void);
 void mru_select_prev(void);
 void name_screen_knob(int dir); /* dir<0 = left, dir>0 = right */

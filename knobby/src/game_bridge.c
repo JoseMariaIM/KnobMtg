@@ -1,6 +1,7 @@
 #include "game_bridge.h"
 #include "game.h"
-#include "ui_1p.h"
+#include "ui_cmd_damage.h"
+#include "home.h"
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "rename.h"

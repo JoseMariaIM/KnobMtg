@@ -3,14 +3,19 @@
 
 /* See home.h. */
 
-static void (*home_fn)(void) = NULL;
+static const home_screen_t *bound = NULL;
 
-void back_to_main_register(void (*fn)(void))
+void home_bind(const home_screen_t *screen)
 {
-    home_fn = fn;
+    bound = screen;
 }
 
 void back_to_main(void)
 {
-    if (home_fn != NULL) home_fn();
+    if (bound != NULL && bound->go != NULL) bound->go();
+}
+
+void refresh_player_ui(void)
+{
+    if (bound != NULL && bound->refresh != NULL) bound->refresh();
 }

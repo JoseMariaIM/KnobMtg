@@ -18,7 +18,7 @@
 #include "nav.h"
 #include "ui_partners.h"
 #include "ui_battery.h"
-#include "ui_1p.h"
+#include "ui_cmd_damage.h"
 #include "ui_player_menu.h"
 #include <stdio.h>
 #include <assert.h>

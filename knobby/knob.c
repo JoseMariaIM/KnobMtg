@@ -5,6 +5,7 @@
 #include "src/dice.h"
 #include "src/intro.h"
 #include "src/ui_1p.h"
+#include "src/ui_cmd_damage.h"
 #include "src/ui_mp.h"
 #include "src/ui_player_menu.h"
 #include "src/settings.h"
@@ -694,7 +695,14 @@ void knob_gui(void)
        names no screen it does not own. Must run before
        build_quad_menus() below, which builds the pages and draws an
        unbound row dimmed. */
-    back_to_main_register(nav_go_home);
+    {
+        static const home_screen_t home = {
+            .go      = nav_go_home,
+            .refresh = nav_refresh_player_ui,
+        };
+        home_bind(&home);
+    }
+    rename_set_return_hook(open_player_menu);
     settings_bind_screen("brightness", open_settings_screen,        &screen_settings);
     settings_bind_screen("battery",    open_battery_screen,         &screen_battery);
     settings_bind_screen("table-sync", open_table_sync_screen,      &screen_table_sync);

@@ -33,11 +33,11 @@ typedef void (*game_hook_fn)(void);
 typedef void (*game_hook_bool_fn)(bool active);
 
 typedef struct {
-    /* Replace: extern void refresh_player_ui(void); (ui_mp.c/ui_1p.c) */
+    /* Replace: extern void refresh_player_ui(void); (home.h) */
     game_hook_fn refresh_player_ui;
-    /* Replace: extern void refresh_select_ui(void); (ui_1p.c) */
+    /* Replace: extern void refresh_select_ui(void); (ui_cmd_damage.c) */
     game_hook_fn refresh_select_ui;
-    /* Replace: extern void refresh_damage_ui(void); (ui_1p.c) */
+    /* Replace: extern void refresh_damage_ui(void); (ui_cmd_damage.c) */
     game_hook_fn refresh_damage_ui;
     /* Replace: extern void refresh_all_damage_ui(void); (ui_player_menu.c) */
     game_hook_fn refresh_all_damage_ui;

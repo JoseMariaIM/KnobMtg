@@ -14,6 +14,7 @@
 #include "game_state.h"
 #include "storage.h"
 #include "rename.h"
+#include "ui_player_menu.h"
 #include "attack.h"
 #include <stdio.h>
 #include <assert.h>
@@ -45,6 +46,11 @@ static void test_a_rename_outlives_the_power_switch(void)
     menu_player = 0;
     rename_test_apply("Chema");
     assert(strcmp(player_names[0], "Chema") == 0);
+    /* Committing a name hands control back to the player menu. rename
+       does not name that target itself any more - knob.c registers it
+       with rename_set_return_hook(), so a missing registration shows up
+       here as the rename screen never being left. */
+    assert(lv_scr_act() == screen_player_menu);
 
     simulate_reboot();
     if (strcmp(player_names[0], "Chema") != 0) {

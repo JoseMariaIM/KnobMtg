@@ -13,6 +13,7 @@
 #include "game_mode.h"
 #include "game.h"
 #include "ui_1p.h"
+#include "ui_cmd_damage.h"
 #include "ui_mp.h"
 #include "ui_player_menu.h"
 #include "rename.h"
@@ -162,8 +163,16 @@ void build_quad_menus(void)
 }
 
 // ---------- navigation ----------
-/* Registered with back_to_main_register() at boot - see home.h for
-   why the two halves are apart. */
+/* Both registered with home_bind() at boot - see home.h for why the
+   two halves are apart. */
+void nav_refresh_player_ui(void)
+{
+    if (nvs_get_players_to_track() == 1)
+        refresh_main_ui();
+    else
+        refresh_multiplayer_ui();
+}
+
 void nav_go_home(void)
 {
     int track = nvs_get_players_to_track();

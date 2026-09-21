@@ -30,10 +30,11 @@ extern lv_obj_t *screen_tools_menu;
 void build_quad_menus(void);
 void open_quad_menu(void);
 
-/* The body behind back_to_main(): the multiplayer screen or the 1p
-   one, whichever the player count calls for. Registered at boot; call
-   it through home.h, not from here. */
+/* The bodies behind home.h: the multiplayer screen or the 1p one,
+   whichever the player count calls for. Bound at boot with
+   home_bind(); call them through home.h, not from here. */
 void nav_go_home(void);
+void nav_refresh_player_ui(void);
 
 /* Where back goes for the settings cluster and the minigames menu.
    False when the screen is none of theirs, which is knob.c's cue to

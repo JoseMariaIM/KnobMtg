@@ -6,7 +6,7 @@
 #include "rename.h"
 #include "lang.h"
 #include "storage.h"
-#include "ui_1p.h"
+#include "ui_cmd_damage.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_player_menu = NULL;

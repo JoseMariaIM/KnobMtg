@@ -1,8 +1,7 @@
 #include "rename.h"
 #include "home.h"
 #include "ui_mp.h"
-#include "ui_player_menu.h"
-#include "ui_1p.h"
+#include "ui_cmd_damage.h"
 #include "game.h"
 #include "storage.h"
 #include "net_sync.h"
@@ -92,6 +91,25 @@ static void mru_use_name(const char *name)
     settings_save();
 }
 
+// ---------- return target ----------
+static void (*return_hook)(int player) = NULL;
+
+void rename_set_return_hook(void (*fn)(int player))
+{
+    return_hook = fn;
+}
+
+/* The one way out of the rename screen once a name is settled: repaint
+   everything that shows a name, then hand control back to whoever is
+   above us. */
+static void rename_return(void)
+{
+    refresh_rename_ui();
+    refresh_select_ui();
+    refresh_damage_ui();
+    if (return_hook != NULL) return_hook(menu_player);
+}
+
 // ---------- rename-all advance ----------
 static void rename_all_advance(void)
 {
@@ -131,10 +149,7 @@ static void apply_name_and_return(const char *name)
     if (rename_all_active) {
         rename_all_advance();
     } else {
-        refresh_rename_ui();
-        refresh_select_ui();
-        refresh_damage_ui();
-        open_player_menu(menu_player);
+        rename_return();
     }
 }
 
@@ -157,10 +172,7 @@ static void event_name_save(lv_event_t *e)
         if (rename_all_active) {
             rename_all_advance();
         } else {
-            refresh_rename_ui();
-            refresh_select_ui();
-            refresh_damage_ui();
-            open_player_menu(menu_player);
+            rename_return();
         }
     } else {
         apply_name_and_return(txt);
