@@ -24,13 +24,15 @@
  *
  * A test that only cares about game rules (life clamps, elimination,
  * commander damage, Table Sync merges) can include just this header and
- * link just game_state.c, with no lvgl.h on the include path and no
- * lv_init()/knob_gui() boot needed - UI-facing effects (refresh calls,
- * timer scheduling) are just hook calls that no-op if nothing is
- * registered (see game_hooks.h). sim/tests/ still boots the full UI for
- * its tests today (simpler test setup, and the boot cost is already
- * negligible - see test_harness.h), but nothing about this header
- * requires that anymore. */
+ * link just game_state.c plus game_state_sync.c (Table Sync's own
+ * Lamport-version bookkeeping and wire-format fill/apply - split out
+ * for size, see the comment at its top), with no lvgl.h on the
+ * include path and no lv_init()/knob_gui() boot needed - UI-facing
+ * effects (refresh calls, timer scheduling) are just hook calls that
+ * no-op if nothing is registered (see game_hooks.h). sim/tests/ still
+ * boots the full UI for its tests today (simpler test setup, and the
+ * boot cost is already negligible - see test_harness.h), but nothing
+ * about this header requires that anymore. */
 
 #include "game_types.h"
 #include "game_hooks.h"
@@ -189,7 +191,7 @@ void manual_uneliminate_player(int player);
 void check_player_elimination(int player);
 
 /* Test-only accessors for Table Sync's file-static per-player Lamport
-   versions (see game_state.c). Not for firmware use. */
+   versions (see game_state_sync.c). Not for firmware use. */
 uint16_t player_version_for_test(int player);
 void player_version_set_for_test(int player, uint16_t version);
 
@@ -204,7 +206,7 @@ int get_cmd_target_player_index(int row);
 /* net_sync_fill_state()/net_sync_apply_state()/net_sync_fill_names()/
    net_sync_apply_names()/net_sync_commit_names()/net_sync_begin_game()/
    net_sync_reset_versions() are declared in net_sync.h (included above)
-   and implemented in game_state.c. */
+   and implemented in game_state_sync.c. */
 
 #ifdef __cplusplus
 }
