@@ -1,9 +1,9 @@
 # Revisión de arquitectura — `feat/memory-battery-architecture`
 
-Estado: **Puntos 1 y 2 cerrados, Punto 3 pendiente de decisión**.
-Sustituye por completo un plan anterior que escribí contra `main`, que
-resultó estar 46 commits por detrás de esta rama y del trabajo real
-del proyecto (ver aviso al final).
+Estado: **Puntos 1, 2 y 3 cerrados**. Los tres puntos del plan corto
+están hechos. Sustituye por completo un plan anterior que escribí
+contra `main`, que resultó estar 46 commits por detrás de esta rama y
+del trabajo real del proyecto (ver aviso al final).
 
 ## Veredicto
 
@@ -80,7 +80,12 @@ ninguna firma pública.
 - **Cierre:** mismo comportamiento (`make test` sin tocar los tests
   existentes), menos líneas duplicadas.
 
-### Punto 3 (opcional, preguntar antes) — Partir Table Sync de `game_state.c`
+### Punto 3 (opcional) — Partir Table Sync de `game_state.c` ✅ Cerrado
+
+Rama `arch/remove-blind-externs`, commit `8274618`.
+`game_state.c` 1214→964 líneas; nuevo `game_state_sync.c` (284
+líneas) + `game_state_internal.h` (el seam, mismo patrón que
+`ui_mp_internal.h`).
 Mover `net_sync_fill_state`/`net_sync_apply_state`/
 `net_sync_fill_names`/`net_sync_apply_names`/`net_sync_commit_names`/
 `net_sync_begin_game`/`net_sync_reset_versions` a un `game_state_sync.c`
