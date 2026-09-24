@@ -112,6 +112,8 @@ static uint16_t player_version[MAX_DISPLAY_PLAYERS] = {0};
 static uint16_t names_version = 0;
 
 static void clear_player_elimination_action(int player);
+static void commit_player_event(int player, int log_delta, uint8_t event_type,
+                                 int source, bool is_lethal);
 
 static void net_sync_commit_player(int player)
 {
@@ -430,15 +432,11 @@ int apply_counter_edit(void)
     player_counters[player][counter_edit_type] = counter_edit_value;
 
     if (change_delta != 0) {
-        damage_log_add(player, change_delta, LOG_EVT_COUNTER, counter_edit_type);
-        if (counter_edit_type == COUNTER_TYPE_POISON &&
-            old_value < 10 && counter_edit_value >= 10) {
-            set_player_elimination_action(player, LOG_EVT_COUNTER, counter_edit_type, change_delta);
-        }
-        if (counter_edit_type == COUNTER_TYPE_POISON) {
-            check_player_elimination(player);
-        }
-        net_sync_commit_player(player);
+        /* Only poison has a lethal threshold; every other counter still
+           needs to be logged and synced, just never lethal. */
+        bool is_lethal = counter_edit_type == COUNTER_TYPE_POISON &&
+                          old_value < 10 && counter_edit_value >= 10;
+        commit_player_event(player, change_delta, LOG_EVT_COUNTER, counter_edit_type, is_lethal);
     }
 
     return change_delta;
@@ -481,21 +479,35 @@ void selection_set_single(int player)
     player_selected[player] = true;
 }
 
-/* The single entry point for committing a life change as a game event:
-   log + clamp + elimination-undo action + elimination check. Any path
-   that applies life deltas (knob commit, All Damage) must use this so
-   the elimination machinery can't be bypassed. */
+/* The shared tail of every "commit a game event" path below: log it,
+   flag an elimination-undo action if this is what kills the player,
+   run the actual elimination check, and sync the change to the
+   table. Every apply_*() function is its own state mutation (life or
+   a counter) plus its own lethality test - those differ per event
+   type - followed by one call here. log_delta is whatever value the
+   event log and the elimination-undo action both need to be able to
+   reverse it later: the life delta for LOG_EVT_LIFE/LOG_EVT_CMD_DAMAGE,
+   the counter delta for LOG_EVT_COUNTER. */
+static void commit_player_event(int player, int log_delta, uint8_t event_type,
+                                 int source, bool is_lethal)
+{
+    damage_log_add(player, log_delta, event_type, source);
+    if (is_lethal) {
+        set_player_elimination_action(player, event_type, source, log_delta);
+    }
+    check_player_elimination(player);
+    net_sync_commit_player(player);
+}
+
+/* The single entry point for committing a life change as a game event.
+   Any path that applies life deltas (knob commit, All Damage) must use
+   this so the elimination machinery can't be bypassed. */
 void apply_life_delta(int player, int delta)
 {
     if (player < 0 || player >= MAX_DISPLAY_PLAYERS) return;
     if (player_eliminated[player]) return;
-    damage_log_add(player, delta, LOG_EVT_LIFE, -1);
     player_life[player] = clamp_life(player_life[player] + delta);
-    if (player_life[player] <= 0) {
-        set_player_elimination_action(player, LOG_EVT_LIFE, -1, delta);
-    }
-    check_player_elimination(player);
-    net_sync_commit_player(player);
+    commit_player_event(player, delta, LOG_EVT_LIFE, -1, player_life[player] <= 0);
 }
 
 // ---------- life preview ----------
@@ -585,13 +597,9 @@ void damage_apply(void)
                                   : &cmd_damage_totals[source][cmd_damage_target];
     *cell = enemies[selected_enemy].damage;
     encoded_source = encode_cmd_source(source, cmd_damage_slot);
-    damage_log_add(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
     player_life[cmd_damage_target] = clamp_life(player_life[cmd_damage_target] - delta);
-    if (*cell >= 21 || player_life[cmd_damage_target] <= 0) {
-        set_player_elimination_action(cmd_damage_target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
-    }
-    check_player_elimination(cmd_damage_target);
-    net_sync_commit_player(cmd_damage_target);
+    commit_player_event(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source,
+                         *cell >= 21 || player_life[cmd_damage_target] <= 0);
 
     notify_refresh_select_ui();
 }
@@ -624,13 +632,9 @@ void apply_attack_cmd_damage(int source, int target, int delta, int slot)
                        : &cmd_damage_totals[source][target];
     *cell += delta;
     encoded_source = encode_cmd_source(source, slot);
-    damage_log_add(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source);
     player_life[target] = clamp_life(player_life[target] - delta);
-    if (*cell >= 21 || player_life[target] <= 0) {
-        set_player_elimination_action(target, LOG_EVT_CMD_DAMAGE, encoded_source, -delta);
-    }
-    check_player_elimination(target);
-    net_sync_commit_player(target);
+    commit_player_event(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source,
+                         *cell >= 21 || player_life[target] <= 0);
 }
 
 /* Attack screen's Infect mode: same poison-threshold rule as
@@ -646,12 +650,8 @@ void apply_attack_poison(int target, int delta)
 
     old_value = player_counters[target][COUNTER_TYPE_POISON];
     player_counters[target][COUNTER_TYPE_POISON] = clamp_counter(old_value + delta);
-    damage_log_add(target, delta, LOG_EVT_COUNTER, COUNTER_TYPE_POISON);
-    if (old_value < 10 && player_counters[target][COUNTER_TYPE_POISON] >= 10) {
-        set_player_elimination_action(target, LOG_EVT_COUNTER, COUNTER_TYPE_POISON, delta);
-    }
-    check_player_elimination(target);
-    net_sync_commit_player(target);
+    commit_player_event(target, delta, LOG_EVT_COUNTER, COUNTER_TYPE_POISON,
+                         old_value < 10 && player_counters[target][COUNTER_TYPE_POISON] >= 10);
 }
 
 void change_player_life(int delta)
