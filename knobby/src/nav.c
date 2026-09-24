@@ -20,11 +20,9 @@
 #include "rename.h"
 #include "mp_victory.h"
 #include "attack.h"
+#include "../knob.h" /* reset_all_values */
 
 /* See nav.h. */
-
-// Forward declaration for knob.c's reset, which has no header of its own
-extern void reset_all_values(void);
 
 lv_obj_t *screen_quad_menu = NULL;
 lv_obj_t *screen_tools_menu = NULL;

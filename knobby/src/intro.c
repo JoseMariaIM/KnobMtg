@@ -3,9 +3,7 @@
 #include "assets_intro.h"
 #include "hw.h"
 #include "ota_notice.h"
-
-// Forward declarations
-extern void start_player_selection_animation(void);
+#include "game.h" /* start_player_selection_animation */
 
 lv_obj_t *screen_intro = NULL;
 

@@ -40,6 +40,18 @@ typedef enum {
 
 void knob_gui(void);
 
+/* Reinicia la partida (vida, brillo desde NVS, todas las pantallas) y
+   arranca la ruleta de selección de primer jugador. Llamado tras
+   aplicar Game Mode y desde el menú de ajustes; declarado aquí (antes
+   solo tenía `extern void reset_all_values(void);` sueltos en cada
+   llamador, sin cabecera propia) para que quien lo use dependa de
+   este header, no de una declaración a ciegas que el compilador nunca
+   comprueba contra la definición real. No necesita el mecanismo de
+   home.h (home_bind): knob.c es la raíz de la app y nadie por debajo
+   necesita que knob.c le devuelva la llamada, así que no hay ciclo
+   que romper, solo una declaración que faltaba. */
+void reset_all_values(void);
+
 void knob_change(knob_event_t k);
 void knob_process_pending(void);
 bool activity_kick(void);

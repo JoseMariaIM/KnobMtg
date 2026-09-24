@@ -5,8 +5,7 @@
 #include "game.h"
 #include "prefs_table.h"
 #include "lang.h"
-
-extern void reset_all_values(void);
+#include "../knob.h" /* reset_all_values */
 
 lv_obj_t *screen_victory = NULL;
 static lv_obj_t *label_victory_title = NULL;

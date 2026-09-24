@@ -6,9 +6,7 @@
 #include "ui_mp.h"
 #include "net_sync.h"
 #include "lang.h"
-
-// Forward declarations
-extern void reset_all_values(void);
+#include "../knob.h" /* reset_all_values */
 
 // ---------- screens ----------
 lv_obj_t *screen_game_mode_menu = NULL;
