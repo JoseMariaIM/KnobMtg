@@ -1,9 +1,9 @@
 # Revisión de arquitectura — `feat/memory-battery-architecture`
 
-Estado: **revisión inicial completa, plan de trabajo pendiente de tu
-aprobación**. Sustituye por completo un plan anterior que escribí
-contra `main`, que resultó estar 46 commits por detrás de esta rama y
-del trabajo real del proyecto (ver aviso al final).
+Estado: **Puntos 1 y 2 cerrados, Punto 3 pendiente de decisión**.
+Sustituye por completo un plan anterior que escribí contra `main`, que
+resultó estar 46 commits por detrás de esta rama y del trabajo real
+del proyecto (ver aviso al final).
 
 ## Veredicto
 
@@ -54,7 +54,9 @@ Verificado en esta sesión, no asumido:
 
 ## Plan de trabajo (corto, 3 puntos, cada uno su propia rama/commit)
 
-### Punto 1 — Quitar los 4 `extern void` sueltos que quedan
+### Punto 1 — Quitar los 4 `extern void` sueltos que quedan ✅ Cerrado
+
+Rama `arch/remove-blind-externs`, commit `e949e07`.
 Mismo fix que ya apliqué y verifiqué sobre `main`: incluir el header
 real en vez de redeclarar a ciegas.
 - `start_player_selection_animation`: `intro.c` ya puede incluir
@@ -66,7 +68,9 @@ real en vez de redeclarar a ciegas.
 - **Cierre:** `grep -rn "^extern void" knobby/src/*.c knobby/*.c` → 0
   líneas. `make test`, `make firmware` en verde.
 
-### Punto 2 — Unificar la secuencia repetida de "aplicar un cambio"
+### Punto 2 — Unificar la secuencia repetida de "aplicar un cambio" ✅ Cerrado
+
+Rama `arch/remove-blind-externs`, commit `66c1151`.
 Extraer un helper interno a `game_state.c` (no hace falta exponerlo en
 el header, es un detalle de implementación) que encapsule
 log+clamp+acción-de-eliminación+check+sync, y hacer que
