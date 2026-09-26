@@ -1,7 +1,7 @@
 #ifndef _QUAD_SCREEN_H
 #define _QUAD_SCREEN_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* The four-quarter menu screen, which is how nearly every menu on this
  * device is laid out: settings pages, the tools menu, table sync, the

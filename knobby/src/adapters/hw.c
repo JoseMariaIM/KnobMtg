@@ -3,7 +3,7 @@
 #include "prefs_display.h"
 #include "net_sync.h"
 #include "lang.h"
-#include "../knob.h"
+#include "../../knob.h"
 #include "driver/ledc.h"
 #include "esp_sleep.h"
 #include <stdio.h>
@@ -12,7 +12,7 @@
 #endif
 
 // ---------- private constants ----------
-#include "pincfg.h"
+#include "../../pincfg.h"
 #define BACKLIGHT_PIN TFT_BLK
 #define BACKLIGHT_LEDC_MODE LEDC_LOW_SPEED_MODE
 #define BACKLIGHT_LEDC_TIMER LEDC_TIMER_0

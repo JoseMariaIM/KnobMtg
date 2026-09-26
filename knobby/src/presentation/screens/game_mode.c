@@ -6,7 +6,7 @@
 #include "ui_mp.h"
 #include "../../adapters/net_sync.h"
 #include "../../adapters/lang.h"
-#include "../knob.h" /* reset_all_values */
+#include "../../../knob.h" /* reset_all_values */
 
 // ---------- screens ----------
 lv_obj_t *screen_game_mode_menu = NULL;

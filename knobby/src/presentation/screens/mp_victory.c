@@ -5,7 +5,7 @@
 #include "../../usecases/game.h"
 #include "../../adapters/prefs_table.h"
 #include "../../adapters/lang.h"
-#include "../knob.h" /* reset_all_values */
+#include "../../../knob.h" /* reset_all_values */
 
 lv_obj_t *screen_victory = NULL;
 static lv_obj_t *label_victory_title = NULL;

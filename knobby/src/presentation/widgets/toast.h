@@ -1,7 +1,7 @@
 #ifndef _TOAST_H
 #define _TOAST_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* A self-dismissing banner on lv_layer_top().
  *

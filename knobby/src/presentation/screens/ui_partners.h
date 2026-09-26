@@ -1,7 +1,7 @@
 #ifndef _UI_PARTNERS_H
 #define _UI_PARTNERS_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* Which players field a partner commander.
  *

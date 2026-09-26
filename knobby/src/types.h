@@ -1,7 +1,7 @@
 #ifndef _TYPES_H
 #define _TYPES_H
 
-#include "knob.h"
+#include "../knob.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

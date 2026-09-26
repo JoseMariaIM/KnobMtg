@@ -5,7 +5,7 @@
 #include "../../adapters/lang.h"
 #include "../ota/wifi_ota.h"
 #include "ui_wifi.h"
-#include "../knob.h"
+#include "../../../knob.h"
 #include <stdio.h>
 #include <string.h>
 

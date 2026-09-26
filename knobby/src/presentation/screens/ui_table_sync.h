@@ -1,7 +1,7 @@
 #ifndef _UI_TABLE_SYNC_H
 #define _UI_TABLE_SYNC_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* The Table Sync screen: start or re-invite, join, leave, and a status
  * tile that tracks pairing while the screen is up.

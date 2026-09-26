@@ -1,7 +1,7 @@
 #ifndef _UI_LANGUAGE_H
 #define _UI_LANGUAGE_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* The language picker: one row per language, the current one
  * highlighted. Picking one persists it and restarts the device, since

@@ -1,7 +1,7 @@
 #ifndef _UI_BATTERY_H
 #define _UI_BATTERY_H
 
-#include "knob.h"
+#include "../../../knob.h"
 
 /* The battery screen: one reading, one calibration line.
  *
