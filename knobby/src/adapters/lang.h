@@ -75,6 +75,8 @@ typedef enum {
     STR_BATTERY_FMT,         /* "Battery: %d%%" */
     STR_BATTERY_NOT_CALIBRATED,
     STR_BATTERY_CALIBRATED_FMT, /* "%.2fV calibrated" */
+    STR_BATTERY_CHARGING,
+    STR_BATTERY_CHARGING_DETAIL_FMT, /* "%.2fV - charging" */
     STR_SETTING_WIFI,
     STR_SETTING_UPDATES,
     STR_WIFI_TITLE,
