@@ -37,7 +37,7 @@ jobs:
 
       - name: Write dev version header
         run: |
-          echo "#define FIRMWARE_VERSION \"dev-${GITHUB_SHA::7}\"" > knobby/src/version.h
+          echo "#define FIRMWARE_VERSION \"dev-${GITHUB_SHA::7}\"" > knobby/src/adapters/version.h
 
       - name: Compile with arduino-cli
         run: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Write dev version header
         run: |
-          echo "#define FIRMWARE_VERSION \"dev-${GITHUB_SHA::7}\"" > knobby/src/version.h
+          echo "#define FIRMWARE_VERSION \"dev-${GITHUB_SHA::7}\"" > knobby/src/adapters/version.h
 
       - name: Run unit tests
         run: make -C sim test

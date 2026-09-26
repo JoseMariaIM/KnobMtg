@@ -28,19 +28,19 @@
  * transient UI (color wheel, QR, keyboards, damage log pages) needs at
  * runtime. */
 #include "test_harness.h"
-#include "settings.h"
-#include "settings.h"
-#include "ui_wifi.h"
-#include "snake.h"
-#include "pong.h"
-#include "dino.h"
-#include "tetris.h"
-#include "breakout.h"
-#include "flappy.h"
-#include "eggs.h"
-#include "invaders.h"
-#include "rps.h"
-#include "asteroids.h"
+#include "../../../knobby/src/presentation/screens/settings.h"
+#include "../../../knobby/src/presentation/screens/settings.h"
+#include "../../../knobby/src/presentation/screens/ui_wifi.h"
+#include "../../../knobby/src/presentation/minigames/snake.h"
+#include "../../../knobby/src/presentation/minigames/pong.h"
+#include "../../../knobby/src/presentation/minigames/dino.h"
+#include "../../../knobby/src/presentation/minigames/tetris.h"
+#include "../../../knobby/src/presentation/minigames/breakout.h"
+#include "../../../knobby/src/presentation/minigames/flappy.h"
+#include "../../../knobby/src/presentation/minigames/eggs.h"
+#include "../../../knobby/src/presentation/minigames/invaders.h"
+#include "../../../knobby/src/presentation/minigames/rps.h"
+#include "../../../knobby/src/presentation/minigames/asteroids.h"
 #include <stdio.h>
 #include <assert.h>
 

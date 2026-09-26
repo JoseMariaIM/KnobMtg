@@ -10,7 +10,7 @@
  * row to settings_items[] and forgetting the matching bind in
  * knob_gui() is exactly how that happens, so assert it directly. */
 #include "test_harness.h"
-#include "settings.h"
+#include "../../knobby/src/presentation/screens/settings.h"
 #include <stdio.h>
 #include <assert.h>
 

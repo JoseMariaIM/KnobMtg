@@ -1,7 +1,7 @@
 #ifndef _TYPES_H
 #define _TYPES_H
 
-#include "knob.h"
+#include "../knob.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,7 +10,7 @@
  * live in game_types.h, which doesn't include LVGL - see the comment at
  * its top. Re-included here so every existing #include "types.h" site
  * keeps seeing exactly the same symbols it always has. */
-#include "game_types.h"
+#include "entities/game_types.h"
 
 // ---------- types ----------
 typedef struct {

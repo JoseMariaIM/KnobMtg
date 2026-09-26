@@ -5,7 +5,7 @@
  * runner's head), jumps don't stack, and the run ends on contact. */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "dino.h"
+#include "../../knobby/src/presentation/minigames/dino.h"
 #include <stdio.h>
 #include <assert.h>
 

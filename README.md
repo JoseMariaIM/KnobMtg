@@ -120,7 +120,7 @@ make -C sim test-game-state-purity   # game_state.h compiles with zero LVGL depe
 
 See [sim/tests/test_harness.h](sim/tests/test_harness.h) for how a test boots the UI headlessly, and any existing file under `sim/tests/` for the pattern (one binary per file, plain `assert()`).
 
-The game's actual rules live in [knobby/src/game_state.h](knobby/src/game_state.h)/`.c`, with zero LVGL types in the header - `game.h`/`.c` is the LVGL-facing bridge (color math, the 3 timers that schedule follow-ups) that everything else still includes exactly as before. See the comment at the top of `game_state.h` for the split.
+The game's actual rules live in [knobby/src/entities/game_state.h](knobby/src/entities/game_state.h)/`.c`, with zero LVGL types in the header - `usecases/game.h`/`.c` is the LVGL-facing bridge (color math, the 3 timers that schedule follow-ups) that everything else still includes exactly as before. See the comment at the top of `game_state.h` for the split.
 
 ## 🧑‍🤝‍🧑 Contributing
 

@@ -11,17 +11,17 @@
  * every field is a plain function/object pointer with no type-level
  * connection to "which screen this row is for". */
 #include "test_harness.h"
-#include "dice.h"
-#include "settings.h"
-#include "nav.h"
-#include "home.h"
-#include "ui_table_sync.h"
-#include "ui_language.h"
-#include "ui_battery.h"
-#include "minigames_menu.h"
-#include "ui_1p.h"
-#include "ui_cmd_damage.h"
-#include "ui_mp.h"
+#include "../../knobby/src/presentation/minigames/dice.h"
+#include "../../knobby/src/presentation/screens/settings.h"
+#include "../../knobby/src/nav.h"
+#include "../../knobby/src/presentation/screens/home.h"
+#include "../../knobby/src/presentation/screens/ui_table_sync.h"
+#include "../../knobby/src/presentation/screens/ui_language.h"
+#include "../../knobby/src/presentation/screens/ui_battery.h"
+#include "../../knobby/src/presentation/screens/minigames_menu.h"
+#include "../../knobby/src/presentation/screens/ui_1p.h"
+#include "../../knobby/src/presentation/screens/ui_cmd_damage.h"
+#include "../../knobby/src/presentation/screens/ui_mp.h"
 #include <stdio.h>
 #include <assert.h>
 

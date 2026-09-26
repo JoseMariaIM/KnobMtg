@@ -1,0 +1,369 @@
+#include "ui_cmd_damage.h"
+#include "home.h"
+#include "../../usecases/game.h"
+#include "../../adapters/lang.h"
+
+// ---------- screens ----------
+lv_obj_t *screen_select = NULL;
+lv_obj_t *screen_damage = NULL;
+
+// ---------- select UI ----------
+static lv_obj_t *label_select_title = NULL;
+static lv_obj_t *select_rows[MAX_ENEMY_COUNT];
+static lv_obj_t *label_enemy_name[MAX_ENEMY_COUNT];
+static lv_obj_t *label_enemy_damage[MAX_ENEMY_COUNT];
+static lv_obj_t *btn_slot_commander = NULL;
+static lv_obj_t *btn_slot_partner = NULL;
+
+// ---------- damage UI ----------
+static lv_obj_t *label_damage_title = NULL;
+static lv_obj_t *label_damage_value = NULL;
+static lv_obj_t *label_damage_hint = NULL;
+static lv_obj_t *label_damage_delta = NULL;
+
+/* grid constants for select screen */
+#define SEL_BOX_W      100
+#define SEL_BOX_H       56
+#define SEL_BOX_GAP_X    6
+#define SEL_BOX_GAP_Y    6
+#define SEL_GRID_COLS    2
+
+static bool is_enemy_eliminated(int player_index)
+{
+    return (player_index >= 0 && player_index < MAX_DISPLAY_PLAYERS &&
+            player_eliminated[player_index]);
+}
+
+static void style_select_entry(int i, int player_index)
+{
+    char buf[32];
+    lv_color_t text_color = get_player_text_color(player_index);
+    bool eliminated = is_enemy_eliminated(player_index);
+
+    lv_label_set_text(label_enemy_name[i], player_names[player_index]);
+    snprintf(buf, sizeof(buf), "%d", enemies[i].damage);
+    lv_label_set_text(label_enemy_damage[i], buf);
+
+    if (eliminated) {
+        lv_color_t disabled_bg = lv_color_hex(0x404040);
+        lv_color_t disabled_text = lv_color_hex(0x808080);
+        lv_obj_set_style_text_color(label_enemy_name[i], disabled_text, 0);
+        lv_obj_set_style_text_color(label_enemy_damage[i], disabled_text, 0);
+        lv_obj_set_style_bg_color(select_rows[i], disabled_bg, 0);
+        lv_obj_set_style_bg_opa(select_rows[i], LV_OPA_COVER, 0);
+        lv_obj_clear_flag(select_rows[i], LV_OBJ_FLAG_CLICKABLE);
+    } else {
+        lv_obj_set_style_text_color(label_enemy_name[i], text_color, 0);
+        lv_obj_set_style_text_color(label_enemy_damage[i], text_color, 0);
+        lv_obj_set_style_bg_color(select_rows[i], get_player_base_color(player_index), 0);
+        lv_obj_set_style_bg_opa(select_rows[i], LV_OPA_COVER, 0);
+        lv_obj_add_flag(select_rows[i], LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    lv_obj_set_style_text_font(label_enemy_name[i], &lv_font_es_16, 0);
+    lv_obj_set_style_text_font(label_enemy_damage[i], &lv_font_es_22, 0);
+    lv_obj_align(label_enemy_name[i], LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_align(label_enemy_damage[i], LV_ALIGN_BOTTOM_MID, 0, -4);
+}
+
+static void style_slot_tab(lv_obj_t *btn, bool active)
+{
+    lv_obj_set_style_bg_color(btn, active ? lv_color_hex(0x2979FF) : lv_color_hex(0x2A2A2A), 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+}
+
+/* Whether any player LISTED on this screen fields a partner.
+ *
+ * The slot tabs pick which of a source's two commanders a number
+ * belongs to, so they are worth showing only when one of the sources
+ * in front of you actually has two. Asked of the listed opponents
+ * rather than of the table as a whole: a partner sitting out of this
+ * particular target's row set is not a choice this screen can make. */
+static bool select_screen_has_partner_source(void)
+{
+    int i;
+
+    for (i = 0; i < active_enemy_count; i++) {
+        if (player_has_partner(get_cmd_target_player_index(i))) return true;
+    }
+    return false;
+}
+
+void refresh_select_ui(void)
+{
+    int i;
+    int n = active_enemy_count;
+    int cols = (n <= 1) ? 1 : SEL_GRID_COLS;
+    int rows_needed = (n + cols - 1) / cols;
+    int grid_w = cols * SEL_BOX_W + (cols - 1) * SEL_BOX_GAP_X;
+    int grid_h = rows_needed * SEL_BOX_H + (rows_needed - 1) * SEL_BOX_GAP_Y;
+    int grid_x = (240 - grid_w) / 2;
+    int grid_y = (230 - grid_h) / 2;
+
+    {
+        bool show_slots = select_screen_has_partner_source();
+
+        /* With nobody to choose between, the pair of tabs is not a
+           disabled control - it is a question that does not arise, so
+           it goes away entirely rather than sitting there greyed. */
+        if (!show_slots && cmd_damage_slot != 0) {
+            cmd_damage_slot = 0;
+            refresh_cmd_damage_slot();
+        }
+        if (btn_slot_commander != NULL) {
+            if (show_slots) lv_obj_clear_flag(btn_slot_commander, LV_OBJ_FLAG_HIDDEN);
+            else            lv_obj_add_flag(btn_slot_commander, LV_OBJ_FLAG_HIDDEN);
+            style_slot_tab(btn_slot_commander, cmd_damage_slot == 0);
+        }
+        if (btn_slot_partner != NULL) {
+            if (show_slots) lv_obj_clear_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
+            else            lv_obj_add_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
+            style_slot_tab(btn_slot_partner, cmd_damage_slot == 1);
+        }
+    }
+
+    for (i = 0; i < MAX_ENEMY_COUNT; i++) {
+        if (select_rows[i] == NULL) continue;
+
+        if (i < n) {
+            int col = i % cols;
+            int row = i / cols;
+            int items_in_row = (row < n / cols) ? cols : (n % cols);
+            if (items_in_row == 0) items_in_row = cols;
+            int row_offset = (cols > 1 && items_in_row == 1) ? (SEL_BOX_W + SEL_BOX_GAP_X) / 2 : 0;
+            int x = grid_x + col * (SEL_BOX_W + SEL_BOX_GAP_X) + row_offset;
+            int y = grid_y + row * (SEL_BOX_H + SEL_BOX_GAP_Y);
+            int player_index = get_cmd_target_player_index(i);
+
+            lv_obj_clear_flag(select_rows[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_size(select_rows[i], SEL_BOX_W, SEL_BOX_H);
+            lv_obj_set_pos(select_rows[i], x, y);
+            lv_obj_set_style_radius(select_rows[i], 8, 0);
+            style_select_entry(i, player_index);
+        } else {
+            lv_obj_add_flag(select_rows[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+void refresh_damage_ui(void)
+{
+    char buf[64];
+    lv_color_t text_color;
+    lv_color_t bg_color;
+    int player_index;
+    int delta = damage_pending_delta();
+
+    if (selected_enemy < 0 || selected_enemy >= active_enemy_count) return;
+
+    player_index = get_cmd_target_player_index(selected_enemy);
+    bg_color = get_player_active_color(player_index);
+    text_color = get_player_text_color(player_index);
+    if (cmd_damage_slot == 1) {
+        snprintf(buf, sizeof(buf), t(STR_PARTNER_SUFFIX), player_names[player_index]);
+        lv_label_set_text(label_damage_title, buf);
+    } else {
+        lv_label_set_text(label_damage_title, player_names[player_index]);
+    }
+    lv_obj_set_style_bg_color(screen_damage, bg_color, 0);
+    lv_obj_set_style_text_color(label_damage_title, text_color, 0);
+    lv_obj_set_style_text_color(label_damage_hint, text_color, 0);
+
+    snprintf(buf, sizeof(buf), t(STR_DAMAGE_PREFIX), enemies[selected_enemy].damage);
+    lv_label_set_text(label_damage_value, buf);
+    lv_obj_set_style_text_color(label_damage_value, text_color, 0);
+
+    if (delta != 0) {
+        /* Undialed knob delta, annotated above the (already-updated) total.
+           Dialing damage up hurts the target, so the delta uses the
+           life-loss color (negated life delta), with the same contrast
+           fallback the multiplayer panels use. */
+        lv_color_t delta_color = get_player_preview_color(player_index, -delta);
+        if (color_is_light(bg_color) == color_is_light(delta_color))
+            delta_color = text_color;
+        snprintf(buf, sizeof(buf), "%+d", delta);
+        lv_label_set_text(label_damage_delta, buf);
+        lv_obj_set_style_text_color(label_damage_delta, delta_color, 0);
+        lv_obj_clear_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+void open_select_screen(void)
+{
+    refresh_select_ui();
+    load_screen_if_needed(screen_select);
+}
+
+static void open_damage_screen(int enemy_index)
+{
+    selected_enemy = enemy_index;
+    damage_enter();
+    refresh_damage_ui();
+    load_screen_if_needed(screen_damage);
+}
+
+// ---------- events ----------
+static void event_slot_commander(lv_event_t *e)
+{
+    (void)e;
+    if (cmd_damage_slot == 0) return;
+    cmd_damage_slot = 0;
+    refresh_cmd_damage_slot();
+    refresh_select_ui();
+}
+
+static void event_slot_partner(lv_event_t *e)
+{
+    (void)e;
+    if (cmd_damage_slot == 1) return;
+    cmd_damage_slot = 1;
+    refresh_cmd_damage_slot();
+    refresh_select_ui();
+}
+
+static void event_select_enemy(lv_event_t *e)
+{
+    int index = (int)(intptr_t)lv_event_get_user_data(e);
+    int player_index = get_cmd_target_player_index(index);
+    if (player_index >= 0 && player_index < MAX_DISPLAY_PLAYERS && player_eliminated[player_index]) {
+        return;
+    }
+    open_damage_screen(index);
+}
+
+static void event_damage_apply(lv_event_t *e)
+{
+    (void)e;
+    bool was_cmd = (cmd_damage_target >= 0);
+    damage_apply();
+    if (was_cmd) {
+        back_to_main();
+    } else {
+        refresh_select_ui();
+        load_screen_if_needed(screen_select);
+    }
+}
+
+// ---------- screen builders ----------
+void build_select_screen(void)
+{
+    int i;
+    lv_obj_t *container;
+
+    screen_select = lv_obj_create(NULL);
+    lv_obj_set_size(screen_select, 360, 360);
+    lv_obj_set_style_bg_color(screen_select, lv_color_black(), 0);
+    lv_obj_set_style_border_width(screen_select, 0, 0);
+    lv_obj_set_scrollbar_mode(screen_select, LV_SCROLLBAR_MODE_OFF);
+
+    label_select_title = lv_label_create(screen_select);
+    lv_label_set_text(label_select_title, t(STR_CHOOSE_PLAYER));
+    lv_obj_set_style_text_color(label_select_title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label_select_title, &lv_font_es_22, 0);
+    lv_obj_align(label_select_title, LV_ALIGN_TOP_MID, 0, 22);
+
+    /* Commander/Partner slot toggle: which of the target's two
+       commanders (if they run Partner) subsequent damage edits affect.
+       Only meaningful for players who actually have a partner
+       commander. Both are hidden unless one of the opponents listed
+       below actually fields a partner - see
+       select_screen_has_partner_source(). */
+    btn_slot_commander = lv_btn_create(screen_select);
+    lv_obj_remove_style_all(btn_slot_commander);
+    lv_obj_set_size(btn_slot_commander, 100, 30);
+    lv_obj_set_style_radius(btn_slot_commander, 15, 0);
+    lv_obj_set_style_bg_opa(btn_slot_commander, LV_OPA_COVER, 0);
+    lv_obj_align(btn_slot_commander, LV_ALIGN_TOP_MID, -51, 56);
+    lv_obj_add_event_cb(btn_slot_commander, event_slot_commander, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_commander = lv_label_create(btn_slot_commander);
+    lv_label_set_text(lbl_commander, t(STR_TAB_COMMANDER));
+    lv_obj_set_style_text_color(lbl_commander, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl_commander, &lv_font_es_14, 0);
+    lv_obj_center(lbl_commander);
+
+    btn_slot_partner = lv_btn_create(screen_select);
+    lv_obj_remove_style_all(btn_slot_partner);
+    lv_obj_set_size(btn_slot_partner, 100, 30);
+    lv_obj_set_style_radius(btn_slot_partner, 15, 0);
+    lv_obj_set_style_bg_opa(btn_slot_partner, LV_OPA_COVER, 0);
+    lv_obj_align(btn_slot_partner, LV_ALIGN_TOP_MID, 51, 56);
+    lv_obj_add_event_cb(btn_slot_partner, event_slot_partner, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *lbl_partner = lv_label_create(btn_slot_partner);
+    lv_label_set_text(lbl_partner, t(STR_TAB_PARTNER));
+    lv_obj_set_style_text_color(lbl_partner, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl_partner, &lv_font_es_14, 0);
+    lv_obj_center(lbl_partner);
+
+    container = lv_obj_create(screen_select);
+    lv_obj_set_size(container, 240, 230);
+    lv_obj_align(container, LV_ALIGN_CENTER, 0, 35);
+    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(container, 0, 0);
+    lv_obj_set_style_pad_all(container, 0, 0);
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_AUTO);
+
+    for (i = 0; i < MAX_ENEMY_COUNT; i++) {
+        select_rows[i] = lv_btn_create(container);
+        lv_obj_remove_style_all(select_rows[i]);
+        lv_obj_set_style_bg_opa(select_rows[i], LV_OPA_COVER, 0);
+        lv_obj_set_size(select_rows[i], 220, 46);
+        lv_obj_set_pos(select_rows[i], 0, i * 56);
+        lv_obj_add_event_cb(select_rows[i], event_select_enemy, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+
+        label_enemy_name[i] = lv_label_create(select_rows[i]);
+        lv_obj_set_style_text_font(label_enemy_name[i], &lv_font_es_22, 0);
+        lv_obj_set_style_text_color(label_enemy_name[i], lv_color_white(), 0);
+        lv_obj_align(label_enemy_name[i], LV_ALIGN_LEFT_MID, 16, 0);
+
+        label_enemy_damage[i] = lv_label_create(select_rows[i]);
+        lv_obj_set_style_text_font(label_enemy_damage[i], &lv_font_es_22, 0);
+        lv_obj_set_style_text_color(label_enemy_damage[i], lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_align(label_enemy_damage[i], LV_ALIGN_RIGHT_MID, -16, 0);
+    }
+}
+
+void build_damage_screen(void)
+{
+    screen_damage = lv_obj_create(NULL);
+    lv_obj_set_size(screen_damage, 360, 360);
+    lv_obj_set_style_bg_color(screen_damage, lv_color_black(), 0);
+    lv_obj_set_style_border_width(screen_damage, 0, 0);
+    lv_obj_set_scrollbar_mode(screen_damage, LV_SCROLLBAR_MODE_OFF);
+
+    label_damage_title = lv_label_create(screen_damage);
+    lv_label_set_text(label_damage_title, "P1");
+    lv_obj_set_style_text_color(label_damage_title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label_damage_title, &lv_font_es_22, 0);
+    lv_obj_align(label_damage_title, LV_ALIGN_TOP_MID, 0, 28);
+
+    label_damage_value = lv_label_create(screen_damage);
+    lv_label_set_text(label_damage_value, "Damage: 0"); /* placeholder, overwritten by refresh_damage_ui before shown */
+    lv_obj_set_style_text_color(label_damage_value, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label_damage_value, &lv_font_es_32, 0);
+    lv_obj_align(label_damage_value, LV_ALIGN_CENTER, 0, -10);
+
+    label_damage_hint = lv_label_create(screen_damage);
+    lv_label_set_text(label_damage_hint, t(STR_TURN_KNOB_THEN_APPLY));
+    lv_obj_set_style_text_color(label_damage_hint, lv_color_hex(0x6A6A6A), 0);
+    lv_obj_set_style_text_font(label_damage_hint, &lv_font_es_14, 0);
+    lv_obj_align(label_damage_hint, LV_ALIGN_CENTER, 0, 24);
+
+    /* Pending knob delta, annotated above the running total */
+    label_damage_delta = lv_label_create(screen_damage);
+    lv_label_set_text(label_damage_delta, "");
+    lv_obj_set_style_text_color(label_damage_delta, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label_damage_delta, &lv_font_es_32, 0);
+    lv_obj_align(label_damage_delta, LV_ALIGN_CENTER, 0, -48);
+    lv_obj_add_flag(label_damage_delta, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *btn = make_button(screen_damage, t(STR_APPLY), 120, 46, event_damage_apply);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -46);
+}
+
+bool select_test_slot_tabs_visible(void)
+{
+    if (btn_slot_partner == NULL) return false;
+    return !lv_obj_has_flag(btn_slot_partner, LV_OBJ_FLAG_HIDDEN);
+}

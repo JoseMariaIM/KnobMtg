@@ -1,7 +1,7 @@
 #ifndef _NAV_H
 #define _NAV_H
 
-#include "knob.h"
+#include "../knob.h"
 
 /* The shell: the two top-level menus, and the one place that decides
  * where "back" goes.

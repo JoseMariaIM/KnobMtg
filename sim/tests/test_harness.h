@@ -11,14 +11,14 @@
 #include "board_detect.h"
 #include <lvgl.h>
 #include "knob.h"
-#include "game.h"
-#include "prefs.h"
-#include "prefs_display.h"
-#include "prefs_table.h"
-#include "prefs_roster.h"
-#include "prefs_network.h"
-#include "prefs_scores.h"
-#include "hw.h"
+#include "../../knobby/src/usecases/game.h"
+#include "../../knobby/src/adapters/prefs.h"
+#include "../../knobby/src/adapters/prefs_display.h"
+#include "../../knobby/src/adapters/prefs_table.h"
+#include "../../knobby/src/adapters/prefs_roster.h"
+#include "../../knobby/src/adapters/prefs_network.h"
+#include "../../knobby/src/adapters/prefs_scores.h"
+#include "../../knobby/src/adapters/hw.h"
 #include "sim_stubs.h"
 #include <string.h>
 

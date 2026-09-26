@@ -3,11 +3,11 @@
 #include "sim_stubs.h"
 #include "board_detect.h"
 #include "knob.h"
-#include "hw.h"
-#include "prefs_display.h"
-#include "prefs_table.h"
-#include "game.h"
-#include "ui_1p.h"
+#include "../knobby/src/adapters/hw.h"
+#include "../knobby/src/adapters/prefs_display.h"
+#include "../knobby/src/adapters/prefs_table.h"
+#include "../knobby/src/usecases/game.h"
+#include "../knobby/src/presentation/screens/ui_1p.h"
 
 #include <stdio.h>
 #include <stdbool.h>

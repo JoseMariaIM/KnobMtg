@@ -25,16 +25,16 @@
  */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "minigame.h"
-#include "snake.h"
-#include "pong.h"
-#include "dino.h"
-#include "tetris.h"
-#include "breakout.h"
-#include "flappy.h"
-#include "eggs.h"
-#include "invaders.h"
-#include "asteroids.h"
+#include "../../knobby/src/presentation/minigames/minigame.h"
+#include "../../knobby/src/presentation/minigames/snake.h"
+#include "../../knobby/src/presentation/minigames/pong.h"
+#include "../../knobby/src/presentation/minigames/dino.h"
+#include "../../knobby/src/presentation/minigames/tetris.h"
+#include "../../knobby/src/presentation/minigames/breakout.h"
+#include "../../knobby/src/presentation/minigames/flappy.h"
+#include "../../knobby/src/presentation/minigames/eggs.h"
+#include "../../knobby/src/presentation/minigames/invaders.h"
+#include "../../knobby/src/presentation/minigames/asteroids.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

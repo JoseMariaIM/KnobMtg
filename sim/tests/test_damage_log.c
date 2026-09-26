@@ -2,7 +2,7 @@
  * damage_log_remove_last_for used by elimination undo, and the ring's
  * DAMAGE_LOG_MAX capacity wrap-around. */
 #include "test_harness.h"
-#include "damage_log.h"
+#include "../../knobby/src/usecases/damage_log.h"
 #include <stdio.h>
 #include <assert.h>
 

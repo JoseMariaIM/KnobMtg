@@ -11,12 +11,12 @@
  */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "game_state.h"
-#include "prefs_roster.h"
-#include "prefs_table.h"
-#include "rename.h"
-#include "ui_player_menu.h"
-#include "attack.h"
+#include "../../knobby/src/entities/game_state.h"
+#include "../../knobby/src/adapters/prefs_roster.h"
+#include "../../knobby/src/adapters/prefs_table.h"
+#include "../../knobby/src/usecases/rename.h"
+#include "../../knobby/src/presentation/screens/ui_player_menu.h"
+#include "../../knobby/src/presentation/screens/attack.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

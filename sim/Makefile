@@ -42,11 +42,26 @@ GUI_LDFLAGS := $(SDL_LDFLAGS) $(LDFLAGS)
 # Top-level knobby files
 KNOBBY_TOP_SRCS := $(KNOBBY)/knob.c $(KNOBBY)/board_pins.c
 
-# Source files in src/
-KNOBBY_SRC_SRCS := $(addprefix $(KNOBBY)/src/, \
-	ui_1p.c ui_cmd_damage.c ui_mp.c mp_layout.c mp_victory.c mp_attack_gesture.c ui_player_menu.c settings.c quad_screen.c minigames_menu.c ui_battery.c ui_partners.c ui_table_sync.c ui_language.c nav.c toast.c ota_notice.c game_bridge.c home.c \
-	intro.c assets_intro.c game.c game_state.c game_state_sync.c game_hooks.c damage_log.c attack.c \
-	game_mode.c rename.c dice.c hw.c prefs.c prefs_autosave.c mana.c lang.c wifi_ota.c ui_wifi.c custom_keyboard.c round_safe.c minigame.c snake.c pong.c dino.c tetris.c breakout.c flappy.c eggs.c invaders.c rps.c asteroids.c)
+# Source files in src/ (Clean Architecture layers)
+KNOBBY_SRC_SRCS := \
+	$(KNOBBY)/src/nav.c \
+	$(KNOBBY)/src/entities/game_state.c $(KNOBBY)/src/entities/game_state_sync.c $(KNOBBY)/src/entities/game_hooks.c \
+	$(KNOBBY)/src/usecases/game.c $(KNOBBY)/src/usecases/game_bridge.c $(KNOBBY)/src/usecases/damage_log.c $(KNOBBY)/src/usecases/round_safe.c $(KNOBBY)/src/usecases/rename.c \
+	$(KNOBBY)/src/adapters/hw.c $(KNOBBY)/src/adapters/prefs.c $(KNOBBY)/src/adapters/prefs_autosave.c $(KNOBBY)/src/adapters/lang.c $(KNOBBY)/src/adapters/assets_intro.c \
+	$(KNOBBY)/src/presentation/screens/home.c $(KNOBBY)/src/presentation/screens/intro.c $(KNOBBY)/src/presentation/screens/settings.c \
+	$(KNOBBY)/src/presentation/screens/ui_1p.c $(KNOBBY)/src/presentation/screens/ui_cmd_damage.c $(KNOBBY)/src/presentation/screens/ui_mp.c \
+	$(KNOBBY)/src/presentation/screens/ui_player_menu.c $(KNOBBY)/src/presentation/screens/ui_battery.c $(KNOBBY)/src/presentation/screens/ui_partners.c \
+	$(KNOBBY)/src/presentation/screens/ui_table_sync.c $(KNOBBY)/src/presentation/screens/ui_language.c $(KNOBBY)/src/presentation/screens/ui_wifi.c \
+	$(KNOBBY)/src/presentation/screens/ota_notice.c $(KNOBBY)/src/presentation/screens/game_mode.c $(KNOBBY)/src/presentation/screens/attack.c \
+	$(KNOBBY)/src/presentation/screens/mp_attack_gesture.c $(KNOBBY)/src/presentation/screens/quad_screen.c $(KNOBBY)/src/presentation/screens/minigames_menu.c \
+	$(KNOBBY)/src/presentation/screens/mp_layout.c $(KNOBBY)/src/presentation/screens/mp_victory.c \
+	$(KNOBBY)/src/presentation/widgets/toast.c $(KNOBBY)/src/presentation/widgets/custom_keyboard.c \
+	$(KNOBBY)/src/presentation/ota/wifi_ota.c \
+	$(KNOBBY)/src/presentation/minigames/minigame.c $(KNOBBY)/src/presentation/minigames/dice.c $(KNOBBY)/src/presentation/minigames/mana.c \
+	$(KNOBBY)/src/presentation/minigames/snake.c $(KNOBBY)/src/presentation/minigames/pong.c $(KNOBBY)/src/presentation/minigames/dino.c \
+	$(KNOBBY)/src/presentation/minigames/tetris.c $(KNOBBY)/src/presentation/minigames/breakout.c $(KNOBBY)/src/presentation/minigames/flappy.c \
+	$(KNOBBY)/src/presentation/minigames/eggs.c $(KNOBBY)/src/presentation/minigames/invaders.c $(KNOBBY)/src/presentation/minigames/rps.c \
+	$(KNOBBY)/src/presentation/minigames/asteroids.c
 
 # Sim files
 SIM_SRCS := sim_main.c sim_stubs.c
