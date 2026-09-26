@@ -1,11 +1,11 @@
 #include "game_mode.h"
 #include "home.h"
 #include "quad_screen.h"
-#include "adapters/prefs_table.h"
+#include "../../adapters/prefs_table.h"
 #include "ui_partners.h"
 #include "ui_mp.h"
-#include "adapters/net_sync.h"
-#include "adapters/lang.h"
+#include "../../adapters/net_sync.h"
+#include "../../adapters/lang.h"
 #include "../knob.h" /* reset_all_values */
 
 // ---------- screens ----------

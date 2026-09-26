@@ -11,11 +11,11 @@
 #include "mp_victory.h"
 #include "mp_attack_gesture.h"
 #include "ui_player_menu.h"
-#include "usecases/game.h"
-#include "adapters/prefs_display.h"
-#include "adapters/prefs_table.h"
-#include "adapters/hw.h"
-#include "adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/prefs_display.h"
+#include "../../adapters/prefs_table.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/lang.h"
 #include "attack.h"
 #include <string.h>
 

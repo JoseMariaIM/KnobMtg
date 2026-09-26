@@ -1,8 +1,8 @@
 #include "pong.h"
-#include "presentation/minigames/minigame.h"
-#include "adapters/lang.h"
-#include "usecases/game.h"
-#include "adapters/prefs_scores.h"
+#include "minigame.h"
+#include "../../adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/prefs_scores.h"
 #include "esp_random.h"
 #include <math.h>
 

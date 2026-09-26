@@ -1,7 +1,7 @@
 #ifndef _BREAKOUT_H
 #define _BREAKOUT_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_breakout;
 

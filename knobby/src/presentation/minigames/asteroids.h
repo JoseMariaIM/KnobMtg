@@ -1,7 +1,7 @@
 #ifndef _ASTEROIDS_H
 #define _ASTEROIDS_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_asteroids;
 

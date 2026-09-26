@@ -1,5 +1,5 @@
 #include "mana.h"
-#include "adapters/lang.h"
+#include "../../adapters/lang.h"
 #include <string.h>
 #include <stdio.h>
 

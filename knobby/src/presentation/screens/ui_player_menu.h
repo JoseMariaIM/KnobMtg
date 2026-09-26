@@ -1,7 +1,7 @@
 #ifndef _UI_PLAYER_MENU_H
 #define _UI_PLAYER_MENU_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_player_menu;

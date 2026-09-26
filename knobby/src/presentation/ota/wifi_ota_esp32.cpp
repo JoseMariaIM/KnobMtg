@@ -5,14 +5,14 @@
 #ifndef SIMULATOR
 
 #include "wifi_ota.h"
-#include "adapters/version.h"
+#include "../../adapters/version.h"
 
 extern "C" {
-#include "adapters/prefs.h"
-#include "adapters/prefs_network.h"
-#include "adapters/net_sync.h"
-#include "adapters/hw.h"
-#include "adapters/lang.h"
+#include "../../adapters/prefs.h"
+#include "../../adapters/prefs_network.h"
+#include "../../adapters/net_sync.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/lang.h"
 }
 
 #include <Arduino.h>

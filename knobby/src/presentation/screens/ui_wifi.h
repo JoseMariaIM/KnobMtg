@@ -1,7 +1,7 @@
 #ifndef _UI_WIFI_H
 #define _UI_WIFI_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_wifi_settings;
 extern lv_obj_t *screen_wifi_scan_list;

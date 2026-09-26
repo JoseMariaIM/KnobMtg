@@ -1,7 +1,7 @@
 #ifndef _ASSETS_INTRO_H
 #define _ASSETS_INTRO_H
 
-#include "types.h"
+#include "../types.h"
 
 /* Raster crops of the Genex Comics logo (source: GenexTextoBlanco.svg),
    baked onto a solid black background at the exact size/position the boot

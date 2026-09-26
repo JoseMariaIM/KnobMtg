@@ -1,10 +1,10 @@
-#include "usecases/game_bridge.h"
-#include "usecases/game.h"
-#include "presentation/screens/ui_cmd_damage.h"
-#include "presentation/screens/home.h"
-#include "presentation/screens/ui_mp.h"
-#include "presentation/screens/ui_player_menu.h"
-#include "usecases/rename.h"
+#include "game_bridge.h"
+#include "game.h"
+#include "../presentation/screens/ui_cmd_damage.h"
+#include "../presentation/screens/home.h"
+#include "../presentation/screens/ui_mp.h"
+#include "../presentation/screens/ui_player_menu.h"
+#include "rename.h"
 
 /* See game_bridge.h. */
 

@@ -1,7 +1,7 @@
 #include "ui_battery.h"
-#include "adapters/hw.h"
-#include "adapters/lang.h"
-#include "types.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/lang.h"
+#include "../../types.h"
 
 /* See ui_battery.h. */
 

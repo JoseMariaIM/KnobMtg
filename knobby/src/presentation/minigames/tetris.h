@@ -1,7 +1,7 @@
 #ifndef _TETRIS_H
 #define _TETRIS_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_tetris;
 

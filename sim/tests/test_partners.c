@@ -12,14 +12,14 @@
  * clock nobody declared. */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "entities/game_state.h"
-#include "adapters/prefs_table.h"
-#include "presentation/screens/settings.h"
-#include "nav.h"
-#include "presentation/screens/ui_partners.h"
-#include "presentation/screens/ui_battery.h"
-#include "presentation/screens/ui_cmd_damage.h"
-#include "presentation/screens/ui_player_menu.h"
+#include "../../knobby/src/entities/game_state.h"
+#include "../../knobby/src/adapters/prefs_table.h"
+#include "../../knobby/src/presentation/screens/settings.h"
+#include "../../knobby/src/nav.h"
+#include "../../knobby/src/presentation/screens/ui_partners.h"
+#include "../../knobby/src/presentation/screens/ui_battery.h"
+#include "../../knobby/src/presentation/screens/ui_cmd_damage.h"
+#include "../../knobby/src/presentation/screens/ui_player_menu.h"
 #include <stdio.h>
 #include <assert.h>
 

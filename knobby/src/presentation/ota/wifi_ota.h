@@ -1,7 +1,7 @@
 #ifndef _WIFI_OTA_H
 #define _WIFI_OTA_H
 
-#include "types.h"
+#include "../../types.h"
 
 #ifdef __cplusplus
 extern "C" {

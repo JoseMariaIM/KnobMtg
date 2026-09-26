@@ -6,7 +6,7 @@
  * partner_cmd_damage_totals in game.h). Originally sim/test_partner_commander.c;
  * moved here to run under `make test` instead of by hand. */
 #include "test_harness.h"
-#include "presentation/screens/ui_cmd_damage.h"
+#include "../../knobby/src/presentation/screens/ui_cmd_damage.h"
 #include <stdio.h>
 #include <assert.h>
 

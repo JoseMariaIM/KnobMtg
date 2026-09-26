@@ -1,11 +1,11 @@
 #include "ui_player_menu.h"
 #include "home.h"
 #include "quad_screen.h"
-#include "usecases/damage_log.h"
-#include "usecases/game.h"
-#include "usecases/rename.h"
-#include "adapters/lang.h"
-#include "adapters/prefs_table.h"
+#include "../../usecases/damage_log.h"
+#include "../../usecases/game.h"
+#include "../../usecases/rename.h"
+#include "../../adapters/lang.h"
+#include "../../adapters/prefs_table.h"
 #include "ui_cmd_damage.h"
 
 // ---------- screens ----------

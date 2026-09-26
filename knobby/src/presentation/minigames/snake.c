@@ -1,7 +1,7 @@
 #include "snake.h"
-#include "adapters/lang.h"
-#include "usecases/game.h"
-#include "adapters/prefs_scores.h"
+#include "../../adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/prefs_scores.h"
 #include "esp_random.h"
 #include <string.h>
 

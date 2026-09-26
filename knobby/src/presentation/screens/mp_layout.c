@@ -1,6 +1,6 @@
 #include "mp_layout.h"
-#include "adapters/prefs_display.h"
-#include "adapters/prefs_table.h"
+#include "../../adapters/prefs_display.h"
+#include "../../adapters/prefs_table.h"
 
 /* ---------- wedge geometry, derived once per layout rebuild ----------
    Everything that depends on the slice angles (label anchors, text

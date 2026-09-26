@@ -1,7 +1,7 @@
 #ifndef _RPS_H
 #define _RPS_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_rps;
 

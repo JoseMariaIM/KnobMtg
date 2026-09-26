@@ -9,7 +9,7 @@
  * include path or a framebuffer/lv_init() in sight. See the comment at
  * the top of game_state.h for the full rationale and what stayed
  * behind in game.h (color math, the 3 lv_timer_t objects) instead. */
-#include "entities/game_state.h"
+#include "../../../knobby/src/entities/game_state.h"
 #include <assert.h>
 #include <stddef.h>
 

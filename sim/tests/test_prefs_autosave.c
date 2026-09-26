@@ -15,9 +15,9 @@
  * cycle rather than one per turn of the knob. */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "adapters/prefs_autosave.h"
-#include "entities/game_state.h"
-#include "adapters/net_sync.h"
+#include "../../knobby/src/adapters/prefs_autosave.h"
+#include "../../knobby/src/entities/game_state.h"
+#include "../../knobby/src/adapters/net_sync.h"
 #include "nvs.h"
 #include <stdio.h>
 #include <assert.h>

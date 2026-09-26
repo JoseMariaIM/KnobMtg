@@ -1,7 +1,7 @@
 #ifndef _RENAME_H
 #define _RENAME_H
 
-#include "types.h"
+#include "../types.h"
 
 extern lv_obj_t *screen_player_name;
 

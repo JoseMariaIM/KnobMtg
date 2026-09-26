@@ -1,11 +1,11 @@
 #include "ui_wifi.h"
-#include "nav.h"
+#include "../../nav.h"
 #include "quad_screen.h"
-#include "presentation/ota/wifi_ota.h"
-#include "adapters/prefs_network.h"
-#include "adapters/lang.h"
-#include "presentation/widgets/custom_keyboard.h"
-#include "usecases/round_safe.h"
+#include "../ota/wifi_ota.h"
+#include "../../adapters/prefs_network.h"
+#include "../../adapters/lang.h"
+#include "../widgets/custom_keyboard.h"
+#include "../../usecases/round_safe.h"
 #include <string.h>
 
 // ---------- screens ----------

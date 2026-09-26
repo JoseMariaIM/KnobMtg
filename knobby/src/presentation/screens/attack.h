@@ -1,7 +1,7 @@
 #ifndef _ATTACK_H
 #define _ATTACK_H
 
-#include "types.h"
+#include "../../types.h"
 
 /* What the attack resolves as. These are exclusive - one press, one
  * effect - which is why Lifelink is a mode here rather than the tick

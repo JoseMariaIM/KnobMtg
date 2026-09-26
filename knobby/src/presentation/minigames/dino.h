@@ -1,7 +1,7 @@
 #ifndef _DINO_H
 #define _DINO_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- state ----------
 extern lv_obj_t *screen_dino;

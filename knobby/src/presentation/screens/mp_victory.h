@@ -1,7 +1,7 @@
 #ifndef _MP_VICTORY_H
 #define _MP_VICTORY_H
 
-#include "types.h"
+#include "../../types.h"
 
 /* The victory screen: fades in once only one player is left standing
  * in multiplayer, shows their name/color full-screen, and holding

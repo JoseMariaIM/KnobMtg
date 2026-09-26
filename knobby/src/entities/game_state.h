@@ -36,7 +36,7 @@
 
 #include "game_types.h"
 #include "game_hooks.h"
-#include "adapters/net_sync.h"
+#include "../adapters/net_sync.h"
 
 #ifdef __cplusplus
 extern "C" {

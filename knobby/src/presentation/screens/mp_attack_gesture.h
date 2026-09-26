@@ -1,7 +1,7 @@
 #ifndef _MP_ATTACK_GESTURE_H
 #define _MP_ATTACK_GESTURE_H
 
-#include "types.h"
+#include "../../types.h"
 
 /* The Attack drag gesture on screen_multiplayer's panels: drag from one
  * player's wedge onto another's to open the Attack screen for that

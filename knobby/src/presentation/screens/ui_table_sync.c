@@ -1,9 +1,9 @@
 #include "ui_table_sync.h"
 #include "quad_screen.h"
-#include "types.h"
-#include "adapters/net_sync.h"
-#include "adapters/prefs_table.h"
-#include "adapters/lang.h"
+#include "../../types.h"
+#include "../../adapters/net_sync.h"
+#include "../../adapters/prefs_table.h"
+#include "../../adapters/lang.h"
 #include <string.h>
 
 lv_obj_t *screen_table_sync = NULL;

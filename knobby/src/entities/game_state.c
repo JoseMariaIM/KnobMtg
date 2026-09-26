@@ -5,11 +5,11 @@
  * this file calls through (never directly) - game_hooks.h. */
 #include "game_state.h"
 #include "game_state_internal.h"
-#include "usecases/damage_log.h"
-#include "adapters/prefs_table.h"
-#include "adapters/prefs_roster.h"
+#include "../usecases/damage_log.h"
+#include "../adapters/prefs_table.h"
+#include "../adapters/prefs_roster.h"
 #include "esp_random.h"
-#include "adapters/lang.h"
+#include "../adapters/lang.h"
 #include <string.h>
 #include <stdio.h>
 

@@ -1,5 +1,5 @@
 #include "quad_screen.h"
-#include "types.h"
+#include "../../types.h"
 
 /* See quad_screen.h. */
 

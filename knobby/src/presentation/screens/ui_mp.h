@@ -1,7 +1,7 @@
 #ifndef _UI_MP_H
 #define _UI_MP_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_multiplayer;

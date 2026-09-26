@@ -2,7 +2,7 @@
 #define _MINIGAMES_MENU_H
 
 #include "knob.h"
-#include "adapters/lang.h"
+#include "../../adapters/lang.h"
 
 /* The launcher: which games exist, in what order, and the quad pages
  * that show them.

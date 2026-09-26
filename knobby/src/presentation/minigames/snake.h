@@ -1,7 +1,7 @@
 #ifndef _SNAKE_H
 #define _SNAKE_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- state ----------
 extern lv_obj_t *screen_snake;

@@ -1,7 +1,7 @@
 #include "attack.h"
 #include "home.h"
-#include "usecases/game.h"
-#include "adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/lang.h"
 #include <math.h>
 
 

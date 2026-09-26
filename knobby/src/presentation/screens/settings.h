@@ -1,8 +1,8 @@
 #ifndef _SETTINGS_H
 #define _SETTINGS_H
 
-#include "types.h"
-#include "adapters/lang.h"
+#include "../../types.h"
+#include "../../adapters/lang.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_settings;

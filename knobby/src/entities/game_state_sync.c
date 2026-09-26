@@ -8,7 +8,7 @@
  * module across two files. */
 #include "game_state.h"
 #include "game_state_internal.h"
-#include "usecases/damage_log.h"
+#include "../usecases/damage_log.h"
 #include <string.h>
 #include <stdio.h>
 

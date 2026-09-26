@@ -22,14 +22,14 @@
  * meant to pick a mode, or refuse to resolve at all. */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "presentation/screens/attack.h"
-#include "usecases/game.h"
-#include "adapters/lang.h"
-#include "adapters/prefs_table.h"
-#include "adapters/prefs_display.h"
-#include "presentation/screens/ui_mp.h"
-#include "presentation/screens/home.h"
-#include "entities/game_state.h"
+#include "../../knobby/src/presentation/screens/attack.h"
+#include "../../knobby/src/usecases/game.h"
+#include "../../knobby/src/adapters/lang.h"
+#include "../../knobby/src/adapters/prefs_table.h"
+#include "../../knobby/src/adapters/prefs_display.h"
+#include "../../knobby/src/presentation/screens/ui_mp.h"
+#include "../../knobby/src/presentation/screens/home.h"
+#include "../../knobby/src/entities/game_state.h"
 #include <assert.h>
 #include <math.h>
 #include <string.h>

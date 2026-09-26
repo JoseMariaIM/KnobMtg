@@ -1,7 +1,7 @@
 #ifndef _INVADERS_H
 #define _INVADERS_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_invaders;
 

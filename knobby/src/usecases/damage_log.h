@@ -1,7 +1,7 @@
 #ifndef _DAMAGE_LOG_H
 #define _DAMAGE_LOG_H
 
-#include "types.h"
+#include "../types.h"
 
 #define DAMAGE_LOG_MAX 256
 

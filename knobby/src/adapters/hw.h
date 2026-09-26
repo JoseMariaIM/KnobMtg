@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#include "types.h"
+#include "../types.h"
 
 // ---------- state ----------
 extern int brightness_percent;

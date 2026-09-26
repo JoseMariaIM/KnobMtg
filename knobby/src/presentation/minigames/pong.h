@@ -1,7 +1,7 @@
 #ifndef _PONG_H
 #define _PONG_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- state ----------
 extern lv_obj_t *screen_pong;

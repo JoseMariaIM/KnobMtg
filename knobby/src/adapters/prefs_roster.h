@@ -5,7 +5,7 @@
  * somebody renames a seat. See prefs.h. */
 
 #include "prefs.h"
-#include "types.h"
+#include "../types.h"
 
 /* The players' own names, as last set from the rename screen or
  * adopted from another device at the table.

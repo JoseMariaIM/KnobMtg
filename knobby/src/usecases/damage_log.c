@@ -1,7 +1,7 @@
-#include "usecases/damage_log.h"
-#include "usecases/game.h"
-#include "adapters/lang.h"
-#include "usecases/round_safe.h"
+#include "damage_log.h"
+#include "game.h"
+#include "../adapters/lang.h"
+#include "round_safe.h"
 #include <string.h>
 
 // ---------- data ----------

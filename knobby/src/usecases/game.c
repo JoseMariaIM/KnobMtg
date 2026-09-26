@@ -3,9 +3,9 @@
  * comment at the top of that file) and the bridge that wires
  * game_state.c's game_hooks up to real UI refresh functions and owns
  * the 3 lv_timer_t objects those hooks schedule. */
-#include "usecases/game.h"
-#include "adapters/prefs_display.h"
-#include "adapters/prefs_table.h"
+#include "game.h"
+#include "../adapters/prefs_display.h"
+#include "../adapters/prefs_table.h"
 
 // ---------- player colors ----------
 static const uint32_t player_color_table[MAX_GAME_PLAYERS][LIFE_VIB_COUNT] = {

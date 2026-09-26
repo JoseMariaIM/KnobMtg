@@ -1,8 +1,8 @@
 #include "ui_language.h"
 #include "quad_screen.h"
-#include "types.h"
-#include "adapters/lang.h"
-#include "usecases/round_safe.h"
+#include "../../types.h"
+#include "../../adapters/lang.h"
+#include "../../usecases/round_safe.h"
 
 lv_obj_t *screen_language_picker = NULL;
 

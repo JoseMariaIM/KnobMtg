@@ -1,6 +1,6 @@
-#include "presentation/widgets/custom_keyboard.h"
-#include "adapters/lang.h"
-#include "usecases/round_safe.h"
+#include "custom_keyboard.h"
+#include "../../adapters/lang.h"
+#include "../../usecases/round_safe.h"
 
 /* ---------- geometry ----------
  * Screen is a 360x360 square canvas but only the inscribed circle

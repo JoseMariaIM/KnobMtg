@@ -1,17 +1,17 @@
 #include "minigames_menu.h"
 #include "quad_screen.h"
-#include "types.h"
+#include "../../types.h"
 #include <string.h>
-#include "presentation/minigames/snake.h"
-#include "presentation/minigames/pong.h"
-#include "presentation/minigames/dino.h"
-#include "presentation/minigames/tetris.h"
-#include "presentation/minigames/breakout.h"
-#include "presentation/minigames/flappy.h"
-#include "presentation/minigames/eggs.h"
-#include "presentation/minigames/invaders.h"
-#include "presentation/minigames/rps.h"
-#include "presentation/minigames/asteroids.h"
+#include "../minigames/snake.h"
+#include "../minigames/pong.h"
+#include "../minigames/dino.h"
+#include "../minigames/tetris.h"
+#include "../minigames/breakout.h"
+#include "../minigames/flappy.h"
+#include "../minigames/eggs.h"
+#include "../minigames/invaders.h"
+#include "../minigames/rps.h"
+#include "../minigames/asteroids.h"
 
 /* See minigames_menu.h. */
 

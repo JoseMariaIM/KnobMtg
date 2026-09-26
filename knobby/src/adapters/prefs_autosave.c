@@ -1,6 +1,6 @@
 #include "prefs_autosave.h"
 #include "prefs.h"
-#include "types.h"
+#include "../types.h"
 
 /* See prefs_autosave.h. */
 

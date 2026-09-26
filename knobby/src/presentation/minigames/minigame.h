@@ -1,9 +1,9 @@
 #ifndef _MINIGAME_H
 #define _MINIGAME_H
 
-#include "types.h"
-#include "adapters/lang.h"
-#include "adapters/prefs_scores.h"
+#include "../../types.h"
+#include "../../adapters/lang.h"
+#include "../../adapters/prefs_scores.h"
 
 /* The parts every minigame on this device has in common.
  *

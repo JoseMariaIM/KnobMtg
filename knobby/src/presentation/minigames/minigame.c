@@ -1,6 +1,6 @@
-#include "presentation/minigames/minigame.h"
+#include "minigame.h"
 #include <math.h>
-#include "usecases/game.h"
+#include "../../usecases/game.h"
 #include <string.h>
 
 /* See minigame.h for what this layer is for. */

@@ -1,9 +1,9 @@
 #include "ui_partners.h"
 #include "quad_screen.h"
-#include "types.h"
-#include "usecases/game.h"
-#include "adapters/prefs_table.h"
-#include "adapters/lang.h"
+#include "../../types.h"
+#include "../../usecases/game.h"
+#include "../../adapters/prefs_table.h"
+#include "../../adapters/lang.h"
 #include <string.h>
 
 lv_obj_t *screen_partners = NULL;

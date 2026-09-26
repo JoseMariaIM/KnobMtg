@@ -1,7 +1,7 @@
 #ifndef _GAME_MODE_H
 #define _GAME_MODE_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_game_mode_menu;

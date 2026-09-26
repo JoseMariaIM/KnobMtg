@@ -243,7 +243,7 @@ uint32_t esp_random(void) { return (uint32_t)rand(); }
    --table-sync / --table-session preset it, and Start/Join/Leave behave
    sensibly in the interactive sim (Join succeeds immediately — there is
    no table to join). */
-#include "adapters/net_sync.h"
+#include "../knobby/src/adapters/net_sync.h"
 
 static int64_t sim_nvs_value(const char *key)
 {
@@ -290,8 +290,8 @@ int net_sync_code(void)
 
 /* Populate the event log with random entries (shared by the headless
    and SDL mains so --random-log behaves the same in both). */
-#include "usecases/damage_log.h"
-#include "usecases/game.h"
+#include "../knobby/src/usecases/damage_log.h"
+#include "../knobby/src/usecases/game.h"
 
 void sim_populate_random_log(void)
 {

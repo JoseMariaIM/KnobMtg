@@ -15,8 +15,8 @@
  * it has to name the UI refresh functions, and this header is what
  * every screen includes, so keeping the two together meant game and
  * the UI each depended on the other. */
-#include "types.h"
-#include "entities/game_state.h"
+#include "../types.h"
+#include "../entities/game_state.h"
 
 // ---------- player colors ----------
 extern lv_color_hsv_t player_custom_hsv[MAX_DISPLAY_PLAYERS];

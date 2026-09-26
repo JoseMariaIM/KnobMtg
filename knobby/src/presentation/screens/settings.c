@@ -1,11 +1,11 @@
 #include "settings.h"
 #include "quad_screen.h"
-#include "adapters/hw.h"
-#include "adapters/prefs_display.h"
-#include "adapters/prefs_table.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/prefs_display.h"
+#include "../../adapters/prefs_table.h"
 #include <string.h>
-#include "adapters/lang.h"
-#include "usecases/game.h"
+#include "../../adapters/lang.h"
+#include "../../usecases/game.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_settings = NULL;

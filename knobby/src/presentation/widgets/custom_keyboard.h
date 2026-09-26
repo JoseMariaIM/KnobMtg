@@ -1,7 +1,7 @@
 #ifndef _CUSTOM_KEYBOARD_H
 #define _CUSTOM_KEYBOARD_H
 
-#include "types.h"
+#include "../../types.h"
 
 /* A 4-row on-screen keyboard shaped to fit this device's round display:
  * each row is only as wide as the circle actually allows at its height,

@@ -1,9 +1,9 @@
 #include "ui_1p.h"
 #include "home.h"
 #include "ui_player_menu.h"
-#include "usecases/game.h"
-#include "adapters/hw.h"
-#include "adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/lang.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_1p = NULL;

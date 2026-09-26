@@ -2,7 +2,7 @@
  * that turns a raw ADC voltage into a displayed percentage. No LVGL
  * runtime needed - it's a pure lookup - so this links against hw.o
  * directly without booting the UI. */
-#include "adapters/hw.h"
+#include "../../knobby/src/adapters/hw.h"
 #include <stdio.h>
 #include <assert.h>
 

@@ -4,7 +4,7 @@
 #include "prefs_roster.h"
 #include "prefs_network.h"
 #include "prefs_scores.h"
-#include "types.h"
+#include "../types.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <string.h>

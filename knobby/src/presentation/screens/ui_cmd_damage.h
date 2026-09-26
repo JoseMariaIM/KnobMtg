@@ -11,7 +11,7 @@
  * pair without dragging in - and being dragged back into - the main
  * life counter. */
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- screens ----------
 extern lv_obj_t *screen_select;

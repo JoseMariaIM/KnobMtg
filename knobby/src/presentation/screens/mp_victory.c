@@ -2,9 +2,9 @@
 #include "home.h"
 #include "ui_mp_internal.h"
 #include "ui_1p.h"
-#include "usecases/game.h"
-#include "adapters/prefs_table.h"
-#include "adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/prefs_table.h"
+#include "../../adapters/lang.h"
 #include "../knob.h" /* reset_all_values */
 
 lv_obj_t *screen_victory = NULL;

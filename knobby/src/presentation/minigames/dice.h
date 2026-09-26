@@ -1,7 +1,7 @@
 #ifndef _DICE_H
 #define _DICE_H
 
-#include "types.h"
+#include "../../types.h"
 
 // ---------- state ----------
 extern lv_obj_t *screen_dice_menu;

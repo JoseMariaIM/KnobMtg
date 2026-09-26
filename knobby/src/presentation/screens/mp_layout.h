@@ -1,7 +1,7 @@
 #ifndef _MP_LAYOUT_H
 #define _MP_LAYOUT_H
 
-#include "types.h"
+#include "../../types.h"
 
 /* Multiplayer panel geometry: WHICH players go where for each 2p/3p/4p
  * layout x orientation combination (mp_panel_spec_t/mp_layout_spec_t,

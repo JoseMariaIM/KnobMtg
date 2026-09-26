@@ -1,5 +1,5 @@
 #include "hw.h"
-#include "entities/game_state.h"
+#include "../entities/game_state.h"
 #include "prefs_display.h"
 #include "net_sync.h"
 #include "lang.h"

@@ -1,7 +1,7 @@
 #include "ui_cmd_damage.h"
 #include "home.h"
-#include "usecases/game.h"
-#include "adapters/lang.h"
+#include "../../usecases/game.h"
+#include "../../adapters/lang.h"
 
 // ---------- screens ----------
 lv_obj_t *screen_select = NULL;

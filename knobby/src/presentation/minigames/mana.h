@@ -1,7 +1,7 @@
 #ifndef _MANA_H
 #define _MANA_H
 
-#include "types.h"
+#include "../../types.h"
 
 #define MANA_COLOR_COUNT 6
 

@@ -1,7 +1,7 @@
 #ifndef _INTRO_H
 #define _INTRO_H
 
-#include "types.h"
+#include "../../types.h"
 
 extern lv_obj_t *screen_intro;
 

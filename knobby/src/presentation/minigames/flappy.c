@@ -1,5 +1,5 @@
 #include "flappy.h"
-#include "presentation/minigames/minigame.h"
+#include "minigame.h"
 #include "esp_random.h"
 #include <math.h>
 #include <string.h>

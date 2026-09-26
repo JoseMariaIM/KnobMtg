@@ -1,8 +1,8 @@
 #include "wifi_ota.h"
-#include "adapters/prefs_network.h"
-#include "adapters/version.h"
-#include "adapters/hw.h"
-#include "adapters/lang.h"
+#include "../../adapters/prefs_network.h"
+#include "../../adapters/version.h"
+#include "../../adapters/hw.h"
+#include "../../adapters/lang.h"
 
 #include <string.h>
 #include <stdio.h>

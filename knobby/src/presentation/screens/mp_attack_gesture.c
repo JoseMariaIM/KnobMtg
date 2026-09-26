@@ -1,7 +1,7 @@
 #include "mp_attack_gesture.h"
 #include "ui_mp_internal.h"
 #include "ui_mp.h"
-#include "usecases/game.h"
+#include "../../usecases/game.h"
 #include "attack.h"
 #include <string.h>
 

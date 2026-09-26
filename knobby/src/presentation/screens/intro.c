@@ -1,9 +1,9 @@
 #include "intro.h"
 #include "home.h"
-#include "adapters/assets_intro.h"
-#include "adapters/hw.h"
+#include "../../adapters/assets_intro.h"
+#include "../../adapters/hw.h"
 #include "ota_notice.h"
-#include "usecases/game.h" /* start_player_selection_animation */
+#include "../../usecases/game.h" /* start_player_selection_animation */
 
 lv_obj_t *screen_intro = NULL;
 
