@@ -3,7 +3,7 @@
  * poke a corner outside the inscribed circle. Pure geometry, no LVGL
  * needed at all - this is exactly the kind of check that's cheap to
  * run exhaustively. */
-#include "round_safe.h"
+#include "usecases/round_safe.h"
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>

@@ -1,0 +1,383 @@
+#include "hw.h"
+#include "entities/game_state.h"
+#include "prefs_display.h"
+#include "net_sync.h"
+#include "lang.h"
+#include "../knob.h"
+#include "driver/ledc.h"
+#include "esp_sleep.h"
+#include <stdio.h>
+#ifndef SIMULATOR
+#include "esp32-hal-cpu.h"
+#endif
+
+// ---------- private constants ----------
+#include "pincfg.h"
+#define BACKLIGHT_PIN TFT_BLK
+#define BACKLIGHT_LEDC_MODE LEDC_LOW_SPEED_MODE
+#define BACKLIGHT_LEDC_TIMER LEDC_TIMER_0
+#define BACKLIGHT_LEDC_CHANNEL LEDC_CHANNEL_0
+#define BACKLIGHT_LEDC_FREQ 5000
+#define BACKLIGHT_LEDC_RES LEDC_TIMER_10_BIT
+#define BACKLIGHT_DUTY_MAX 1023
+
+// Tunable power/timing constants are defined in knob_hw.h
+
+// ---------- state ----------
+int brightness_percent = DEFAULT_BRIGHTNESS_PERCENT;
+bool dimmed = false;
+bool screen_blanked = false;
+float battery_voltage = 0.0f;
+int battery_percent = -1;
+
+static void check_low_battery_cutoff(void);
+static uint32_t battery_sample_tick = 0;
+static bool battery_sample_valid = false;
+static int low_battery_consecutive = 0;
+static uint32_t last_activity_tick = 0;
+static uint32_t undim_tick = 0;
+static lv_timer_t *auto_dim_timer = NULL;
+#ifndef SIMULATOR
+static bool cpu_boosted = false;
+static lv_timer_t *cpu_boost_timer = NULL;
+#endif
+
+#define BATTERY_ICON_MAX 8
+static lv_obj_t *battery_icons[BATTERY_ICON_MAX];
+static int battery_icon_count = 0;
+
+static bool battery_icon_blink_visible = true;
+static lv_timer_t *battery_icon_timer = NULL;
+
+// ---------- battery curve ----------
+static const float battery_curve_voltages[] = {
+    3.35f, 3.55f, 3.68f, 3.74f, 3.80f, 3.88f, 3.96f, 4.06f, 4.18f
+};
+static const int battery_curve_percentages[] = {
+    0, 5, 12, 22, 34, 48, 64, 82, 100
+};
+
+// ---------- private helpers ----------
+static int clamp_percent(int value)
+{
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return value;
+}
+
+/* Non-static so unit tests can exercise the curve directly (see hw.h);
+   nothing outside hw.c calls it in firmware, it's just no longer hidden. */
+int battery_percent_from_voltage(float voltage)
+{
+    size_t i;
+
+    if (voltage <= battery_curve_voltages[0]) return 0;
+    for (i = 1; i < (sizeof(battery_curve_voltages) / sizeof(battery_curve_voltages[0])); i++) {
+        if (voltage <= battery_curve_voltages[i]) {
+            float low_v = battery_curve_voltages[i - 1];
+            float high_v = battery_curve_voltages[i];
+            int low_p = battery_curve_percentages[i - 1];
+            int high_p = battery_curve_percentages[i];
+            float ratio = (voltage - low_v) / (high_v - low_v);
+            return clamp_percent((int)(low_p + ((high_p - low_p) * ratio) + 0.5f));
+        }
+    }
+
+    return 100;
+}
+
+// ---------- battery ----------
+void update_battery_measurement(bool force)
+{
+    if (!force && battery_sample_valid && (lv_tick_elaps(battery_sample_tick) < BATTERY_SAMPLE_INTERVAL_MS)) {
+        return;
+    }
+
+    battery_voltage = knob_read_battery_voltage();
+    battery_sample_tick = lv_tick_get();
+    battery_sample_valid = (battery_voltage > 0.0f);
+
+    check_low_battery_cutoff();
+}
+
+static void check_low_battery_cutoff(void)
+{
+    if (!battery_sample_valid) return;
+
+    if (battery_voltage <= LOW_BATTERY_VOLTAGE) {
+        low_battery_consecutive++;
+        if (low_battery_consecutive >= LOW_BATTERY_COUNT) {
+            knob_enter_deep_sleep();
+        }
+    } else {
+        low_battery_consecutive = 0;
+    }
+}
+
+void knob_enter_deep_sleep(void)
+{
+    /* Deep sleep with the WiFi driver live violates the IDF sleep
+       contract (and this path is reachable while Table Sync is on).
+       The wake is a full reboot, so the game is left for good — a
+       recharged device rejoins via the in-game Invite. */
+    net_sync_leave_game();
+
+    // Turn off backlight
+    ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, 0);
+    ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+
+    /* Deep sleep wakes as a fresh boot, so anything still sitting in
+       the preferences cache goes with it. */
+    prefs_flush();
+
+    // Configure 15s timer wakeup to re-check voltage
+    esp_sleep_enable_timer_wakeup(LOW_BATTERY_WAKE_US);
+    esp_deep_sleep_start();
+}
+
+int read_battery_percent(void)
+{
+    update_battery_measurement(false);
+    if (!battery_sample_valid) return -1;
+    return battery_percent_from_voltage(battery_voltage);
+}
+
+// ---------- low-battery indicator ----------
+void battery_icon_register(lv_obj_t *icon)
+{
+    if (icon == NULL || battery_icon_count >= BATTERY_ICON_MAX) return;
+    battery_icons[battery_icon_count++] = icon;
+    lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+}
+
+void battery_icon_unregister(lv_obj_t *icon)
+{
+    int i;
+    if (icon == NULL) return;
+    for (i = 0; i < battery_icon_count; i++) {
+        if (battery_icons[i] == icon) {
+            battery_icons[i] = battery_icons[--battery_icon_count];
+            return;
+        }
+    }
+}
+
+static void battery_icon_apply(bool visible)
+{
+    int i;
+    for (i = 0; i < battery_icon_count; i++) {
+        if (visible) lv_obj_clear_flag(battery_icons[i], LV_OBJ_FLAG_HIDDEN);
+        else         lv_obj_add_flag(battery_icons[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/* Anything wanting a cheap periodic check can register here rather
+   than create a timer of its own. The low-battery indicator already
+   owns one whose period the device is paying for either way, and a
+   second timer is a second light-sleep wake: on this device that is
+   the dominant idle power cost, not the work the callback does.
+
+   hw.c is the wrong place to know WHAT gets polled - the first caller
+   was the OTA update check, which is how a backlight-and-battery file
+   came to include wifi_ota.h and ui_wifi.h. One hook, set at boot by
+   knob.c; NULL means nothing to poll. */
+static void (*idle_poll_hook)(void) = NULL;
+
+void hw_set_idle_poll_hook(void (*fn)(void))
+{
+    idle_poll_hook = fn;
+}
+
+static void battery_icon_timer_cb(lv_timer_t *timer)
+{
+    int pct = read_battery_percent();
+
+    if (idle_poll_hook != NULL) idle_poll_hook();
+    if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
+        /* Icon stays hidden essentially the entire time the device is
+           used - falling back to a slow check instead of waking every
+           500ms to redundantly re-hide an already-hidden icon is a big
+           chunk of this device's idle light-sleep wake frequency. */
+        lv_timer_set_period(timer, BATTERY_CHECK_IDLE_PERIOD_MS);
+        battery_icon_blink_visible = true;
+        battery_icon_apply(false);
+        return;
+    }
+    lv_timer_set_period(timer, BATTERY_BLINK_PERIOD_MS);
+    if (pct >= LOW_BATTERY_BLINK_PCT) {
+        battery_icon_blink_visible = true;
+        battery_icon_apply(true);
+        return;
+    }
+    battery_icon_apply(battery_icon_blink_visible);
+    battery_icon_blink_visible = !battery_icon_blink_visible;
+}
+
+// ---------- brightness ----------
+static void brightness_init(void)
+{
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode = BACKLIGHT_LEDC_MODE,
+        .duty_resolution = BACKLIGHT_LEDC_RES,
+        .timer_num = BACKLIGHT_LEDC_TIMER,
+        .freq_hz = BACKLIGHT_LEDC_FREQ,
+        .clk_cfg = LEDC_USE_RTC8M_CLK
+    };
+    ledc_timer_config(&ledc_timer);
+
+    ledc_channel_config_t ledc_channel = {
+        .gpio_num = BACKLIGHT_PIN,
+        .speed_mode = BACKLIGHT_LEDC_MODE,
+        .channel = BACKLIGHT_LEDC_CHANNEL,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = BACKLIGHT_LEDC_TIMER,
+        .duty = 0,
+        .hpoint = 0
+    };
+    ledc_channel_config(&ledc_channel);
+}
+
+void brightness_apply(void)
+{
+    uint32_t duty = (uint32_t)((brightness_percent * BACKLIGHT_DUTY_MAX) / 100);
+    ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
+    ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+}
+
+void change_brightness(int delta)
+{
+    brightness_percent = clamp_brightness(brightness_percent + delta);
+    prefs_set_brightness(brightness_percent);
+    brightness_apply();
+}
+
+// ---------- CPU boost ----------
+#ifndef SIMULATOR
+static void cpu_boost_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    if (cpu_boosted && lv_tick_elaps(last_activity_tick) >= CPU_BOOST_IDLE_MS) {
+        setCpuFrequencyMhz(CPU_FREQ_ACTIVE);
+        cpu_boosted = false;
+        if (cpu_boost_timer != NULL) {
+            lv_timer_pause(cpu_boost_timer);
+        }
+    }
+}
+#endif
+
+// ---------- auto-dim / screen blank ----------
+/* Deeper power state past dim: backlight fully off and the panel told to
+ * stop driving GRAM (see BLANK_AFTER_DIM_MS in hw.h and scr_display_off()
+ * in scr_st77916.h). Only ever entered from auto_dim_timer_cb() below,
+ * once already dimmed. */
+static void screen_blank_enter(void)
+{
+    if (screen_blanked) return;
+    screen_blanked = true;
+    ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, 0);
+    ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+    scr_display_off();
+}
+
+bool activity_kick(void)
+{
+    bool was_dimmed = dimmed;
+    bool was_blanked = screen_blanked;
+    last_activity_tick = lv_tick_get();
+#ifndef SIMULATOR
+    if (!cpu_boosted) {
+        setCpuFrequencyMhz(CPU_FREQ_BOOST);
+        cpu_boosted = true;
+    }
+    if (cpu_boost_timer != NULL) {
+        lv_timer_resume(cpu_boost_timer);
+    }
+#endif
+    if (was_blanked) {
+        screen_blanked = false;
+        scr_display_on();
+    }
+    if (dimmed) {
+        if (auto_dim_timer != NULL) {
+            lv_timer_resume(auto_dim_timer);
+        }
+        dimmed = false;
+        undim_tick = last_activity_tick;
+        brightness_apply();
+    }
+    /* Both dim and blank are "was it asleep" for the caller's swallow-
+       gesture check (see the touch read callback in scr_st77916.h and
+       handle_knob_event() in knob.c): a blanked screen is always dimmed
+       too (screen_blank_enter only runs once already dimmed), so was_dimmed
+       alone would already cover it, but spelling out the OR keeps this
+       correct even if that invariant ever changes. */
+    return was_dimmed || was_blanked;
+}
+
+bool in_undim_grace(void)
+{
+    return undim_tick != 0 && lv_tick_elaps(undim_tick) < UNDIM_GRACE_MS;
+}
+
+static void auto_dim_timer_cb(lv_timer_t *timer)
+{
+    int dim_setting;
+    uint32_t timeout;
+
+    (void)timer;
+
+    // Piggyback: poll battery and check low-voltage cutoff regardless of
+    // dim/blank state.  update_battery_measurement() has its own 60s throttle.
+    update_battery_measurement(false);
+
+    dim_setting = prefs_get_auto_dim();
+    if (dim_setting == AUTO_DIM_OFF) return; /* also holds the blank stage off */
+    timeout = auto_dim_ms[dim_setting];
+
+    if (!dimmed) {
+        if (lv_tick_elaps(last_activity_tick) >= timeout) {
+            dimmed = true;
+            uint32_t duty = (uint32_t)((AUTO_DIM_BRIGHTNESS * BACKLIGHT_DUTY_MAX) / 100);
+            ledc_set_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
+            ledc_update_duty(BACKLIGHT_LEDC_MODE, BACKLIGHT_LEDC_CHANNEL);
+            /* Deliberately NOT paused here (unlike before this state was
+               added): this same timer now also watches for the deeper
+               blank stage below, so it needs to keep ticking. That costs
+               nothing extra while idle - the light-sleep loop's own
+               IDLE_SLEEP_MAX_MS ceiling (knobby.ino) already wakes the
+               CPU on this same ~1s cadence regardless of which app
+               timers are pending, dim or not. */
+        }
+        return;
+    }
+
+    if (!screen_blanked && lv_tick_elaps(last_activity_tick) >= timeout + BLANK_AFTER_DIM_MS) {
+        screen_blank_enter();
+    }
+
+    if (screen_blanked && auto_dim_timer != NULL) {
+        /* Nothing left to watch for until activity_kick() reverses both
+           and resumes this timer. */
+        lv_timer_pause(auto_dim_timer);
+    }
+}
+
+// ---------- init ----------
+void knob_hw_init(void)
+{
+    prefs_init();
+    lang_init(); /* must run before any build_*_screen() call below */
+    /* And this before the screens too: they bake the names into their
+       labels as they are built. */
+    player_names_restore();
+    brightness_init();
+    brightness_percent = prefs_get_brightness();
+    last_activity_tick = lv_tick_get();
+    auto_dim_timer = lv_timer_create(auto_dim_timer_cb, AUTO_DIM_CHECK_PERIOD_MS, NULL);
+    battery_icon_timer = lv_timer_create(battery_icon_timer_cb, BATTERY_BLINK_PERIOD_MS, NULL);
+#ifndef SIMULATOR
+    cpu_boost_timer = lv_timer_create(cpu_boost_timer_cb, 100, NULL);
+    lv_timer_pause(cpu_boost_timer);
+#endif
+}

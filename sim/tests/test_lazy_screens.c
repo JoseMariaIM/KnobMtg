@@ -10,16 +10,16 @@
  * (the lv_obj_t* pointer identity must stay the same, or every repeat
  * visit would leak the previous screen's objects into LVGL's heap). */
 #include "test_harness.h"
-#include "ui_wifi.h"
-#include "snake.h"
-#include "pong.h"
-#include "settings.h"
+#include "presentation/screens/ui_wifi.h"
+#include "presentation/minigames/snake.h"
+#include "presentation/minigames/pong.h"
+#include "presentation/screens/settings.h"
 #include "nav.h"
-#include "ui_table_sync.h"
-#include "ui_language.h"
-#include "ui_partners.h"
-#include "ui_battery.h"
-#include "minigames_menu.h"
+#include "presentation/screens/ui_table_sync.h"
+#include "presentation/screens/ui_language.h"
+#include "presentation/screens/ui_partners.h"
+#include "presentation/screens/ui_battery.h"
+#include "presentation/screens/minigames_menu.h"
 #include <stdio.h>
 #include <assert.h>
 

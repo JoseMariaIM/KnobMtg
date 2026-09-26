@@ -3,11 +3,11 @@
 #include "sim_stubs.h"
 #include "board_detect.h"
 #include "knob.h"
-#include "hw.h"
-#include "prefs_display.h"
-#include "prefs_table.h"
-#include "game.h"
-#include "ui_1p.h"
+#include "adapters/hw.h"
+#include "adapters/prefs_display.h"
+#include "adapters/prefs_table.h"
+#include "usecases/game.h"
+#include "presentation/screens/ui_1p.h"
 
 #include <stdio.h>
 #include <stdbool.h>

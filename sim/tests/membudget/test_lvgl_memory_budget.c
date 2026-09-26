@@ -28,19 +28,19 @@
  * transient UI (color wheel, QR, keyboards, damage log pages) needs at
  * runtime. */
 #include "test_harness.h"
-#include "settings.h"
-#include "settings.h"
-#include "ui_wifi.h"
-#include "snake.h"
-#include "pong.h"
-#include "dino.h"
-#include "tetris.h"
-#include "breakout.h"
-#include "flappy.h"
-#include "eggs.h"
-#include "invaders.h"
-#include "rps.h"
-#include "asteroids.h"
+#include "presentation/screens/settings.h"
+#include "presentation/screens/settings.h"
+#include "presentation/screens/ui_wifi.h"
+#include "presentation/minigames/snake.h"
+#include "presentation/minigames/pong.h"
+#include "presentation/minigames/dino.h"
+#include "presentation/minigames/tetris.h"
+#include "presentation/minigames/breakout.h"
+#include "presentation/minigames/flappy.h"
+#include "presentation/minigames/eggs.h"
+#include "presentation/minigames/invaders.h"
+#include "presentation/minigames/rps.h"
+#include "presentation/minigames/asteroids.h"
 #include <stdio.h>
 #include <assert.h>
 

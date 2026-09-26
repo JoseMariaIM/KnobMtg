@@ -25,16 +25,16 @@
  */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "minigame.h"
-#include "snake.h"
-#include "pong.h"
-#include "dino.h"
-#include "tetris.h"
-#include "breakout.h"
-#include "flappy.h"
-#include "eggs.h"
-#include "invaders.h"
-#include "asteroids.h"
+#include "presentation/minigames/minigame.h"
+#include "presentation/minigames/snake.h"
+#include "presentation/minigames/pong.h"
+#include "presentation/minigames/dino.h"
+#include "presentation/minigames/tetris.h"
+#include "presentation/minigames/breakout.h"
+#include "presentation/minigames/flappy.h"
+#include "presentation/minigames/eggs.h"
+#include "presentation/minigames/invaders.h"
+#include "presentation/minigames/asteroids.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

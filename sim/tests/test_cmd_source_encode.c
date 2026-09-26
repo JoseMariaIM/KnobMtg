@@ -4,7 +4,7 @@
  * functions in game.h). A silent off-by-one here would misattribute
  * damage to the wrong commander after an undo - exhaustively round-trip
  * every valid (source, slot) pair. Pure math, no LVGL runtime needed. */
-#include "game.h"
+#include "usecases/game.h"
 #include <stdio.h>
 #include <assert.h>
 

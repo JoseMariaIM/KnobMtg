@@ -11,12 +11,12 @@
  */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "game_state.h"
-#include "prefs_roster.h"
-#include "prefs_table.h"
-#include "rename.h"
-#include "ui_player_menu.h"
-#include "attack.h"
+#include "entities/game_state.h"
+#include "adapters/prefs_roster.h"
+#include "adapters/prefs_table.h"
+#include "usecases/rename.h"
+#include "presentation/screens/ui_player_menu.h"
+#include "presentation/screens/attack.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

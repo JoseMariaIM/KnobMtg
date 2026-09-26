@@ -6,7 +6,7 @@
  * function directly with hand-built packets - exactly what two real
  * devices exchange over ESP-NOW, without needing two processes. */
 #include "test_harness.h"
-#include "net_sync.h"
+#include "adapters/net_sync.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

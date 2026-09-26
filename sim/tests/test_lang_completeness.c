@@ -4,7 +4,7 @@
  * initializers default absent slots to NULL), it just silently shows
  * English on that one string in the Spanish UI (see t()'s fallback).
  * This makes the hole visible in CI instead of a bug report. */
-#include "lang.h"
+#include "adapters/lang.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>

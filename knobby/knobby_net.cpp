@@ -23,7 +23,7 @@
 #include "knobby_net.h"
 
 extern "C" {
-#include "src/net_sync.h"
+#include "src/adapters/net_sync.h"
 }
 
 #define KNOBBY_NET_MAGIC   0x4B4E4259u /* "KNBY": filters foreign ESP-NOW traffic */

@@ -12,14 +12,14 @@
  * clock nobody declared. */
 #include "test_harness.h"
 #include "sim_stubs.h"
-#include "game_state.h"
-#include "prefs_table.h"
-#include "settings.h"
+#include "entities/game_state.h"
+#include "adapters/prefs_table.h"
+#include "presentation/screens/settings.h"
 #include "nav.h"
-#include "ui_partners.h"
-#include "ui_battery.h"
-#include "ui_cmd_damage.h"
-#include "ui_player_menu.h"
+#include "presentation/screens/ui_partners.h"
+#include "presentation/screens/ui_battery.h"
+#include "presentation/screens/ui_cmd_damage.h"
+#include "presentation/screens/ui_player_menu.h"
 #include <stdio.h>
 #include <assert.h>
 

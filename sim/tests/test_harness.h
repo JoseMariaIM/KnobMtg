@@ -11,14 +11,14 @@
 #include "board_detect.h"
 #include <lvgl.h>
 #include "knob.h"
-#include "game.h"
-#include "prefs.h"
-#include "prefs_display.h"
-#include "prefs_table.h"
-#include "prefs_roster.h"
-#include "prefs_network.h"
-#include "prefs_scores.h"
-#include "hw.h"
+#include "usecases/game.h"
+#include "adapters/prefs.h"
+#include "adapters/prefs_display.h"
+#include "adapters/prefs_table.h"
+#include "adapters/prefs_roster.h"
+#include "adapters/prefs_network.h"
+#include "adapters/prefs_scores.h"
+#include "adapters/hw.h"
 #include "sim_stubs.h"
 #include <string.h>
 

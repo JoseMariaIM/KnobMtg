@@ -11,8 +11,8 @@
 #include <lvgl.h>
 #include "hal/lv_hal.h"
 #include "knob.h"
-#include "src/hw.h"
-#include "src/wifi_ota.h"
+#include "src/adapters/hw.h"
+#include "src/presentation/ota/wifi_ota.h"
 #include "knobby_net.h"
 
 static const float BATTERY_DIVIDER_RATIO = 2.0f;

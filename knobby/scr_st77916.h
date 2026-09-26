@@ -7,7 +7,7 @@
 #include <ESP_Panel_Library.h>
 // #include "bidi_switch_knob.h"
 #include "knob.h"
-#include "src/hw.h"
+#include "src/adapters/hw.h"
 
 #define SCREEN_RES_HOR 360
 #define SCREEN_RES_VER 360

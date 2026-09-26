@@ -1,0 +1,467 @@
+#include "usecases/rename.h"
+#include "presentation/screens/home.h"
+#include "presentation/screens/ui_mp.h"
+#include "presentation/screens/ui_cmd_damage.h"
+#include "usecases/game.h"
+#include "adapters/prefs_table.h"
+#include "adapters/prefs_roster.h"
+#include "adapters/net_sync.h"
+#include "adapters/lang.h"
+#include "presentation/widgets/custom_keyboard.h"
+#include "usecases/round_safe.h"
+#include <string.h>
+
+// ---------- screens ----------
+lv_obj_t *screen_player_name = NULL;
+
+// ---------- MRU name list ----------
+static char mru_names[NAME_LIST_COUNT][NAME_LIST_LEN];
+static int mru_count = 0;
+
+// ---------- widgets ----------
+static lv_obj_t *label_name_title = NULL;
+static lv_obj_t *mru_list_container = NULL;
+static lv_obj_t *btn_mru_select = NULL;
+static lv_obj_t *textarea_name = NULL;
+static custom_keyboard_t name_kb;
+static bool name_keyboard_mode = false;
+
+/* Container is fixed on screen and only its content scrolls, so sizing
+ * it to the round-safe width for its own y-span (see round_safe.h)
+ * keeps every row - however far scrolled - inside the glass. Ends
+ * short of btn_mru_select below it. */
+#define MRU_LIST_Y1 64
+#define MRU_LIST_Y2 260
+static int mru_list_width = 280;
+static int mru_selected = 0;
+
+// ---------- rename-all state ----------
+static bool rename_all_active = false;
+static int rename_all_start = 0;
+static int rename_all_count = 0;
+static int rename_all_done = 0;
+
+// ---------- forward declarations ----------
+static void refresh_mru_list_ui(void);
+static void update_mru_highlight(void);
+static void name_screen_show_list(void);
+static void name_screen_show_keyboard(void);
+
+// ---------- MRU helpers ----------
+static bool is_default_name(const char *name)
+{
+    if (name[0] != 'P') return false;
+    if (name[1] < '1' || name[1] > '9') return false;
+    if (name[2] != '\0') return false;
+    return true;
+}
+
+static void mru_load(void)
+{
+    prefs_get_name_list(mru_names);
+    mru_count = 0;
+    for (int i = 0; i < NAME_LIST_COUNT; i++) {
+        if (mru_names[i][0] == '\0') break;
+        mru_count = i + 1;
+    }
+}
+
+static void mru_use_name(const char *name)
+{
+    int i, found = -1;
+
+    for (i = 0; i < mru_count; i++) {
+        if (strcmp(mru_names[i], name) == 0) { found = i; break; }
+    }
+
+    if (found > 0) {
+        char tmp[NAME_LIST_LEN];
+        memcpy(tmp, mru_names[found], NAME_LIST_LEN);
+        memmove(&mru_names[1], &mru_names[0], (size_t)found * NAME_LIST_LEN);
+        memcpy(mru_names[0], tmp, NAME_LIST_LEN);
+    } else if (found < 0) {
+        int shift = (mru_count < NAME_LIST_COUNT) ? mru_count : NAME_LIST_COUNT - 1;
+        if (shift > 0)
+            memmove(&mru_names[1], &mru_names[0], (size_t)shift * NAME_LIST_LEN);
+        snprintf(mru_names[0], NAME_LIST_LEN, "%s", name);
+        if (mru_count < NAME_LIST_COUNT) mru_count++;
+    }
+    /* found == 0: already at front, nothing to do */
+
+    prefs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
+}
+
+// ---------- return target ----------
+static void (*return_hook)(int player) = NULL;
+
+void rename_set_return_hook(void (*fn)(int player))
+{
+    return_hook = fn;
+}
+
+/* The one way out of the rename screen once a name is settled: repaint
+   everything that shows a name, then hand control back to whoever is
+   above us. */
+static void rename_return(void)
+{
+    refresh_rename_ui();
+    refresh_select_ui();
+    refresh_damage_ui();
+    if (return_hook != NULL) return_hook(menu_player);
+}
+
+// ---------- rename-all advance ----------
+static void rename_all_advance(void)
+{
+    rename_all_done++;
+    if (rename_all_done < rename_all_count) {
+        int next = (rename_all_start + rename_all_done) % rename_all_count;
+        menu_player = next;
+        open_rename_screen();
+    } else {
+        rename_all_active = false;
+        refresh_select_ui();
+        refresh_damage_ui();
+        back_to_main();
+    }
+}
+
+// ---------- apply + return ----------
+static void apply_name_and_return(const char *name)
+{
+    /* Unchanged name (e.g. the "keep current" row, where name aliases
+       the destination buffer): skip the write — snprintf with
+       overlapping src/dst is UB — and the broadcast, so a no-op
+       re-apply can't win a version tie against a real remote rename. */
+    if (strcmp(player_names[menu_player], name) != 0) {
+        snprintf(player_names[menu_player],
+                 sizeof(player_names[menu_player]), "%s", name);
+        /* The one place a name changes on purpose, so the one place it
+           is written down. A game reset and a power cycle both leave
+           the table's names alone. */
+        player_names_persist();
+        net_sync_commit_names();
+    }
+    if (!is_default_name(name))
+        mru_use_name(name);
+    refresh_multiplayer_ui();
+
+    if (rename_all_active) {
+        rename_all_advance();
+    } else {
+        rename_return();
+    }
+}
+
+// ---------- events ----------
+static void event_name_save(lv_event_t *e)
+{
+    const char *txt;
+
+    (void)e;
+    if (textarea_name == NULL) return;
+
+    txt = lv_textarea_get_text(textarea_name);
+    if (strlen(txt) == 0) {
+        /* Empty: reset to default, don't add to MRU */
+        snprintf(player_names[menu_player],
+                 sizeof(player_names[menu_player]),
+                 "P%d", menu_player + 1);
+        net_sync_commit_names();
+        refresh_multiplayer_ui();
+        if (rename_all_active) {
+            rename_all_advance();
+        } else {
+            rename_return();
+        }
+    } else {
+        apply_name_and_return(txt);
+    }
+}
+
+static void event_mru_delete(lv_event_t *e)
+{
+    (void)e;
+    /* Only delete actual MRU entries (rows 1..mru_count) */
+    if (mru_selected < 1 || mru_selected > mru_count) return;
+
+    int del = mru_selected - 1;
+    int remaining = mru_count - del - 1;
+    if (remaining > 0)
+        memmove(&mru_names[del], &mru_names[del + 1], (size_t)remaining * NAME_LIST_LEN);
+    mru_count--;
+    mru_names[mru_count][0] = '\0';
+
+    prefs_set_name_list((const char (*)[NAME_LIST_LEN])mru_names);
+
+    /* Clamp selection */
+    int total = 1 + mru_count + 1;
+    if (mru_selected >= total) mru_selected = total - 1;
+
+    refresh_mru_list_ui();
+}
+
+static void event_mru_select(lv_event_t *e)
+{
+    (void)e;
+    if (mru_selected == 0) {
+        /* Current name row — re-apply as-is */
+        apply_name_and_return(player_names[menu_player]);
+    } else if (mru_selected <= mru_count) {
+        apply_name_and_return(mru_names[mru_selected - 1]);
+    } else {
+        name_screen_show_keyboard();
+        refresh_rename_ui();
+    }
+}
+
+static void event_mru_row_click(lv_event_t *e)
+{
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    if (idx == 0) {
+        /* Current name row */
+        apply_name_and_return(player_names[menu_player]);
+    } else if (idx <= mru_count) {
+        apply_name_and_return(mru_names[idx - 1]);
+    } else {
+        name_screen_show_keyboard();
+        refresh_rename_ui();
+    }
+}
+
+// ---------- MRU list UI ----------
+static void add_list_row(int idx, const char *text, lv_color_t color)
+{
+    lv_obj_t *row = lv_obj_create(mru_list_container);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, mru_list_width - 20, 28);
+    lv_obj_set_style_radius(row, 4, 0);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(row, event_mru_row_click, LV_EVENT_CLICKED, (void *)(intptr_t)idx);
+
+    lv_obj_t *lbl = lv_label_create(row);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_color(lbl, color, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_es_16, 0);
+    lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 8, 0);
+}
+
+static void refresh_mru_list_ui(void)
+{
+    int i, total;
+
+    if (mru_list_container == NULL) return;
+
+    lv_obj_clean(mru_list_container);
+    /* row 0 = current name, rows 1..mru_count = MRU, last = "Type new..." */
+    total = 1 + mru_count + 1;
+
+    add_list_row(0, player_names[menu_player], lv_color_hex(0x80CBC4));
+    for (i = 0; i < mru_count; i++)
+        add_list_row(1 + i, mru_names[i], lv_color_white());
+    add_list_row(total - 1, t(STR_RENAME_TYPE_NEW), lv_color_hex(0x7A7A7A));
+
+    if (mru_selected >= total) mru_selected = total - 1;
+    if (mru_selected < 0) mru_selected = 0;
+
+    lv_obj_scroll_to_y(mru_list_container, 0, LV_ANIM_OFF);
+    update_mru_highlight();
+}
+
+static void update_mru_highlight(void)
+{
+    int i;
+    int total = 1 + mru_count + 1;
+    uint32_t child_count = lv_obj_get_child_cnt(mru_list_container);
+
+    for (i = 0; i < (int)child_count && i < total; i++) {
+        lv_obj_t *row = lv_obj_get_child(mru_list_container, i);
+        if (i == mru_selected) {
+            lv_obj_set_style_bg_color(row, lv_color_hex(0x333333), 0);
+            lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        } else {
+            lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        }
+    }
+
+    /* Scroll selected into view. Force layout first: rows rebuilt this pass
+       have {0,0,0,0} coords until LVGL lays out the flex container. */
+    if (mru_selected >= 0 && mru_selected < (int)child_count) {
+        lv_obj_t *sel = lv_obj_get_child(mru_list_container, mru_selected);
+        lv_obj_update_layout(mru_list_container);
+        lv_coord_t sel_y = lv_obj_get_y(sel);
+        lv_coord_t sel_h = lv_obj_get_height(sel);
+        lv_coord_t cont_h = lv_obj_get_height(mru_list_container);
+        lv_coord_t scroll_y = lv_obj_get_scroll_y(mru_list_container);
+
+        if (sel_y - scroll_y < 0)
+            lv_obj_scroll_to_y(mru_list_container, sel_y, LV_ANIM_ON);
+        else if (sel_y + sel_h - scroll_y > cont_h)
+            lv_obj_scroll_to_y(mru_list_container, sel_y + sel_h - cont_h, LV_ANIM_ON);
+    }
+}
+
+// ---------- mode switching ----------
+static void name_screen_show_list(void)
+{
+    name_keyboard_mode = false;
+    if (mru_list_container) lv_obj_clear_flag(mru_list_container, LV_OBJ_FLAG_HIDDEN);
+    if (btn_mru_select)     lv_obj_clear_flag(btn_mru_select, LV_OBJ_FLAG_HIDDEN);
+    if (textarea_name)      lv_obj_add_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
+    custom_keyboard_set_hidden(&name_kb, true);
+}
+
+static void name_screen_show_keyboard(void)
+{
+    name_keyboard_mode = true;
+    if (mru_list_container) lv_obj_add_flag(mru_list_container, LV_OBJ_FLAG_HIDDEN);
+    if (btn_mru_select)     lv_obj_add_flag(btn_mru_select, LV_OBJ_FLAG_HIDDEN);
+    if (textarea_name)      lv_obj_clear_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
+    custom_keyboard_reset(&name_kb);
+    custom_keyboard_set_hidden(&name_kb, false);
+}
+
+// ---------- knob / back ----------
+void mru_select_next(void)
+{
+    if (name_keyboard_mode) return;
+    if (mru_selected < mru_count + 1) {
+        mru_selected++;
+        update_mru_highlight();
+    }
+}
+
+void mru_select_prev(void)
+{
+    if (name_keyboard_mode) return;
+    if (mru_selected > 0) {
+        mru_selected--;
+        update_mru_highlight();
+    }
+}
+
+/* The knob does double duty on this screen: cycles the MRU list when
+   it's showing, or moves the text cursor when the keyboard is - the
+   keyboard itself no longer has left/right arrow keys (they were hard
+   to hit and unreliable to tap; see custom_keyboard.c history), so the
+   knob is now the only way to reposition the cursor while typing. */
+void name_screen_knob(int dir)
+{
+    if (name_keyboard_mode) {
+        if (textarea_name == NULL) return;
+        if (dir < 0) lv_textarea_cursor_left(textarea_name);
+        else if (dir > 0) lv_textarea_cursor_right(textarea_name);
+        return;
+    }
+    if (dir < 0) mru_select_prev();
+    else if (dir > 0) mru_select_next();
+}
+
+bool name_screen_handle_back(void)
+{
+    if (name_keyboard_mode) {
+        name_screen_show_list();
+        refresh_rename_ui();
+        return true;
+    }
+    if (rename_all_active) {
+        rename_all_active = false;
+        back_to_main();
+        return true;
+    }
+    return false;
+}
+
+// ---------- refresh / open ----------
+void refresh_rename_ui(void)
+{
+    char buf[40];
+
+    if (label_name_title != NULL) {
+        if (name_keyboard_mode)
+            lv_label_set_text(label_name_title, t(STR_RENAME_NEW_NAME));
+        else {
+            snprintf(buf, sizeof(buf), t(STR_RENAME_FMT), player_names[menu_player]);
+            lv_label_set_text(label_name_title, buf);
+        }
+    }
+
+    if (textarea_name != NULL) {
+        lv_textarea_set_text(textarea_name, "");
+    }
+
+    refresh_mru_list_ui();
+}
+
+void open_rename_screen(void)
+{
+    mru_load();
+    mru_selected = 0;
+    name_screen_show_list();
+    refresh_rename_ui();
+    load_screen_if_needed(screen_player_name);
+}
+
+void open_rename_all_screen(void)
+{
+    rename_all_active = true;
+    rename_all_start = menu_player;
+    rename_all_count = prefs_get_num_players();
+    rename_all_done = 0;
+    open_rename_screen();
+}
+
+// ---------- build ----------
+void build_rename_screen(void)
+{
+    screen_player_name = lv_obj_create(NULL);
+    lv_obj_set_size(screen_player_name, 360, 360);
+    lv_obj_set_style_bg_color(screen_player_name, lv_color_black(), 0);
+    lv_obj_set_style_border_width(screen_player_name, 0, 0);
+    lv_obj_set_scrollbar_mode(screen_player_name, LV_SCROLLBAR_MODE_OFF);
+
+    /* Title (shared between modes) */
+    label_name_title = lv_label_create(screen_player_name);
+    lv_obj_set_style_text_color(label_name_title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(label_name_title, &lv_font_es_22, 0);
+    lv_obj_align(label_name_title, LV_ALIGN_TOP_MID, 0, 18);
+
+    /* --- List mode widgets --- */
+    mru_list_width = round_safe_width(MRU_LIST_Y1, MRU_LIST_Y2);
+    mru_list_container = lv_obj_create(screen_player_name);
+    lv_obj_remove_style_all(mru_list_container);
+    lv_obj_set_size(mru_list_container, mru_list_width, MRU_LIST_Y2 - MRU_LIST_Y1);
+    lv_obj_align(mru_list_container, LV_ALIGN_TOP_MID, 0, MRU_LIST_Y1);
+    lv_obj_set_flex_flow(mru_list_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(mru_list_container, 2, 0);
+    lv_obj_set_scrollbar_mode(mru_list_container, LV_SCROLLBAR_MODE_OFF);
+
+    btn_mru_select = lv_btn_create(screen_player_name);
+    lv_obj_set_size(btn_mru_select, 120, 38);
+    lv_obj_add_event_cb(btn_mru_select, event_mru_select, LV_EVENT_SHORT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_mru_select, event_mru_delete, LV_EVENT_LONG_PRESSED, NULL);
+    lv_obj_t *btn_mru_label = lv_label_create(btn_mru_select);
+    lv_label_set_text(btn_mru_label, t(STR_RENAME_SELECT));
+    lv_obj_center(btn_mru_label);
+    lv_obj_align(btn_mru_select, LV_ALIGN_TOP_MID, 0, 278);
+
+    /* --- Keyboard mode widgets (hidden initially) --- */
+    textarea_name = lv_textarea_create(screen_player_name);
+    lv_obj_set_size(textarea_name, 240, 44);
+    lv_obj_align(textarea_name, LV_ALIGN_TOP_MID, 0, 56);
+    lv_textarea_set_max_length(textarea_name, 15);
+    lv_textarea_set_one_line(textarea_name, true);
+    lv_obj_add_flag(textarea_name, LV_OBJ_FLAG_HIDDEN);
+
+    /* Custom round-display-shaped keyboard (see custom_keyboard.h) -
+       its own Enter key fires LV_EVENT_READY, wired to event_name_save
+       below just like the removed "Guardar" button used to be. */
+    custom_keyboard_build(&name_kb, screen_player_name);
+    custom_keyboard_set_textarea(&name_kb, textarea_name);
+    custom_keyboard_set_ready_cb(&name_kb, event_name_save);
+    custom_keyboard_set_hidden(&name_kb, true);
+
+    mru_load();
+}
+
+void rename_test_apply(const char *name) { apply_name_and_return(name); }

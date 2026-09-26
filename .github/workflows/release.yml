@@ -49,7 +49,7 @@ jobs:
 
       - name: Write release version header
         run: |
-          echo "#define FIRMWARE_VERSION \"${{ github.ref_name }}\"" > knobby/src/version.h
+          echo "#define FIRMWARE_VERSION \"${{ github.ref_name }}\"" > knobby/src/adapters/version.h
 
       - name: Compile with arduino-cli
         run: |
