@@ -55,6 +55,19 @@ extern int battery_percent;
 // reason to wake the CPU from light sleep 2x/second for that. It only
 // needs BATTERY_BLINK_PERIOD_MS cadence once it's actually blinking.
 #define BATTERY_CHECK_IDLE_PERIOD_MS 5000   /* ms, while icon is hidden */
+// This board has no VBUS/charge-status pin (see board_pins_t) - the ADC
+// only sees the BAT node, which the charger IC also drives. A battery
+// discharging under normal use never jumps this much between two
+// samples; only a charger being plugged in pushes that node up this
+// fast (regulation + the IR drop from the charge current itself). Used
+// as a heuristic "charging just started" trigger - see
+// battery_is_charging() in hw.c.
+#define BATTERY_CHARGE_DETECT_RISE_V 0.12f  /* volts, between two samples */
+// Once flagged charging, require the voltage to fall back this far off
+// its charging-phase peak before believing the charger was unplugged -
+// stops normal CV-phase ripple near the top of the curve from flapping
+// the flag on and off every sample.
+#define BATTERY_CHARGE_HYSTERESIS_V  0.08f  /* volts, off the peak */
 
 // ---------- functions ----------
 void knob_hw_init(void);
@@ -62,6 +75,10 @@ void brightness_apply(void);
 void update_battery_measurement(bool force);
 int read_battery_percent(void);
 int battery_percent_from_voltage(float voltage); /* pure curve lookup, exposed for unit tests */
+/* Heuristic only (see BATTERY_CHARGE_DETECT_RISE_V above) - this board
+   can't directly sense the charger, so this infers it from how the
+   measured voltage moves between samples. */
+bool battery_is_charging(void);
 void change_brightness(int delta);
 bool in_undim_grace(void);
 void knob_enter_deep_sleep(void);

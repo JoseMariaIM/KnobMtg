@@ -53,6 +53,20 @@ void refresh_battery_ui(void)
         return;
     }
 
+    /* This board can't tell "charger plugged in" from "battery full"
+       directly (see battery_is_charging() in hw.c) - the raw percentage
+       jumps around while the charger is regulating the BAT node, so
+       showing it as a normal reading here would just repeat the
+       confusing jump this screen exists to explain. Say so instead. */
+    if (battery_is_charging()) {
+        lv_label_set_text(label_settings_battery, t(STR_BATTERY_CHARGING));
+        if (label_settings_battery_detail != NULL) {
+            snprintf(detail_buf, sizeof(detail_buf), t(STR_BATTERY_CHARGING_DETAIL_FMT), battery_voltage);
+            lv_label_set_text(label_settings_battery_detail, detail_buf);
+        }
+        return;
+    }
+
     snprintf(buf, sizeof(buf), t(STR_BATTERY_FMT), battery_percent);
     lv_label_set_text(label_settings_battery, buf);
     if (label_settings_battery_detail != NULL) {
