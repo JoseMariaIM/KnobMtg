@@ -31,9 +31,14 @@ float battery_voltage = 0.0f;
 int battery_percent = -1;
 
 static void check_low_battery_cutoff(void);
+static void update_charging_state(float new_voltage);
 static uint32_t battery_sample_tick = 0;
 static bool battery_sample_valid = false;
 static int low_battery_consecutive = 0;
+static float battery_prev_voltage = 0.0f;
+static bool battery_prev_valid = false;
+static bool battery_charging = false;
+static float battery_charging_peak = 0.0f;
 static uint32_t last_activity_tick = 0;
 static uint32_t undim_tick = 0;
 static lv_timer_t *auto_dim_timer = NULL;
@@ -97,7 +102,53 @@ void update_battery_measurement(bool force)
     battery_sample_tick = lv_tick_get();
     battery_sample_valid = (battery_voltage > 0.0f);
 
+    if (battery_sample_valid) {
+        update_charging_state(battery_voltage);
+        battery_prev_voltage = battery_voltage;
+        battery_prev_valid = true;
+    }
+
     check_low_battery_cutoff();
+}
+
+/* This board's ADC only sees the BAT node, which the charger IC also
+   drives - there is no separate VBUS/charge-status pin to read (see
+   board_pins_t in board_detect.h). So "is a charger plugged in" is
+   inferred from how the measured voltage moves between samples instead
+   of measured directly:
+     - a battery discharging under normal use never jumps up by
+       BATTERY_CHARGE_DETECT_RISE_V between two samples - only a
+       charger regulating that node (plus the IR drop from the charge
+       current itself) does that, so a jump that size flags "charging".
+     - once flagged, the flag sticks through normal CV-phase ripple
+       near the top of the curve, and only clears once the voltage has
+       fallen BATTERY_CHARGE_HYSTERESIS_V off its charging-phase peak -
+       i.e. the charger was actually unplugged and the battery is
+       sagging back down to its real resting voltage. */
+static void update_charging_state(float new_voltage)
+{
+    if (!battery_prev_valid) {
+        return; /* nothing yet to compare the first sample against */
+    }
+
+    if (battery_charging) {
+        if (new_voltage > battery_charging_peak) {
+            battery_charging_peak = new_voltage;
+        } else if (battery_charging_peak - new_voltage >= BATTERY_CHARGE_HYSTERESIS_V) {
+            battery_charging = false;
+        }
+        return;
+    }
+
+    if (new_voltage - battery_prev_voltage >= BATTERY_CHARGE_DETECT_RISE_V) {
+        battery_charging = true;
+        battery_charging_peak = new_voltage;
+    }
+}
+
+bool battery_is_charging(void)
+{
+    return battery_charging;
 }
 
 static void check_low_battery_cutoff(void)
@@ -193,7 +244,7 @@ static void battery_icon_timer_cb(lv_timer_t *timer)
     int pct = read_battery_percent();
 
     if (idle_poll_hook != NULL) idle_poll_hook();
-    if (pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
+    if (battery_is_charging() || pct < 0 || pct >= LOW_BATTERY_INDICATOR_PCT) {
         /* Icon stays hidden essentially the entire time the device is
            used - falling back to a slow check instead of waking every
            500ms to redundantly re-hide an already-hidden icon is a big
