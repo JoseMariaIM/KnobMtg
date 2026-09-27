@@ -316,6 +316,9 @@ static void print_usage(void)
            "  --counter-delta <n>    Pending knob delta on counter-edit (default: 0)\n"
            "  --counter-player <n>   Player for counter-edit, 0-3 (default: 0)\n"
            "  --enemy-damage <csv>   Set commander damage per enemy row (e.g. 5,12,3)\n"
+           "  --cmd-damage <spec>    Committed commander damage, as\n"
+           "                         target:source:slot:damage groups (slot 1 = partner),\n"
+           "                         e.g. 1:0:0:12;1:0:1:5;1:2:0:9\n"
            "  --damage-delta <n>     Pending knob delta on the damage screen (default: 0)\n"
            "  --all-damage-value <n> Value for all-damage screen (default: 5)\n"
            "  --menu-player <n>      Player index for player-menu, 0-3 (default: 0)\n"
@@ -354,6 +357,33 @@ static int parse_csv_ints(const char *csv, int *out, int max_count)
         tok = strtok(NULL, ",");
     }
     return i;
+}
+
+/* "target:source:slot:damage" groups, separated by ';' - written straight
+   into the committed per-pair tallies, which is what the main screen's
+   commander-damage chips read (slot 0 = primary commander, 1 = partner). */
+static void parse_cmd_damage(const char *arg)
+{
+    char buf[256];
+    char *tok;
+
+    snprintf(buf, sizeof(buf), "%s", arg);
+    tok = strtok(buf, ";");
+    while (tok != NULL) {
+        int target = -1, source = -1, slot = 0, damage = 0;
+
+        if (sscanf(tok, "%d:%d:%d:%d", &target, &source, &slot, &damage) == 4 &&
+            target >= 0 && target < MAX_DISPLAY_PLAYERS &&
+            source >= 0 && source < MAX_GAME_PLAYERS) {
+            if (slot != 0) {
+                partner_cmd_damage_totals[source][target] = damage;
+                set_player_has_partner(source, true);
+            } else {
+                cmd_damage_totals[source][target] = damage;
+            }
+        }
+        tok = strtok(NULL, ";");
+    }
 }
 
 static void parse_csv_strings(const char *csv, char names[][16], int max_count)
@@ -410,6 +440,7 @@ int main(int argc, char *argv[])
     int counter_delta_set = 0;
     int enemy_damage_values[MAX_ENEMY_COUNT] = {0};
     int enemy_damage_set = 0;
+    const char *cmd_damage_arg = NULL;
     int damage_delta_val = 0;
     int damage_delta_set = 0;
     int all_damage_val = 5;
@@ -511,6 +542,8 @@ int main(int argc, char *argv[])
         } else if (strcmp(argv[i], "--enemy-damage") == 0 && i + 1 < argc) {
             parse_csv_ints(argv[++i], enemy_damage_values, MAX_ENEMY_COUNT);
             enemy_damage_set = 1;
+        } else if (strcmp(argv[i], "--cmd-damage") == 0 && i + 1 < argc) {
+            cmd_damage_arg = argv[++i];
         } else if (strcmp(argv[i], "--damage-delta") == 0 && i + 1 < argc) {
             damage_delta_val = atoi(argv[++i]);
             damage_delta_set = 1;
@@ -649,6 +682,8 @@ int main(int argc, char *argv[])
             refresh_select_ui(); \
             refresh_damage_ui(); \
         } \
+        if (cmd_damage_arg != NULL) \
+            parse_cmd_damage(cmd_damage_arg); \
         if (damage_delta_set) \
             add_damage_to_selected_enemy(damage_delta_val); \
         if (all_damage_set) { \

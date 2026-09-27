@@ -29,8 +29,9 @@
  * runtime. */
 #include "test_harness.h"
 #include "../../../knobby/src/presentation/screens/settings.h"
-#include "../../../knobby/src/presentation/screens/settings.h"
+#include "../../../knobby/src/presentation/screens/ui_partners.h"
 #include "../../../knobby/src/presentation/screens/ui_wifi.h"
+#include "../../../knobby/src/presentation/screens/minigames_menu.h"
 #include "../../../knobby/src/presentation/minigames/snake.h"
 #include "../../../knobby/src/presentation/minigames/pong.h"
 #include "../../../knobby/src/presentation/minigames/dino.h"

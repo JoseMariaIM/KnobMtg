@@ -55,6 +55,7 @@ KNOBBY_SRC_SRCS := \
 	$(KNOBBY)/src/presentation/screens/ota_notice.c $(KNOBBY)/src/presentation/screens/game_mode.c $(KNOBBY)/src/presentation/screens/attack.c \
 	$(KNOBBY)/src/presentation/screens/mp_attack_gesture.c $(KNOBBY)/src/presentation/screens/quad_screen.c $(KNOBBY)/src/presentation/screens/minigames_menu.c \
 	$(KNOBBY)/src/presentation/screens/mp_layout.c $(KNOBBY)/src/presentation/screens/mp_victory.c \
+	$(KNOBBY)/src/presentation/screens/mp_threat_chips.c \
 	$(KNOBBY)/src/presentation/widgets/toast.c $(KNOBBY)/src/presentation/widgets/custom_keyboard.c \
 	$(KNOBBY)/src/presentation/ota/wifi_ota.c \
 	$(KNOBBY)/src/presentation/minigames/minigame.c $(KNOBBY)/src/presentation/minigames/dice.c $(KNOBBY)/src/presentation/minigames/mana.c \

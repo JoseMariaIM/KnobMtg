@@ -10,6 +10,7 @@
 #include "ui_mp_internal.h"
 #include "mp_victory.h"
 #include "mp_attack_gesture.h"
+#include "mp_threat_chips.h"
 #include "ui_player_menu.h"
 #include "../../usecases/game.h"
 #include "../../adapters/prefs_display.h"
@@ -31,6 +32,12 @@ static lv_obj_t *add_low_battery_icon(lv_obj_t *parent)
 }
 
 static lv_obj_t *mp_battery_icon = NULL;
+
+/* Counter badge geometry. The commander-damage chips are sized and
+   spaced off it too, so the two kinds of indicator line up wherever they
+   share a row or an arc. */
+#define COUNTER_BADGE_SIZE 34
+#define COUNTER_ARC_RADIUS 152
 
 // ---------- screens ----------
 lv_obj_t *screen_multiplayer = NULL;
@@ -94,7 +101,7 @@ static void create_counter_row(lv_obj_t *parent, counter_type_t type,
     lv_obj_t *row;
     lv_obj_t *glyph;
 
-    row = make_plain_box(parent, 34, 34);
+    row = make_plain_box(parent, COUNTER_BADGE_SIZE, COUNTER_BADGE_SIZE);
     lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
 
     glyph = lv_label_create(row);
@@ -156,26 +163,96 @@ static void get_counter_equator_anchor(lv_obj_t *panel,
     *anchor_y = target_world_y - panel_center_y;
 }
 
+/* Where a quadrant's commander-damage chips stack.
+ *
+ * Not in the counter badges' row: with every counter up that row is
+ * already the width of the panel, and the two kinds of indicator were
+ * squeezing each other for a strip neither of them needs to share. A
+ * quadrant adjoins the screen's middle on two sides - the badges take
+ * the horizontal one, so the chips take the vertical one, a column down
+ * the panel's inner edge that nothing else uses.
+ *
+ * The column always runs downward, starting below the badge row on the
+ * panels that carry it at their top (the bottom quadrants) and at the
+ * panel's own top edge on the ones that carry it at their bottom. The
+ * space is reserved whether or not any counter is currently showing, so
+ * a chip does not jump when one appears.
+ *
+ * Returns false for a panel with no inner vertical edge (the 2p halves,
+ * which span the full width and have room in the row anyway). */
+static bool get_chip_column_anchor(lv_obj_t *panel, lv_coord_t badge_row_y,
+                                   lv_coord_t *anchor_x, lv_coord_t *first_y,
+                                   lv_coord_t *step_y)
+{
+    lv_obj_t *parent;
+    lv_coord_t panel_x, panel_w, panel_h;
+    lv_coord_t mid_x;
+    int inner_side;
+    /* Enough clearance from the middle for the low-battery icon, which
+       is an overlay centered on the screen's top edge and would
+       otherwise clip the first chip of the top quadrants' columns. */
+    const lv_coord_t edge_gap = 12;
+    const lv_coord_t half = COUNTER_BADGE_SIZE / 2;
+
+    if (panel == NULL || anchor_x == NULL || first_y == NULL || step_y == NULL) return false;
+
+    parent = lv_obj_get_parent(panel);
+    if (parent == NULL) return false;
+
+    panel_x = lv_obj_get_x(panel);
+    panel_w = lv_obj_get_width(panel);
+    panel_h = lv_obj_get_height(panel);
+    mid_x = lv_obj_get_width(parent) / 2;
+
+    if (panel_x + panel_w == mid_x)   inner_side = 1;   /* the right edge is the inner one */
+    else if (panel_x == mid_x)        inner_side = -1;
+    else                              return false;
+
+    *anchor_x = (lv_coord_t)(inner_side * ((panel_w / 2) - half - edge_gap));
+    *first_y = (lv_coord_t)(-(panel_h / 2) + half + edge_gap);
+    if (badge_row_y < 0) {
+        /* Badges sit at this panel's top: start under them. */
+        *first_y = (lv_coord_t)(badge_row_y + COUNTER_BADGE_SIZE + edge_gap);
+    }
+    *step_y = (lv_coord_t)(COUNTER_BADGE_SIZE + 4);
+    return true;
+}
+
 /* ---------- per-panel refresh ---------- */
-static void refresh_counter_rows(const mp_panel_spec_t *spec, int16_t wedge_bis,
-                                 lv_obj_t *panel, lv_obj_t **rows, lv_obj_t **value_labels,
-                                 int player_index, lv_color_t text_color,
-                                 int16_t panel_angle, int16_t row_angle)
+/* The panel's small indicators: the counter badges along the row they
+   have always used, and the commander-damage chips (see
+   mp_threat_chips.h) in a column of their own where the panel's shape
+   allows one - see get_chip_column_anchor(). */
+static void refresh_indicator_row(const mp_panel_spec_t *spec, int16_t wedge_bis,
+                                  lv_obj_t *panel, lv_obj_t **rows, lv_obj_t **value_labels,
+                                  int panel_index, int player_index, lv_color_t text_color,
+                                  int16_t panel_angle, int16_t row_angle)
 {
     int type;
-    int visible_count = 0;
-    int visible_types[COUNTER_TYPE_COUNT];
+    int badge_count = 0;
+    lv_obj_t *badges[COUNTER_TYPE_COUNT];
     char buf[8];
     const lv_coord_t step = 30;
     lv_coord_t anchor_x = 0;
     lv_coord_t anchor_y = 0;
+    lv_coord_t column_x = 0;
+    lv_coord_t column_y = 0;
+    lv_coord_t column_step = 0;
+    bool chips_in_column;
+    int chip_count;
+    int row_count;
+    int i;
 
     (void)panel_angle;
     if (!spec_is_wedge(spec)) {
         get_counter_equator_anchor(panel, &anchor_x, &anchor_y);
     }
+    chips_in_column = !spec_is_wedge(spec) &&
+                      get_chip_column_anchor(panel, anchor_y, &column_x, &column_y, &column_step);
 
     for (type = 0; type < COUNTER_TYPE_COUNT; type++) {
+        int value;
+
         if (rows[type] == NULL || value_labels[type] == NULL) continue;
 
         if (!counter_type_is_enabled((counter_type_t)type) ||
@@ -184,46 +261,61 @@ static void refresh_counter_rows(const mp_panel_spec_t *spec, int16_t wedge_bis,
             continue;
         }
 
-        visible_types[visible_count] = type;
-        visible_count++;
-    }
-
-    for (type = 0; type < visible_count; type++) {
-        int value;
-        int counter_type = visible_types[type];
-        lv_coord_t x_offset = (lv_coord_t)((type * step) - ((visible_count - 1) * step / 2));
-        lv_coord_t local_x;
-        lv_coord_t local_y;
-
-        if (spec_is_wedge(spec)) {
-            /* Badges on an arc near the rim, centered on the wedge
-               bisector: constant clearance from both the rim and the
-               life/name labels regardless of badge count. */
-            const int radius = 152;
-            const int step_deg = 12;
-            int a = (wedge_bis + ((visible_count - 1) * step_deg / 2)
-                     - (type * step_deg) + 360) % 360;
-            local_x = wedge_polar(lv_trigo_cos((int16_t)a), radius);
-            local_y = wedge_polar(lv_trigo_sin((int16_t)a), radius);
-        } else {
-            local_x = anchor_x + x_offset;
-            local_y = anchor_y;
-        }
-
-        value = get_counter_value(player_index, (counter_type_t)counter_type);
-
+        value = get_counter_value(player_index, (counter_type_t)type);
         snprintf(buf, sizeof(buf), "%d", value);
-        lv_label_set_text(value_labels[counter_type], buf);
-        lv_obj_set_style_text_color(value_labels[counter_type], text_color, 0);
+        lv_label_set_text(value_labels[type], buf);
+        lv_obj_set_style_text_color(value_labels[type], text_color, 0);
         {
-            lv_obj_t *glyph = lv_obj_get_child(rows[counter_type], 0);
+            lv_obj_t *glyph = lv_obj_get_child(rows[type], 0);
             if (glyph != NULL) {
                 lv_obj_set_style_text_color(glyph, text_color, 0);
             }
         }
-        lv_obj_clear_flag(rows[counter_type], LV_OBJ_FLAG_HIDDEN);
-        lv_obj_align(rows[counter_type], LV_ALIGN_CENTER, local_x, local_y);
-        apply_object_rotation(rows[counter_type], row_angle, 0, 0);
+        lv_obj_clear_flag(rows[type], LV_OBJ_FLAG_HIDDEN);
+        badges[badge_count++] = rows[type];
+    }
+
+    chip_count = mp_threat_chips_update(panel_index, player_index);
+
+    /* Badges first, then - on a panel with no column of its own - the
+       chips carry on along the same row. */
+    row_count = badge_count + (chips_in_column ? 0 : chip_count);
+
+    for (i = 0; i < row_count; i++) {
+        lv_obj_t *item = (i < badge_count) ? badges[i]
+                                           : mp_threat_chips_obj(panel_index, i - badge_count);
+        lv_coord_t local_x;
+        lv_coord_t local_y;
+
+        if (item == NULL) continue;
+
+        if (spec_is_wedge(spec)) {
+            /* On an arc near the rim, centered on the wedge bisector:
+               constant clearance from both the rim and the life/name
+               labels regardless of how many items there are. */
+            const int radius = COUNTER_ARC_RADIUS;
+            const int step_deg = 12;
+            int a = (wedge_bis + ((row_count - 1) * step_deg / 2)
+                     - (i * step_deg) + 360) % 360;
+            local_x = wedge_polar(lv_trigo_cos((int16_t)a), radius);
+            local_y = wedge_polar(lv_trigo_sin((int16_t)a), radius);
+        } else {
+            local_x = (lv_coord_t)(anchor_x + ((i * step) - ((row_count - 1) * step / 2)));
+            local_y = anchor_y;
+        }
+
+        lv_obj_align(item, LV_ALIGN_CENTER, local_x, local_y);
+        apply_object_rotation(item, row_angle, 0, 0);
+    }
+
+    if (!chips_in_column) return;
+
+    for (i = 0; i < chip_count; i++) {
+        lv_obj_t *chip = mp_threat_chips_obj(panel_index, i);
+
+        if (chip == NULL) continue;
+        lv_obj_align(chip, LV_ALIGN_CENTER, column_x, (lv_coord_t)(column_y + (i * column_step)));
+        apply_object_rotation(chip, row_angle, 0, 0);
     }
 }
 
@@ -322,6 +414,10 @@ void refresh_multiplayer_ui(void)
         lv_coord_t nx = (orientation_mode != ORIENTATION_MODE_CENTRIC) ? spec->nudge_x : 0;
         lv_coord_t bx = nx;
         lv_coord_t by = 0;
+        /* How far the life digits hang above the anchor the label stack is
+           placed from, and the pivot they rotate around. Both label
+           branches below need it, so it lives out here. */
+        lv_coord_t life_pivot_y = 10;
         lv_color_t text_color;
 
         if (spec_is_wedge(spec)) {
@@ -344,7 +440,6 @@ void refresh_multiplayer_ui(void)
 
         if (layout->switch_font_by_orientation) {
             const lv_font_t *life_font;
-            lv_coord_t life_pivot_y;
 
             if (spec_is_wedge(spec)) {
                 /* Pie slices have room for the big font in every
@@ -378,12 +473,12 @@ void refresh_multiplayer_ui(void)
             }
             apply_label_rotation(life_lbl, name_lbl, angle, life_pivot_y, -30);
         } else {
-            apply_label_rotation(life_lbl, name_lbl, angle, 10, -30);
+            apply_label_rotation(life_lbl, name_lbl, angle, life_pivot_y, -30);
         }
 
-        refresh_counter_rows(spec, wedge_bis_deg(i), panel,
-                             mp_state.counter_rows[i], mp_state.counter_values[i],
-                             spec->player_index, text_color, angle, counter_angle);
+        refresh_indicator_row(spec, wedge_bis_deg(i), panel,
+                              mp_state.counter_rows[i], mp_state.counter_values[i],
+                              i, spec->player_index, text_color, angle, counter_angle);
     }
 
     check_for_winner();
@@ -593,6 +688,7 @@ void rebuild_multiplayer_layout(int track)
     mp_attack_gesture_reset();
 
     mp_victory_reset();
+    mp_threat_chips_reset();
 
     if (mp_battery_icon != NULL) {
         battery_icon_unregister(mp_battery_icon);
@@ -672,6 +768,8 @@ void rebuild_multiplayer_layout(int track)
         create_counter_row(panel, COUNTER_TYPE_EXPERIENCE,
             &mp_state.counter_rows[i][COUNTER_TYPE_EXPERIENCE],
             &mp_state.counter_values[i][COUNTER_TYPE_EXPERIENCE], p);
+
+        mp_threat_chips_create(panel, i);
     }
 
     if (layout->panel_count > 0) {
