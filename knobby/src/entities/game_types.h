@@ -21,6 +21,9 @@
 #define LIFE_MAX 999
 #define COUNTER_MIN 0
 #define COUNTER_MAX 9999
+/* Commander damage from ONE commander that kills. Each of a player's two
+   commanders carries its own count toward this - they never pool. */
+#define CMD_DAMAGE_LETHAL 21
 #define DEFAULT_LIFE_TOTAL 40
 #define DEFAULT_BRIGHTNESS_PERCENT 30
 #define MULTIPLAYER_COUNT 4

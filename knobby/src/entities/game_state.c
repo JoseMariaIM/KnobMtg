@@ -202,8 +202,8 @@ void check_player_elimination(int player)
             now_eliminated = true;
         } else {
             for (int i = 0; i < MAX_GAME_PLAYERS; i++) {
-                if (i != player && (cmd_damage_totals[i][player] >= 21 ||
-                                     partner_cmd_damage_totals[i][player] >= 21)) {
+                if (i != player && (cmd_damage_totals[i][player] >= CMD_DAMAGE_LETHAL ||
+                                     partner_cmd_damage_totals[i][player] >= CMD_DAMAGE_LETHAL)) {
                     now_eliminated = true;
                     break;
                 }
@@ -547,7 +547,7 @@ void damage_apply(void)
     encoded_source = encode_cmd_source(source, cmd_damage_slot);
     player_life[cmd_damage_target] = clamp_life(player_life[cmd_damage_target] - delta);
     commit_player_event(cmd_damage_target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source,
-                         *cell >= 21 || player_life[cmd_damage_target] <= 0);
+                         *cell >= CMD_DAMAGE_LETHAL || player_life[cmd_damage_target] <= 0);
 
     notify_refresh_select_ui();
 }
@@ -582,7 +582,7 @@ void apply_attack_cmd_damage(int source, int target, int delta, int slot)
     encoded_source = encode_cmd_source(source, slot);
     player_life[target] = clamp_life(player_life[target] - delta);
     commit_player_event(target, -delta, LOG_EVT_CMD_DAMAGE, encoded_source,
-                         *cell >= 21 || player_life[target] <= 0);
+                         *cell >= CMD_DAMAGE_LETHAL || player_life[target] <= 0);
 }
 
 /* Attack screen's Infect mode: same poison-threshold rule as
@@ -726,6 +726,55 @@ bool any_player_has_partner(void)
         if (player_has_partner(i)) return true;
     }
     return false;
+}
+
+/* See cmd_threats_for_player(): the danger a rival represents is their
+   nearest-to-lethal commander, not the two added up. */
+static int cmd_threat_rank(const cmd_threat_t *threat)
+{
+    return (threat->commander > threat->partner) ? threat->commander : threat->partner;
+}
+
+int cmd_threats_for_player(int target, cmd_threat_t *out, int max_out)
+{
+    cmd_threat_t found[MAX_GAME_PLAYERS];
+    int count = 0;
+    int written = 0;
+    int source;
+
+    if (out == NULL || max_out <= 0) return 0;
+    if (target < 0 || target >= MAX_DISPLAY_PLAYERS) return 0;
+
+    for (source = 0; source < MAX_GAME_PLAYERS; source++) {
+        if (source == target) continue;
+        if (cmd_damage_totals[source][target] <= 0 &&
+            partner_cmd_damage_totals[source][target] <= 0) continue;
+
+        found[count].source = source;
+        found[count].commander = cmd_damage_totals[source][target];
+        found[count].partner = partner_cmd_damage_totals[source][target];
+        count++;
+    }
+
+    /* Selection sort, and only for as many as the caller asked for: at
+       most 7 candidates, of which the caller shows the first few. */
+    while (written < count && written < max_out) {
+        int best = written;
+        int i;
+
+        for (i = written + 1; i < count; i++) {
+            if (cmd_threat_rank(&found[i]) > cmd_threat_rank(&found[best])) best = i;
+        }
+        if (best != written) {
+            cmd_threat_t swap = found[written];
+            found[written] = found[best];
+            found[best] = swap;
+        }
+        out[written] = found[written];
+        written++;
+    }
+
+    return written;
 }
 
 void prepare_cmd_damage_for_player(int target)

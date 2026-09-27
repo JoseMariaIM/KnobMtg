@@ -123,6 +123,25 @@ static inline void decode_cmd_source(int encoded, int *source, int *slot) {
     *source = encoded - (*slot ? MAX_GAME_PLAYERS : 0);
 }
 
+// ---------- commander-damage threat summary ----------
+/* How many rivals a summary covers at once. The main screen has room for
+   a handful of chips per player (see mp_threat_chips.h), and the
+   commander-damage screen is where the full list already lives. */
+#define CMD_THREAT_MAX 4
+
+typedef struct {
+    int source;     /* the rival dealing it (game-player index) */
+    int commander;  /* their primary commander's tally against the target */
+    int partner;    /* their partner commander's own, separate tally */
+} cmd_threat_t;
+
+/* Fills out[] with every rival that has landed commander damage on
+   target, worst first, and returns how many were written (capped at
+   max_out). "Worst" is whichever single commander is closest to
+   CMD_DAMAGE_LETHAL, not the sum: the two never pool, so a rival at 15+0
+   is closer to killing you than one at 10+10. */
+int cmd_threats_for_player(int target, cmd_threat_t *out, int max_out);
+
 // ---------- functions ----------
 void knob_life_init(void);
 void knob_life_reset(void);
