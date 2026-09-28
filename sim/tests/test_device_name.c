@@ -77,9 +77,9 @@ int main(void)
        absurd on a knob-and-keyboard device. */
     assert(strcmp(lv_textarea_get_text(device_name_test_textarea()), expected_default) == 0);
 
-    device_name_test_apply("Mesa Chema");
+    device_name_test_apply("Mesa Wanda");
     prefs_get_device_name(name, sizeof(name));
-    assert(strcmp(name, "Mesa Chema") == 0);
+    assert(strcmp(name, "Mesa Wanda") == 0);
     /* Enter is the only confirm control on this screen, so it has to
        navigate as well as save - otherwise the keyboard just sits there
        looking like nothing happened. */
@@ -91,7 +91,7 @@ int main(void)
     open_device_name_screen();
     device_name_test_apply("");
     prefs_get_device_name(name, sizeof(name));
-    assert(strcmp(name, "Mesa Chema") == 0);
+    assert(strcmp(name, "Mesa Wanda") == 0);
     printf("PASS: an empty field from Settings leaves the name alone\n");
 
     /* Back from Settings is not this screen's business: nav.c unwinds to

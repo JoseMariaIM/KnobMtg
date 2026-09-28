@@ -127,15 +127,15 @@ static void test_a_name_from_another_device_survives(void)
     incoming.version = (uint16_t)(1000);
     for (i = 0; i < NET_SYNC_MAX_SOURCES; i++)
         snprintf(incoming.names[i], NET_SYNC_NAME_LEN, "P%d", i + 1);
-    snprintf(incoming.names[2], NET_SYNC_NAME_LEN, "Marta");
+    snprintf(incoming.names[2], NET_SYNC_NAME_LEN, "Mamen");
 
     net_sync_apply_names(&incoming, /*wins_ties=*/1);
-    assert(strcmp(player_names[2], "Marta") == 0); /* on screen */
+    assert(strcmp(player_names[2], "Mamen") == 0); /* on screen */
 
     let_the_dust_settle();
     stored_player_name(2, stored, sizeof(stored));
-    if (strcmp(stored, "Marta") != 0) {
-        printf("FAIL: an adopted name is '%s' on flash, expected 'Marta'\n", stored);
+    if (strcmp(stored, "Mamen") != 0) {
+        printf("FAIL: an adopted name is '%s' on flash, expected 'Mamen'\n", stored);
         assert(0);
     }
     printf("PASS: a name adopted from another device survives a power cycle\n");

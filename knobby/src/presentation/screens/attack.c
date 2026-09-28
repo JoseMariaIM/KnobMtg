@@ -105,7 +105,7 @@ static const int attack_mode_alt_labels[ATTACK_MODE_COUNT] = {
  * the mode names, and "Comandante" is 94px wide at the smallest face
  * this screen uses. Every pixel given to the ring is a name the hub
  * cannot show: the players' names sit side by side up there, and at 88
- * the boxes were 48px - narrow enough that "Chema" came out clipped.
+ * the boxes were 48px - narrow enough that "Wanda" came out clipped.
  *
  * 96 and 178 is where they meet. The hub holds a 62px name box each
  * side, which covers ordinary first names on one line; the ring still
@@ -616,7 +616,7 @@ void build_attack_screen(void)
      * A circle is widest across its middle, and the amount - the one
      * thing here that is 148px across at "99" - was sitting exactly
      * there, pushing the two names up into the narrow part where their
-     * boxes could only be 62px. "Chema" is 58px, so an ordinary first
+     * boxes could only be 62px. "Wanda" is 58px, so an ordinary first
      * name came within four pixels of being clipped.
      *
      * Dropping the amount 15px below centre costs it nothing (it still

@@ -30,13 +30,13 @@ int main(void)
     prefs_set_num_players(6);
     prefs_set_auto_eliminate(0);
     prefs_set_language(1);
-    prefs_set_wifi_ssid("CasaDeChema");
+    prefs_set_wifi_ssid("RedDePruebas");
     prefs_set_wifi_pass("un-secreto");
-    prefs_set_device_name("Mesa Chema");
+    prefs_set_device_name("Mesa Wanda");
     prefs_set_last_fw_version("v1.2.3");
     prefs_set_game_high_score(GAME_SCORE_SNAKE, 0, 42);
     memset(names, 0, sizeof(names));
-    snprintf(names[0], PLAYER_NAME_LEN, "%s", "Chema");
+    snprintf(names[0], PLAYER_NAME_LEN, "%s", "Wanda");
     prefs_set_player_names((const char (*)[PLAYER_NAME_LEN])names);
     prefs_flush();
     assert(prefs_has_player_names());
