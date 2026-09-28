@@ -54,9 +54,9 @@ int main(void)
     printf("PASS: an unrenamed rival is named by seat number, not by 'P'\n");
 
     /* ---- renamed: the initial identifies them ---- */
-    snprintf(player_names[0], sizeof(player_names[0]), "%s", "Chema");
+    snprintf(player_names[0], sizeof(player_names[0]), "%s", "Wanda");
     refresh_multiplayer_ui();
-    assert(strcmp(chip_text_for(1, 0), "C\n12") == 0);
+    assert(strcmp(chip_text_for(1, 0), "W\n12") == 0);
     printf("PASS: a renamed rival is named by their initial\n");
 
     /* ---- an accented initial is two bytes: half of one renders as
