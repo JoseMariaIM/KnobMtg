@@ -2,5 +2,6 @@
   "version": "v0.7.2",
   "bin": "knobby.ino.bin",
   "test_version": "v0.7.3-beta1",
-  "test_bin": "test/knobby.ino.bin"
+  "test_bin": "test/knobby.ino.bin",
+  "test_devices": "6EA350"
 }
