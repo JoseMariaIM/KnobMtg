@@ -14,13 +14,15 @@ name: Release Firmware
 # anything on the other three changing.
 #
 # Two ways in:
-# - push a tag: always publishes to stable, i.e. to every device. This
-#   repo's tags already carry suffixes (v0.0.5-alpha), so a rule like
-#   "a suffix means test" would have quietly rerouted the normal
-#   releases; publishing a test build is a deliberate act instead.
+# - push a tag: a plain version (v0.7.2) publishes to stable, i.e. to
+#   every device; a suffixed one (v0.7.3-beta1, v0.8.0-rc1) publishes to
+#   the test channel, which is the shape this repo already uses while
+#   iterating - 18 v0.6.9-betaN tags before v0.7.0 came out. Same
+#   convention marks the GitHub Release a prerelease, so there is one
+#   thing to remember rather than two.
 # - run it by hand: pick the channel, the version string, and optionally
-#   the tester list to set at the same time. This is the only way to
-#   publish to the test channel.
+#   the tester list to set at the same time. Use this to send a plain
+#   version to testers first, or to re-publish without a new tag.
 #
 # Changing only WHO gets the current test build needs no build at all -
 # that is ota-testers.yml.
@@ -72,10 +74,12 @@ jobs:
             channel="${{ inputs.channel }}"
             version="${{ inputs.version }}"
           else
-            # A pushed tag is a release for everybody - see the note at
-            # the top about why the tag's own shape decides nothing.
+            # Suffix means test channel - see the note at the top.
             version="${{ github.ref_name }}"
-            channel="stable"
+            case "$version" in
+              *-*) channel="test" ;;
+              *)   channel="stable" ;;
+            esac
           fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"

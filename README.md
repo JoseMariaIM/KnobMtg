@@ -52,12 +52,12 @@ Settings → Updates screen, next to its name. It comes from the MAC, so it
 survives a rename and a factory reset - which is why it, and not the name, is
 what the list targets.
 
-**To publish a build:** push a tag and it goes to **stable**, i.e. to every
-device - the tag's own shape decides nothing, since this repo's tags all carry
-suffixes already. To publish to the **test** channel, run the *Release Firmware*
-workflow by hand and pick the channel, the version string, and optionally the
-tester list in one go. Publishing a beta is a deliberate act, never a side
-effect of how a tag was spelled.
+**To publish a build:** push a tag. A plain version (`v0.7.2`) goes to
+**stable**, i.e. to every device; a suffixed one (`v0.7.3-beta1`, `v0.8.0-rc1`)
+goes to the **test** channel and reaches only the devices on the list. The same
+suffix marks the GitHub Release a prerelease. Running the *Release Firmware*
+workflow by hand overrides that: pick the channel, the version string, and
+optionally the tester list in one go.
 
 **To change who receives the current test build:** run the *Choose who gets test
 builds* workflow with a comma-separated list of ids. It edits one field and
