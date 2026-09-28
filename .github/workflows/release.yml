@@ -49,9 +49,10 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
+# Both workflows publish by pushing to the same branch, so they must not
+# interleave - the second push of a race is rejected and its release
+# would be built but never published.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -59,9 +60,6 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -125,11 +123,10 @@ jobs:
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,PartitionScheme=custom" --export-binaries knobby
 
-      # The published site is a branch, not a fresh artifact each time:
+      # The published site IS this branch (Pages serves it directly), so
+      # a release adds to what is already live instead of replacing it:
       # publishing a test build must not take the stable binaries down
-      # with it (and vice versa), and the tester list has to survive
-      # every release. upload-pages-artifact replaces the whole site, so
-      # the site is assembled here from what is already live.
+      # with it, and the tester list has to survive every release.
       - name: Check out the published site
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -203,26 +200,15 @@ jobs:
           fi
           cat site/ota.json
 
-      - name: Commit the site
+      # This push IS the publication: Pages builds the site from this
+      # branch. It used to upload an artifact and deploy it instead,
+      # which is how v0.7.3-beta1 was published while three successive
+      # deployments reported success and none of them ever went live.
+      - name: Publish the site
         run: |
           git -C site add -A
           git -C site commit -m "Publish ${{ steps.target.outputs.version }} to the ${{ steps.target.outputs.channel }} channel" || echo "nothing changed"
           git -C site push origin gh-pages
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
 
       - name: Zip binaries for GitHub Release
         run: |
@@ -238,5 +224,5 @@ jobs:
           files: knobby-firmware-${{ steps.target.outputs.version }}.zip
           body: |
             Channel: **${{ steps.target.outputs.channel }}**
-            Install via GitHub Pages: ${{ steps.deployment.outputs.page_url }}
+            Install via GitHub Pages: https://josemariaim.github.io/KnobMtg/
           generate_release_notes: true
