@@ -1,0 +1,108 @@
+name: Choose who gets test builds
+
+# Changes WHICH devices are on the test channel, without building or
+# publishing any firmware: it edits one field of the ota.json already
+# live on the site (see .github/workflows/release.yml and the "update
+# channels" block in knobby/src/presentation/ota/wifi_ota.h).
+#
+# A device id is the six hex digits its own Updates screen shows, next to
+# the name its owner gave it. Ids come from the MAC, so they survive a
+# rename and a factory reset.
+#
+# Adding an id hands that device the current test build on its next
+# check. REMOVING one hands it the stable build instead - the device only
+# compares versions, in either direction, so dropping somebody from the
+# list rolls their unit back rather than leaving it stranded on a test
+# build. Clearing the list entirely (clear = true) puts everybody back on
+# stable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: 'Device ids on the test channel, comma separated (e.g. A1B2C3,DE45F6)'
+        required: false
+        type: string
+      clear:
+        description: 'Take everybody off the test channel'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out the published site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git ls-remote --exit-code --heads "$remote" gh-pages > /dev/null 2>&1; then
+            echo "There is no published site yet - run the release workflow first." >&2
+            exit 1
+          fi
+          git clone --depth 1 --branch gh-pages "$remote" site
+
+      - name: Set the tester list
+        run: |
+          set -euo pipefail
+          if [ ! -f site/ota.json ]; then
+            echo "The site has no ota.json - publish a release first." >&2
+            exit 1
+          fi
+
+          if [ "${{ inputs.clear }}" = "true" ]; then
+            devices=""
+          else
+            devices='${{ inputs.devices }}'
+          fi
+
+          echo "Before: $(jq -r '.test_devices // "(nobody)"' site/ota.json)"
+          jq --arg d "$devices" '.test_devices = $d' site/ota.json > site/ota.json.new
+          mv site/ota.json.new site/ota.json
+          echo "After:  $(jq -r '.test_devices // "(nobody)"' site/ota.json)"
+
+          # Worth saying out loud in the run log: a list pointing at a
+          # channel with nothing published is not an error, those devices
+          # just stay on stable until a test build exists.
+          jq -e 'has("test_version")' site/ota.json > /dev/null || \
+            echo "Note: no test build is published yet, so nobody moves until one is."
+
+      - name: Commit the site
+        run: |
+          git -C site add -A
+          git -C site commit -m "Set the test channel's device list" || echo "nothing changed"
+          git -C site push origin gh-pages
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          enablement: true
+
+      # The devices read the site, not the branch, so the change is only
+      # live once Pages has been redeployed from it.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

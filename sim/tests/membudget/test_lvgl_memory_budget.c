@@ -42,6 +42,8 @@
 #include "../../../knobby/src/presentation/minigames/invaders.h"
 #include "../../../knobby/src/presentation/minigames/rps.h"
 #include "../../../knobby/src/presentation/minigames/asteroids.h"
+#include "../../../knobby/src/presentation/screens/ui_device_name.h"
+#include "../../../knobby/src/presentation/screens/ui_factory_reset.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -80,6 +82,26 @@ static void open_every_lazy_screen(void)
        at four would have hidden two thirds of it. */
     prefs_set_num_players(MAX_GAME_PLAYERS);
     open_partners_screen();
+
+    /* Settings pages past the first, and the two sub-screens that are
+       not opened by anything above: the naming screen carries its own
+       on-screen keyboard, which is the most expensive single screen
+       added since this budget was written, so leaving it out would hide
+       exactly the kind of growth this test exists to catch. */
+    for (int page = 1; page < settings_page_count; page++) {
+        settings_show_page(page);
+    }
+    open_device_name_screen();
+    open_factory_reset_screen();
+
+    /* Two screens hand their memory back once they are off screen (the
+       settings pages behind you, and the naming screen's keyboard - see
+       settings_release_pages() and device_name_unloaded_cb()). Both defer
+       the free to LVGL's next pass, exactly as they do on the device, so
+       the pool has to be read after one rather than in the middle of the
+       navigation that triggered it. */
+    sim_tick_advance(20);
+    lv_timer_handler();
 }
 
 static uint32_t report(const char *label, lv_mem_monitor_t *mon)

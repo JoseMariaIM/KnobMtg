@@ -34,7 +34,7 @@ int main(void)
        not. */
     static const char *bound_ids[] = {
         "brightness", "battery", "table-sync", "minigames",
-        "language", "wifi", "updates",
+        "language", "wifi", "updates", "device-name", "factory-reset",
     };
     for (size_t i = 0; i < sizeof(bound_ids) / sizeof(bound_ids[0]); i++) {
         page = settings_item_page(bound_ids[i]);

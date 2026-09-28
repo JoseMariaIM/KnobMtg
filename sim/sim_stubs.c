@@ -172,6 +172,17 @@ esp_err_t nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, 
     return ESP_FAIL;
 }
 
+/* Same contract as the real one: clears every key in the namespace.
+   The stub has a single flat store (one namespace is all the firmware
+   uses), so that is the whole store. */
+esp_err_t nvs_erase_all(nvs_handle_t handle)
+{
+    (void)handle;
+    nvs_count = 0;
+    memset(nvs_store, 0, sizeof(nvs_store));
+    return ESP_OK;
+}
+
 static unsigned s_commit_count = 0;
 
 unsigned sim_nvs_commit_count(void) { return s_commit_count; }

@@ -19,6 +19,8 @@
 #include "src/presentation/screens/ui_partners.h"
 #include "src/presentation/screens/ui_table_sync.h"
 #include "src/presentation/screens/ui_language.h"
+#include "src/presentation/screens/ui_device_name.h"
+#include "src/presentation/screens/ui_factory_reset.h"
 #include "src/presentation/screens/game_mode.h"
 #include "src/usecases/damage_log.h"
 #include "src/usecases/rename.h"
@@ -528,6 +530,15 @@ static void back_ota_qr(void)
     }
 }
 
+/* Saving a device name from Settings returns to the page its row sits
+   on. Which page that is belongs here, in the composition root, and not
+   in ui_device_name.c - the same reason every other settings row is
+   bound from this file rather than naming a screen in settings.c. */
+static void device_name_return(void)
+{
+    settings_show_page(settings_item_page("device-name"));
+}
+
 static const screen_desc_t screen_registry[] = {
     /* screen                      build                              on_knob              on_back                  back_target             menu_facing */
     { &screen_dice_menu,           build_dice_menu_screen,            change_dice_quantity, NULL,                    &screen_tools_menu,     false },
@@ -556,6 +567,15 @@ static const screen_desc_t screen_registry[] = {
        open this one. */
     { &screen_partners,            NULL,                              NULL,                 NULL,                    &screen_game_mode_menu, false },
     { &screen_language_picker,     build_language_picker_screen,      NULL,                 NULL,                    NULL,                   false }, /* back: settings_handle_back() */
+    /* Both are settings sub-screens (back: nav_handle_back()) and both
+       are built on first open rather than at boot - the naming screen
+       carries a full on-screen keyboard, which is exactly the kind of
+       screen LVGL's fixed 128KB heap should not be paying for in the
+       sessions that never open it (same reasoning as the WiFi cluster
+       below). The naming screen also answers back itself during the
+       first-boot question, before that generic handling - see nav.c. */
+    { &screen_device_name,         NULL,                              device_name_screen_knob, NULL,                 NULL,                   false },
+    { &screen_factory_reset,       NULL,                              NULL,                 NULL,                    NULL,                   false },
     { &screen_damage_log,          build_damage_log_screen,           damage_log_knob,      NULL,                    &screen_tools_menu,     false },
     { &screen_game_mode_menu,      build_game_mode_menu_screen,       change_num_players,   NULL,                    &screen_quad_menu,      false },
     { &screen_custom_life,         build_custom_life_screen,          change_custom_life,   back_custom_life,        NULL,                   false },
@@ -704,6 +724,7 @@ void knob_gui(void)
         home_bind(&home);
     }
     rename_set_return_hook(open_player_menu);
+    device_name_set_return_hook(device_name_return);
     settings_bind_screen("brightness", open_settings_screen,        &screen_settings);
     settings_bind_screen("battery",    open_battery_screen,         &screen_battery);
     settings_bind_screen("table-sync", open_table_sync_screen,      &screen_table_sync);
@@ -711,6 +732,8 @@ void knob_gui(void)
     settings_bind_screen("language",   open_language_picker_screen, &screen_language_picker);
     settings_bind_screen("wifi",       open_wifi_settings_screen,   &screen_wifi_settings);
     settings_bind_screen("updates",    open_ota_update_screen,      &screen_ota_update);
+    settings_bind_screen("device-name",   open_device_name_screen,   &screen_device_name);
+    settings_bind_screen("factory-reset", open_factory_reset_screen, &screen_factory_reset);
 
     build_quad_menus();
 

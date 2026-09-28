@@ -17,6 +17,8 @@
 #include "../knobby/src/nav.h"
 #include "../knobby/src/presentation/screens/home.h"
 #include "../knobby/src/presentation/screens/ui_table_sync.h"
+#include "../knobby/src/presentation/screens/ui_device_name.h"
+#include "../knobby/src/presentation/screens/ui_factory_reset.h"
 #include "../knobby/src/presentation/screens/ui_language.h"
 #include "../knobby/src/presentation/screens/ui_partners.h"
 #include "../knobby/src/presentation/screens/ui_battery.h"
@@ -141,7 +143,7 @@ static void nav_4p(void)         { prefs_set_players_to_track(4); reset_all_valu
 static void nav_intro(void)      { lv_scr_load(screen_intro); }
 static void nav_menu(void)       { open_quad_menu(); }
 static void nav_tools(void)      { lv_scr_load(screen_tools_menu); }
-static void nav_settings_menu(void) { lv_scr_load(settings_pages[0]); }
+static void nav_settings_menu(void) { settings_show_page(0); }
 static void nav_brightness(void) { open_settings_screen(); }
 static void nav_battery(void)    { open_battery_screen(); }
 static void nav_minigames(void)  { open_minigames_menu(); }
@@ -158,6 +160,10 @@ static void nav_asteroids(void)  { open_asteroids_screen(); }
 static void nav_partners(void) { open_partners_screen(); }
 
 static void nav_table_sync(void) { open_table_sync_screen(); }
+static void nav_updates(void) { open_ota_update_screen(); }
+static void nav_device_name(void) { open_device_name_screen(); }
+static void nav_device_name_first(void) { device_name_open_first_boot(NULL); }
+static void nav_factory_reset(void) { open_factory_reset_screen(); }
 static void nav_dice(void)       { open_dice_screen(); }
 static void nav_dice_menu(void)  { open_dice_menu_screen(); }
 static void nav_coin(void)       { open_coin_screen(); }
@@ -241,6 +247,12 @@ static const screen_entry_t all_screens[] = {
     {"color-picker",  nav_color_picker},
     {"mana",          nav_mana},
     {"attack",        nav_attack},
+    {"updates",       nav_updates},
+    {"device-name",   nav_device_name},
+    /* The first-boot wording ("Name this device"), which is otherwise
+       only reachable on a device that has never been named. */
+    {"device-name-first", nav_device_name_first},
+    {"factory-reset", nav_factory_reset},
     {NULL, NULL}
 };
 
@@ -256,7 +268,7 @@ static int nav_dynamic_settings(const char *name)
                     name, settings_page_count);
             exit(1);
         }
-        lv_scr_load(settings_pages[p - 1]);
+        settings_show_page(p - 1);
         return 1;
     }
     if (strncmp(name, "setting:", 8) == 0) {
@@ -265,7 +277,7 @@ static int nav_dynamic_settings(const char *name)
             fprintf(stderr, "Unknown setting id: %s\n", name + 8);
             exit(1);
         }
-        lv_scr_load(settings_pages[p]);
+        settings_show_page(p);
         return 1;
     }
     return 0;

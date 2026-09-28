@@ -28,6 +28,18 @@ void prefs_init(void);
    a reboot, deep sleep, an OTA flash. */
 void prefs_flush(void);
 
+/* Erases everything this device remembers - every setting, the player
+   names, the WiFi credentials, the high scores - and puts the in-RAM
+   cache back to the same defaults a never-configured unit boots with.
+   The caller is expected to reboot right after (see hw_reboot()): the
+   screens were built from these values at boot and half of them cache
+   what they read, so continuing to run against a wiped store would
+   show a device that is only partly reset.
+   Erases the whole "knobby" NVS namespace rather than writing defaults
+   over each key, so a key this build no longer knows about - left by
+   an older firmware - goes away too. */
+void prefs_factory_reset(void);
+
 /* Installed once at boot by prefs_autosave.c. prefs.c calls arm() on
    every write; the scheduler is expected to call prefs_flush() once
    the writes stop. Nothing is written until one is installed, which

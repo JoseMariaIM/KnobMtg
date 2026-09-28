@@ -31,8 +31,14 @@ extern "C" {
  * GitHub API (which rate-limits unauthenticated requests) or needing
  * its own hosting. Update this if the repo is ever renamed/forked. */
 #define OTA_BASE_URL "https://josemariaim.github.io/KnobMtg"
+/* The channel routing file - which build this particular device should
+   be running. See the "update channels" block in wifi_ota.h. */
+#define OTA_CHANNELS_URL OTA_BASE_URL "/ota.json"
+/* Fallback for a site that has not been redeployed with ota.json yet
+   (and what firmware older than channels reads): the web installer's
+   manifest, whose "version" is always the stable channel's. */
 #define OTA_MANIFEST_URL OTA_BASE_URL "/manifest.json"
-#define OTA_BIN_URL OTA_BASE_URL "/knobby.ino.bin"
+#define OTA_DEFAULT_BIN_PATH "knobby.ino.bin"
 
 /* HTTPClient's own default connect timeout is only 5000ms, and that
  * same value ends up gating every individual read/write step of the
@@ -57,7 +63,15 @@ extern char g_saved_ssid[WIFI_SSID_LEN];
 extern ota_state_t g_ota_state;
 extern char g_latest_version[32];
 extern char g_ota_error[64];
+extern bool g_ota_test_channel;
 }
+
+/* Which image the last check decided this device should flash, relative
+   to OTA_BASE_URL. Resolved during the check rather than assumed at
+   apply time: the two channels publish different paths, and applying
+   the stable binary after a check that offered a test build is exactly
+   the mix-up this exists to prevent. */
+static char s_bin_path[96] = OTA_DEFAULT_BIN_PATH;
 
 static ota_progress_cb_t s_progress_cb = NULL;
 
@@ -287,25 +301,83 @@ extern "C" void wifi_disconnect(void)
     g_wifi_ip[0] = '\0';
 }
 
-/* Pulls "version" out of the small fixed-shape manifest.json the web
- * installer already publishes (see web/manifest.json) with a plain
- * substring search - not worth adding a JSON library dependency for one
- * field. If the manifest's shape ever changes this needs updating. */
-static bool extract_json_string_field(const char *json, const char *key, char *out, size_t out_len)
+/* One GET of `url`, with a single retry. A fresh WiFi connection's very
+   first TLS handshake is the flakiest one (still-settling routing/ARP,
+   GitHub's CDN edge occasionally slow to respond) - a single retry with
+   a fresh client clears most transient failures that a longer timeout
+   alone doesn't fix. Fills g_ota_error on failure; `what` names the file
+   in that message. */
+static bool ota_fetch(const char *url, const char *what, String &body)
 {
-    char needle[32];
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    const char *p = strstr(json, needle);
-    if (!p) return false;
-    p = strchr(p + strlen(needle), '"');
-    if (!p) return false;
-    p++;
-    const char *end = strchr(p, '"');
-    if (!end) return false;
-    size_t len = (size_t)(end - p);
-    if (len >= out_len) len = out_len - 1;
-    memcpy(out, p, len);
-    out[len] = '\0';
+    int code = 0;
+    char tls_err[64] = "";
+
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) delay(1000);
+
+        WiFiClientSecure client;
+        /* No certificate pinning: GitHub Pages' TLS chain can rotate at
+           any time, and a stale pinned root would silently brick the
+           update path with no way to fix it except reflashing over USB.
+           Accepted tradeoff for a personal device - see the project
+           chat history. */
+        client.setInsecure();
+
+        HTTPClient http;
+        http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
+        if (!http.begin(client, url)) {
+            snprintf(g_ota_error, sizeof(g_ota_error), "Bad %s URL", what);
+            continue;
+        }
+
+        code = http.GET();
+        if (code == HTTP_CODE_OK) {
+            body = http.getString();
+            http.end();
+            return true;
+        }
+        tls_err[0] = '\0';
+        client.lastError(tls_err, sizeof(tls_err));
+        http.end();
+    }
+
+    /* Free heap is included because "SSL - Memory allocation failed"
+       only means something with a number attached - if it recurs this
+       tells us straight from the error screen whether it's a borderline
+       shortage or something is leaking. */
+    if (tls_err[0] != '\0') {
+        snprintf(g_ota_error, sizeof(g_ota_error), "%s: %s (heap %u)", what, tls_err, (unsigned)ESP.getFreeHeap());
+    } else {
+        snprintf(g_ota_error, sizeof(g_ota_error), "%s: %s", what, HTTPClient::errorToString(code).c_str());
+    }
+    return false;
+}
+
+/* Which channel this device is on, and where that channel's version and
+   binary live. See the "update channels" block in wifi_ota.h. */
+static bool resolve_channel(const char *json, char *version, size_t version_len)
+{
+    /* The published list is the only input: this is decided from GitHub,
+       without the device in hand, and nothing on the device can opt
+       itself in. */
+    g_ota_test_channel = ota_channel_is_test(json, hw_device_id());
+
+    if (g_ota_test_channel && ota_json_string_field(json, "test_version", version, version_len)) {
+        if (!ota_json_string_field(json, "test_bin", s_bin_path, sizeof(s_bin_path))) {
+            snprintf(s_bin_path, sizeof(s_bin_path), "test/" OTA_DEFAULT_BIN_PATH);
+        }
+        Serial.printf("[OTA] channel=test bin=%s (id %s)\n", s_bin_path, hw_device_id());
+        return true;
+    }
+
+    /* Falls through to stable when the test channel has nothing
+       published yet - a tester with no test build waiting is just a
+       normal device, not a device with no updates. */
+    if (!ota_json_string_field(json, "version", version, version_len)) return false;
+    if (!ota_json_string_field(json, "bin", s_bin_path, sizeof(s_bin_path))) {
+        snprintf(s_bin_path, sizeof(s_bin_path), OTA_DEFAULT_BIN_PATH);
+    }
+    Serial.printf("[OTA] channel=stable bin=%s (id %s)\n", s_bin_path, hw_device_id());
     return true;
 }
 
@@ -319,70 +391,45 @@ extern "C" void ota_check_now(void)
 
     g_ota_state = OTA_STATE_CHECKING;
 
-    /* One retry: a fresh WiFi connection's very first TLS handshake is
-       the flakiest one (still-settling routing/ARP, GitHub's CDN edge
-       occasionally slow to respond) - a single retry with a fresh
-       client clears most transient failures that a longer timeout
-       alone doesn't fix. */
     String body;
-    int code = 0;
-    char tls_err[64] = "";
-    bool ok = false;
-
-    for (int attempt = 0; attempt < 2 && !ok; attempt++) {
-        if (attempt > 0) delay(1000);
-
-        WiFiClientSecure client;
-        /* No certificate pinning: GitHub Pages' TLS chain can rotate at
-           any time, and a stale pinned root would silently brick the
-           update path with no way to fix it except reflashing over USB.
-           Accepted tradeoff for a personal device - see the project
-           chat history. */
-        client.setInsecure();
-
-        HTTPClient http;
-        http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
-        if (!http.begin(client, OTA_MANIFEST_URL)) {
-            snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest URL");
-            continue;
-        }
-
-        code = http.GET();
-        if (code == HTTP_CODE_OK) {
-            body = http.getString();
-            ok = true;
-        } else {
-            tls_err[0] = '\0';
-            client.lastError(tls_err, sizeof(tls_err));
-        }
-        http.end();
-    }
-
-    if (!ok) {
-        g_ota_state = OTA_STATE_ERROR;
-        /* Free heap is included because "SSL - Memory allocation failed"
-           only means something with a number attached - if it recurs
-           this tells us straight from the error screen whether it's a
-           borderline shortage or something is leaking. */
-        if (tls_err[0] != '\0') {
-            snprintf(g_ota_error, sizeof(g_ota_error), "Manifest: %s (heap %u)", tls_err, (unsigned)ESP.getFreeHeap());
-        } else {
-            snprintf(g_ota_error, sizeof(g_ota_error), "Manifest: %s", HTTPClient::errorToString(code).c_str());
-        }
-        return;
-    }
-
     char latest[32];
-    if (!extract_json_string_field(body.c_str(), "version", latest, sizeof(latest))) {
-        g_ota_state = OTA_STATE_ERROR;
-        snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest");
-        return;
+    bool resolved = false;
+
+    if (ota_fetch(OTA_CHANNELS_URL, "Channels", body)) {
+        resolved = resolve_channel(body.c_str(), latest, sizeof(latest));
     }
 
-    Serial.printf("[OTA] manifest: latest=%s running=%s\n", latest, FIRMWARE_VERSION);
+    /* Two ways to get here, and the answer is the same for both: the
+       site has no ota.json (a release published before channels
+       existed, or a half-deployed site), or it has one with nothing
+       published for this device's channel yet - which is exactly what a
+       site whose first release was a test build looks like to everybody
+       who is not a tester. The web installer's manifest still carries
+       the stable version, and the stable binary still sits at the path
+       it always did, so read that instead of declaring the update path
+       broken for a device that only wants the stable build anyway. */
+    if (!resolved) {
+        Serial.println(F("[OTA] no channel entry, falling back to manifest.json"));
+        if (!ota_fetch(OTA_MANIFEST_URL, "Manifest", body)) {
+            g_ota_state = OTA_STATE_ERROR;
+            return; /* ota_fetch already filled g_ota_error */
+        }
+        if (!ota_json_string_field(body.c_str(), "version", latest, sizeof(latest))) {
+            g_ota_state = OTA_STATE_ERROR;
+            snprintf(g_ota_error, sizeof(g_ota_error), "Bad manifest");
+            return;
+        }
+        g_ota_test_channel = false;
+        snprintf(s_bin_path, sizeof(s_bin_path), OTA_DEFAULT_BIN_PATH);
+    }
+
+    Serial.printf("[OTA] channel version: latest=%s running=%s\n", latest, FIRMWARE_VERSION);
     if (strcmp(latest, FIRMWARE_VERSION) == 0) {
         g_ota_state = OTA_STATE_UP_TO_DATE;
     } else {
+        /* Any difference counts, in either direction: that is what makes
+           dropping a device from the tester list roll it back onto the
+           stable build instead of leaving it stranded on a test one. */
         g_ota_state = OTA_STATE_AVAILABLE;
         snprintf(g_latest_version, sizeof(g_latest_version), "%s", latest);
         arm_wifi_idle_off();
@@ -412,13 +459,17 @@ extern "C" void ota_apply_update(void)
        OTA_CONNECT_TIMEOUT_MS above. httpUpdate.update(HTTPClient&)
        takes an already-begin()'d client and skips straight to the
        download/flash logic. */
+    char bin_url[160];
+    snprintf(bin_url, sizeof(bin_url), "%s/%s", OTA_BASE_URL, s_bin_path);
+
     HTTPClient http;
     http.setConnectTimeout(OTA_CONNECT_TIMEOUT_MS);
-    if (!http.begin(client, OTA_BIN_URL)) {
+    if (!http.begin(client, bin_url)) {
         g_ota_state = OTA_STATE_ERROR;
         snprintf(g_ota_error, sizeof(g_ota_error), "Bad firmware URL");
         return;
     }
+    Serial.printf("[OTA] flashing %s\n", bin_url);
 
     /* Past this point the device may reboot into the new image without
        coming back here, so commit anything still sitting in the

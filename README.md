@@ -16,6 +16,9 @@ Features/intended use:
 - Brightness and battery guesstimate (WIP)
 - D20 dice roll
 - Event log
+- Device name, asked once on the first boot and editable from Settings
+- Factory reset from Settings (hold to confirm), and over-the-air updates with a
+  test channel you alone point at specific devices - see below
 
 ## 🛠️ Installation
 
@@ -23,6 +26,49 @@ Go to https://knobby-mtg.github.io/knobby-mtg-life-counter/ to install the lates
 
 > [!Warning]
 > Installation is at your own risk, we take no responsiblity for failed installations or devices.
+
+## 📦 Releases and test builds
+
+Devices update over WiFi from this repo's GitHub Pages site. There are two
+channels, and a device is on exactly one of them:
+
+| Channel | Where it is published | Who gets it |
+|---|---|---|
+| `stable` | site root | every device |
+| `test` | site `/test/` | only the devices listed in `ota.json` |
+
+`ota.json`, at the root of the site, is the whole routing table:
+
+```json
+{
+  "version": "v1.4.0",           "bin": "knobby.ino.bin",
+  "test_version": "v1.5.0-rc1",  "test_bin": "test/knobby.ino.bin",
+  "test_devices": "A1B2C3,DE45F6"
+}
+```
+
+A **device id** is the six hex digits shown on the device's own
+Settings → Updates screen, next to its name. It comes from the MAC, so it
+survives a rename and a factory reset - which is why it, and not the name, is
+what the list targets.
+
+**To publish a build:** push a tag. A plain version (`v0.7.2`) goes to
+**stable**, i.e. to every device; a suffixed one (`v0.7.3-beta1`, `v0.8.0-rc1`)
+goes to the **test** channel and reaches only the devices on the list. The same
+suffix marks the GitHub Release a prerelease. Running the *Release Firmware*
+workflow by hand overrides that: pick the channel, the version string, and
+optionally the tester list in one go.
+
+**To change who receives the current test build:** run the *Choose who gets test
+builds* workflow with a comma-separated list of ids. It edits one field and
+redeploys the site - no rebuild, no new release. Removing a device from the list
+puts it back on the stable build at its next check, so that is also how a test
+build is rolled back.
+
+There is deliberately **no setting on the device** to opt into test builds: the
+list is the only way in, so a tester cannot put their own unit on a beta and you
+always know exactly who is running what. The device's Updates screen only
+*reports* which channel it was put on.
 
 ## 🚀 Getting Started
 
@@ -114,6 +160,7 @@ Headless unit tests build against the same simulator sources (no hardware, no di
 
 ```bash
 make -C sim test                     # game logic (life, elimination, damage log, Table Sync, ...)
+                                     # plus prefs: device name, factory reset, update channel routing
 make -C sim test-mem-budget          # regression check: all screens vs. the device's 128KB LVGL pool
 make -C sim test-game-state-purity   # game_state.h compiles with zero LVGL dependency
 ```

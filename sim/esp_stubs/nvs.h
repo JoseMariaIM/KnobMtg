@@ -21,6 +21,7 @@ esp_err_t nvs_set_i8(nvs_handle_t handle, const char *key, int8_t value);
 esp_err_t nvs_set_i16(nvs_handle_t handle, const char *key, int16_t value);
 esp_err_t nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, size_t length);
 
+esp_err_t nvs_erase_all(nvs_handle_t handle);
 esp_err_t nvs_commit(nvs_handle_t handle);
 
 #endif /* _SIM_NVS_H */

@@ -58,11 +58,60 @@ const char *get_firmware_version(void);
  * to the release notes without typing a URL on the device itself. */
 #define KNOBBY_RELEASES_URL "https://github.com/JoseMariaIM/KnobMtg/releases"
 
-/* Blocking: fetches the manifest hosted alongside the GitHub Pages web
- * installer and compares its version against the running firmware.
+/* Blocking: fetches the routing file hosted alongside the GitHub Pages
+ * web installer and compares the version for THIS device's channel
+ * against the running firmware.
  * Requires wifi_get_state() == WIFI_STATE_CONNECTED. */
 void ota_check_now(void);
 ota_state_t ota_get_state(void);
+
+/* ---------- update channels ----------
+ *
+ * ota.json (published by .github/workflows/release.yml, see OTA_BASE_URL
+ * in wifi_ota_esp32.cpp) routes each device to a channel:
+ *
+ *   { "version": "v1.4.0",          "bin": "knobby.ino.bin",
+ *     "test_version": "v1.5.0-rc1", "test_bin": "test/knobby.ino.bin",
+ *     "test_devices": "A1B2C3,DE45F6" }
+ *
+ * A device takes the test build when its hw_device_id() is listed and
+ * the stable one otherwise. That list is the ONLY way onto a test
+ * build: there is deliberately no switch on the device, because the
+ * point of this is that whoever publishes decides who receives, not
+ * whoever happens to be holding a unit. Which also means enrolling or
+ * removing a tester is an edit to one line of one file - no rebuild -
+ * and that a device dropped from the list is handed the stable build on
+ * its next check, i.e. rolled back.
+ *
+ * Flat keys, not nested objects, so the substring parser below is
+ * enough: one HTTPS GET, no JSON library, and no GitHub API (whose
+ * unauthenticated rate limit this device would share with everyone
+ * behind the same address).
+ *
+ * Both parsers are pure and live in wifi_ota.c so the simulator's
+ * unit tests can exercise them without a network - see
+ * sim/tests/test_ota_channel.c. */
+
+/* Reads one "key": "value" pair out of the small fixed-shape JSON the
+ * site publishes. False when the key is absent or the value is not a
+ * plain string. */
+bool ota_json_string_field(const char *json, const char *key, char *out, size_t out_len);
+
+/* True when device_id appears in a comma-separated list, matching whole
+ * entries only (so "A1B2C3" is not found inside "A1B2C3D") and ignoring
+ * case and surrounding spaces. */
+bool ota_device_in_list(const char *list, const char *device_id);
+
+/* The whole channel decision for one device, against one routing file:
+ * true means this device is enrolled on the test channel. A file with no
+ * tester list, or a device not in it, is stable - a malformed or missing
+ * list must never promote anybody. */
+bool ota_channel_is_test(const char *json, const char *device_id);
+
+/* Which channel the last check resolved to, for the Updates screen.
+ * False until a check has run - this device cannot know it is a tester
+ * until it reads the list. */
+bool ota_on_test_channel(void);
 
 /* Fully powers down the radio (not just a disconnect). Connected WiFi is
  * by far this device's largest power draw: the station keeps modem sleep
