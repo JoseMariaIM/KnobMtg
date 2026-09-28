@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 
 /* Shared state, updated either by the SIMULATOR block below or by
  * wifi_ota_esp32.cpp on real firmware (which declares these `extern`
@@ -17,6 +18,9 @@ char g_saved_ssid[WIFI_SSID_LEN] = "";
 ota_state_t g_ota_state = OTA_STATE_IDLE;
 char g_latest_version[32] = "";
 char g_ota_error[64] = "";
+/* Resolved by the last check (see ota_check_now in wifi_ota_esp32.cpp):
+   whether the published tester list named this device. */
+bool g_ota_test_channel = false;
 
 const char *get_firmware_version(void) { return FIRMWARE_VERSION; }
 wifi_state_t wifi_get_state(void) { return g_wifi_state; }
@@ -25,6 +29,90 @@ const char *wifi_get_saved_ssid(void) { return g_saved_ssid; }
 ota_state_t ota_get_state(void) { return g_ota_state; }
 const char *ota_get_latest_version(void) { return g_latest_version; }
 const char *ota_get_error(void) { return g_ota_error; }
+
+/* ---------- channel routing (pure, shared by both builds) ---------- */
+/* See the comment block in wifi_ota.h. Kept here rather than in
+   wifi_ota_esp32.cpp so the decision that picks a firmware image is
+   testable off-device: it is the one part of OTA where a silent mistake
+   means flashing the wrong build onto somebody else's unit. */
+
+bool ota_json_string_field(const char *json, const char *key, char *out, size_t out_len)
+{
+    char needle[32];
+    const char *p;
+    const char *end;
+    size_t len;
+
+    if (json == NULL || key == NULL || out == NULL || out_len == 0) return false;
+
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    p = strstr(json, needle);
+    if (p == NULL) return false;
+    /* Past the key's own closing quote before looking for the value's
+       opening one, or a key that is a prefix of nothing still finds its
+       own quotes. */
+    p = strchr(p + strlen(needle), ':');
+    if (p == NULL) return false;
+    p = strchr(p, '"');
+    if (p == NULL) return false;
+    p++;
+    end = strchr(p, '"');
+    if (end == NULL) return false;
+    len = (size_t)(end - p);
+    if (len >= out_len) len = out_len - 1;
+    memcpy(out, p, len);
+    out[len] = '\0';
+    return true;
+}
+
+bool ota_device_in_list(const char *list, const char *device_id)
+{
+    size_t id_len;
+
+    if (list == NULL || device_id == NULL || device_id[0] == '\0') return false;
+    id_len = strlen(device_id);
+
+    while (*list != '\0') {
+        const char *entry_end;
+        size_t entry_len;
+        size_t i;
+
+        while (*list == ' ' || *list == ',') list++;
+        if (*list == '\0') break;
+
+        entry_end = strchr(list, ',');
+        entry_len = (entry_end != NULL) ? (size_t)(entry_end - list) : strlen(list);
+        /* Trailing spaces are part of the separator, not of the id. */
+        while (entry_len > 0 && list[entry_len - 1] == ' ') entry_len--;
+
+        if (entry_len == id_len) {
+            for (i = 0; i < id_len; i++) {
+                if (toupper((unsigned char)list[i]) != toupper((unsigned char)device_id[i])) break;
+            }
+            /* Whole-entry match only: a list is hand-edited in a GitHub
+               workflow input, and a typo that made one id a prefix of
+               another must not quietly enrol the wrong device. */
+            if (i == id_len) return true;
+        }
+
+        if (entry_end == NULL) break;
+        list = entry_end + 1;
+    }
+    return false;
+}
+
+bool ota_channel_is_test(const char *json, const char *device_id)
+{
+    char devices[256];
+
+    if (!ota_json_string_field(json, "test_devices", devices, sizeof(devices))) return false;
+    return ota_device_in_list(devices, device_id);
+}
+
+bool ota_on_test_channel(void)
+{
+    return g_ota_test_channel;
+}
 
 void wifi_clear_failed_state(void)
 {

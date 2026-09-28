@@ -3,6 +3,8 @@
 #include "quad_screen.h"
 #include "../ota/wifi_ota.h"
 #include "../../adapters/prefs_network.h"
+#include "../../adapters/prefs_device.h"
+#include "../../adapters/hw.h"
 #include "../../adapters/lang.h"
 #include "../widgets/custom_keyboard.h"
 #include "../../usecases/round_safe.h"
@@ -71,6 +73,7 @@ static lv_obj_t *label_wifi_status_body = NULL;
 
 // ---------- ota widgets ----------
 static lv_obj_t *label_ota_current = NULL;
+static lv_obj_t *label_ota_device = NULL;
 static lv_obj_t *label_ota_status = NULL;
 static lv_obj_t *btn_ota_apply = NULL;
 static lv_obj_t *btn_ota_open_wifi = NULL;
@@ -524,6 +527,30 @@ void refresh_ota_update_ui(void)
         lv_label_set_text(label_ota_current, buf);
     }
 
+    /* Which device this is, in the two forms that matter here: the name
+       its owner gave it, and the id the tester list targets (see the
+       update channels block in wifi_ota.h). This is the screen somebody
+       is looking at when asked "what does yours say?", so the id has to
+       be readable from it without digging. The channel line only appears
+       when it is not the ordinary one. */
+    if (label_ota_device != NULL) {
+        char name[DEVICE_NAME_LEN];
+        prefs_get_device_name(name, sizeof(name));
+        if (name[0] != '\0') {
+            snprintf(buf, sizeof(buf), t(STR_OTA_DEVICE_FMT), name, hw_device_id());
+        } else {
+            /* Only reachable before the first-boot question has been
+               answered (see ui_device_name.h) - the id alone still
+               identifies the unit, a dangling dash would not. */
+            snprintf(buf, sizeof(buf), t(STR_OTA_DEVICE_ID_FMT), hw_device_id());
+        }
+        if (ota_on_test_channel()) {
+            size_t used = strlen(buf);
+            snprintf(buf + used, sizeof(buf) - used, "\n%s", t(STR_OTA_CHANNEL_TEST));
+        }
+        lv_label_set_text(label_ota_device, buf);
+    }
+
     if (label_ota_status == NULL) return;
 
     if (btn_ota_apply != NULL) {
@@ -783,6 +810,12 @@ void build_ota_update_screen(void)
     lv_obj_set_style_text_color(label_ota_current, lv_color_hex(0x7A7A7A), 0);
     lv_obj_set_style_text_font(label_ota_current, &lv_font_es_14, 0);
     lv_obj_align(label_ota_current, LV_ALIGN_TOP_MID, 0, 76);
+
+    label_ota_device = lv_label_create(screen_ota_update);
+    lv_obj_set_style_text_color(label_ota_device, lv_color_hex(0x7A7A7A), 0);
+    lv_obj_set_style_text_font(label_ota_device, &lv_font_es_14, 0);
+    lv_obj_set_style_text_align(label_ota_device, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(label_ota_device, LV_ALIGN_TOP_MID, 0, 96);
 
     label_ota_status = lv_label_create(screen_ota_update);
     lv_label_set_text(label_ota_status, t(STR_OTA_TAP_TO_CHECK));

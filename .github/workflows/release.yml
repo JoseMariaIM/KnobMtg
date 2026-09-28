@@ -1,9 +1,49 @@
 name: Release Firmware
 
+# Publishes a build to one of two channels on the GitHub Pages site the
+# devices check for updates (see the "update channels" block in
+# knobby/src/presentation/ota/wifi_ota.h):
+#
+#   stable -> site root      (knobby.ino.bin + manifest.json)
+#   test   -> site /test/    (same layout, one directory down)
+#
+# and records in ota.json which version each channel is on, plus which
+# devices are on the test channel. A device takes the test build only
+# when its id (six hex digits, shown on its own Updates screen) is in
+# that list - so a build can be handed to two people out of five without
+# anything on the other three changing.
+#
+# Two ways in:
+# - push a tag: always publishes to stable, i.e. to every device. This
+#   repo's tags already carry suffixes (v0.0.5-alpha), so a rule like
+#   "a suffix means test" would have quietly rerouted the normal
+#   releases; publishing a test build is a deliberate act instead.
+# - run it by hand: pick the channel, the version string, and optionally
+#   the tester list to set at the same time. This is the only way to
+#   publish to the test channel.
+#
+# Changing only WHO gets the current test build needs no build at all -
+# that is ota-testers.yml.
+
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Channel to publish to'
+        type: choice
+        options: [test, stable]
+        default: test
+      version:
+        description: 'Version string the devices compare against, e.g. v1.5.0-rc2'
+        required: true
+        type: string
+      testers:
+        description: 'Device ids for the test channel (comma separated). Empty = leave the current list alone.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -24,7 +64,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      
+
+      - name: Decide channel and version
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            channel="${{ inputs.channel }}"
+            version="${{ inputs.version }}"
+          else
+            # A pushed tag is a release for everybody - see the note at
+            # the top about why the tag's own shape decides nothing.
+            version="${{ github.ref_name }}"
+            channel="stable"
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$channel" = "test" ]; then
+            echo "dir=test" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=." >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Publishing $version to the $channel channel"
+
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -47,20 +110,100 @@ jobs:
           arduino-cli lib install ESP32_IO_Expander@1.0.1
           arduino-cli lib install esp-lib-utils@0.1.2
 
+      # This is the string the device compares against ota.json, so it
+      # has to be the version being published, not the branch or tag it
+      # happens to be built from.
       - name: Write release version header
         run: |
-          echo "#define FIRMWARE_VERSION \"${{ github.ref_name }}\"" > knobby/src/adapters/version.h
+          echo "#define FIRMWARE_VERSION \"${{ steps.target.outputs.version }}\"" > knobby/src/adapters/version.h
 
       - name: Compile with arduino-cli
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio,PartitionScheme=custom" --export-binaries knobby
 
-      - name: Prepare Web Site
+      # The published site is a branch, not a fresh artifact each time:
+      # publishing a test build must not take the stable binaries down
+      # with it (and vice versa), and the tester list has to survive
+      # every release. upload-pages-artifact replaces the whole site, so
+      # the site is assembled here from what is already live.
+      - name: Check out the published site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Copy exported binaries into the static web directory
-          cp knobby/build/esp32.esp32.esp32s3/*.bin web/
-          # Update version in manifest.json to match the tag
-          sed -i "s/\"latest\"/\"${{ github.ref_name }}\"/g" web/manifest.json
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads "$remote" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$remote" site
+          else
+            echo "No gh-pages branch yet - starting one"
+            mkdir site
+            git -C site init -b gh-pages
+            git -C site remote add origin "$remote"
+          fi
+
+      - name: Lay the build into its channel
+        run: |
+          dir="site/${{ steps.target.outputs.dir }}"
+          mkdir -p "$dir"
+          cp knobby/build/esp32.esp32.esp32s3/*.bin "$dir/"
+          # Each channel keeps its own installer manifest, so the test
+          # build can also be flashed over USB from <site>/test/.
+          sed "s/\"latest\"/\"${{ steps.target.outputs.version }}\"/g" web/manifest.json > "$dir/manifest.json"
+          # The installer page itself only ever lives at the root.
+          cp web/index.html site/index.html
+
+      # ota.json is the routing file the devices read: one flat object,
+      # edited in place so the other channel's entries and the tester
+      # list survive this release untouched.
+      - name: Point the channel at this build in ota.json
+        run: |
+          set -euo pipefail
+          [ -f site/ota.json ] || echo '{}' > site/ota.json
+          version='${{ steps.target.outputs.version }}'
+
+          if [ "${{ steps.target.outputs.channel }}" = "test" ]; then
+            jq --arg v "$version" '.test_version = $v | .test_bin = "test/knobby.ino.bin"' \
+               site/ota.json > site/ota.json.new
+          else
+            jq --arg v "$version" '.version = $v | .bin = "knobby.ino.bin"' \
+               site/ota.json > site/ota.json.new
+          fi
+          mv site/ota.json.new site/ota.json
+
+          # Setting the testers here is a convenience for "build this and
+          # give it to these two"; leaving the input empty keeps whoever
+          # is already enrolled. ota-testers.yml changes the list on its
+          # own, without a build.
+          testers='${{ inputs.testers }}'
+          if [ -n "$testers" ]; then
+            jq --arg d "$testers" '.test_devices = $d' site/ota.json > site/ota.json.new
+            mv site/ota.json.new site/ota.json
+          fi
+
+          # A site whose first publication is a test build has no stable
+          # binary at the root, so ota.json must NOT claim a stable
+          # version - a device that is not a tester would follow it
+          # straight into a 404. It is only filled in from the installer
+          # manifest when the binary it points at is actually there;
+          # otherwise the stable entry stays absent, which the firmware
+          # reads as "nothing published for me" and falls back to
+          # manifest.json (see ota_check_now).
+          if ! jq -e 'has("version")' site/ota.json > /dev/null && [ -f site/knobby.ino.bin ]; then
+            stable="$(jq -r '.version // empty' site/manifest.json 2>/dev/null || true)"
+            if [ -n "$stable" ]; then
+              jq --arg v "$stable" '.version = $v | .bin = "knobby.ino.bin"' \
+                 site/ota.json > site/ota.json.new
+              mv site/ota.json.new site/ota.json
+            fi
+          fi
+          cat site/ota.json
+
+      - name: Commit the site
+        run: |
+          git -C site add -A
+          git -C site commit -m "Publish ${{ steps.target.outputs.version }} to the ${{ steps.target.outputs.channel }} channel" || echo "nothing changed"
+          git -C site push origin gh-pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
@@ -71,7 +214,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: web
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
@@ -79,13 +222,17 @@ jobs:
 
       - name: Zip binaries for GitHub Release
         run: |
-          cd web
-          zip -r ../knobby-firmware-${{ github.ref_name }}.zip knobby.ino.bootloader.bin knobby.ino.partitions.bin boot_app0.bin knobby.ino.bin manifest.json
+          cd "site/${{ steps.target.outputs.dir }}"
+          zip -r "$GITHUB_WORKSPACE/knobby-firmware-${{ steps.target.outputs.version }}.zip" \
+            knobby.ino.bootloader.bin knobby.ino.partitions.bin boot_app0.bin knobby.ino.bin manifest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: knobby-firmware-${{ github.ref_name }}.zip
-          # Include the deployed GitHub Pages URL in the release body
-          body: "Install via GitHub Pages: ${{ steps.deployment.outputs.page_url }}"
+          tag_name: ${{ steps.target.outputs.version }}
+          prerelease: ${{ steps.target.outputs.prerelease == 'true' }}
+          files: knobby-firmware-${{ steps.target.outputs.version }}.zip
+          body: |
+            Channel: **${{ steps.target.outputs.channel }}**
+            Install via GitHub Pages: ${{ steps.deployment.outputs.page_url }}
           generate_release_notes: true
