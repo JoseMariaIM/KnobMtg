@@ -37,6 +37,10 @@ channels, and a device is on exactly one of them:
 | `stable` | site root | every device |
 | `test` | site `/test/` | only the devices listed in `ota.json` |
 
+The site is the `gh-pages` branch, served by Pages directly from it: each
+release adds its channel's files to what is already there instead of replacing
+the site, so publishing a beta cannot take the stable binaries down with it.
+
 `ota.json`, at the root of the site, is the whole routing table:
 
 ```json
@@ -61,7 +65,7 @@ optionally the tester list in one go.
 
 **To change who receives the current test build:** run the *Choose who gets test
 builds* workflow with a comma-separated list of ids. It edits one field and
-redeploys the site - no rebuild, no new release. Removing a device from the list
+pushes it - no rebuild, no new release, live a minute or two later. Removing a device from the list
 puts it back on the stable build at its next check, so that is also how a test
 build is rolled back.
 
