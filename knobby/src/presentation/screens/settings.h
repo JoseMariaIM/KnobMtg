@@ -45,7 +45,19 @@ typedef enum {
 
 settings_screen_kind_t settings_classify_screen(lv_obj_t *screen, int *page);
 void settings_show_page(int page);
+/* Assigns every row to a page and builds the first one. The rest are
+   built the first time they are asked for - see settings_page_screen(). */
 void build_settings_pages(void);
+/* The screen for one settings page, built on first request (NULL for an
+   out-of-range page). Anything that wants to load or render a page
+   itself, rather than navigate to it, has to come through here or it
+   will find the pointer still NULL. */
+lv_obj_t *settings_page_screen(int page);
+/* Free every built settings page except the one on screen. Called on the
+   way out of the menu (see nav.c) and by settings_show_page() itself, so
+   only the page being looked at is resident - see the comment at the
+   definition. */
+void settings_release_pages(void);
 
 /* Point a navigation row at the screen it opens. Called once at boot,
    from knob.c, for every row with no .get - see the comment on

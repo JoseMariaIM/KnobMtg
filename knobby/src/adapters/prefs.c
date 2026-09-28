@@ -3,6 +3,7 @@
 #include "prefs_table.h"
 #include "prefs_roster.h"
 #include "prefs_network.h"
+#include "prefs_device.h"
 #include "prefs_scores.h"
 #include "../types.h"
 #include "nvs_flash.h"
@@ -65,6 +66,7 @@ static char cached_name_list[NAME_LIST_COUNT][NAME_LIST_LEN];
 static char cached_wifi_ssid[WIFI_SSID_LEN] = "";
 static char cached_wifi_pass[WIFI_PASS_LEN] = "";
 static char cached_last_fw_version[FW_VERSION_LEN] = "";
+static char cached_device_name[DEVICE_NAME_LEN] = "";
 static int cached_game_high_score[GAME_SCORE_COUNT][MAX_GAME_PLAYERS] = {{0}};
 
 // ---------- init ----------
@@ -162,6 +164,10 @@ void prefs_init(void)
         size_t fwv_size = sizeof(cached_last_fw_version);
         nvs_get_blob(handle, "last_fw_ver", cached_last_fw_version, &fwv_size);
         cached_last_fw_version[FW_VERSION_LEN - 1] = '\0';
+
+        size_t dn_size = sizeof(cached_device_name);
+        nvs_get_blob(handle, "dev_name", cached_device_name, &dn_size);
+        cached_device_name[DEVICE_NAME_LEN - 1] = '\0';
 
         /* High scores: read the three pre-"game_hi" per-game blobs first,
            then let the combined blob overwrite them if it exists. A
@@ -425,6 +431,26 @@ void prefs_set_last_fw_version(const char *version)
     mark_dirty();
 }
 
+// ---------- device name ----------
+void prefs_get_device_name(char *out, size_t out_len)
+{
+    snprintf(out, out_len, "%s", cached_device_name);
+}
+
+void prefs_set_device_name(const char *name)
+{
+    snprintf(cached_device_name, sizeof(cached_device_name), "%s", name);
+    mark_dirty();
+}
+
+bool prefs_has_device_name(void)
+{
+    /* No separate "was it ever written" flag, unlike the player names:
+       there is no legitimate empty device name to tell apart from an
+       absent one - the naming screen refuses to store blank. */
+    return cached_device_name[0] != '\0';
+}
+
 static bool game_score_slot_valid(game_score_id_t game, int player)
 {
     return game >= 0 && game < GAME_SCORE_COUNT &&
@@ -473,6 +499,7 @@ void prefs_flush(void)
         nvs_set_blob(handle, "wifi_ssid", cached_wifi_ssid, sizeof(cached_wifi_ssid));
         nvs_set_blob(handle, "wifi_pass", cached_wifi_pass, sizeof(cached_wifi_pass));
         nvs_set_blob(handle, "last_fw_ver", cached_last_fw_version, sizeof(cached_last_fw_version));
+        nvs_set_blob(handle, "dev_name", cached_device_name, sizeof(cached_device_name));
         nvs_set_blob(handle, "game_hi", cached_game_high_score, sizeof(cached_game_high_score));
         esp_err_t commit_err = nvs_commit(handle);
         nvs_close(handle);
@@ -482,4 +509,54 @@ void prefs_flush(void)
             settings_dirty = false;
         }
     }
+}
+
+// ---------- factory reset ----------
+/* Every cached_* back to the value a unit that has never been
+   configured boots with - the same literals as their initializers
+   above. Spelled out rather than memset to zero: half of these have a
+   non-zero default (auto-dim, brightness, life total, auto-eliminate),
+   and a zeroed cache would quietly hand out 0% brightness and 0 life
+   instead of the defaults a factory-fresh device actually shows. */
+static void reset_cache_to_defaults(void)
+{
+    cached_brightness = DEFAULT_BRIGHTNESS_PERCENT;
+    cached_auto_dim = AUTO_DIM_30S;
+    cached_color_mode = 0;
+    cached_deselect_timeout = 0;
+    cached_orientation = ORIENTATION_MODE_ABSOLUTE;
+    cached_display_rotation = 0;
+    cached_menu_facing = 0;
+    cached_num_players = 4;
+    cached_players_to_track = 1;
+    cached_life_total = DEFAULT_LIFE_TOTAL;
+    cached_auto_eliminate = 1;
+    cached_random_first = 1;
+    cached_multi_select = 0;
+    cached_language = 0;
+    cached_partners = 0;
+    memset(cached_player_names, 0, sizeof(cached_player_names));
+    cached_player_names_set = false;
+    memset(cached_name_list, 0, sizeof(cached_name_list));
+    cached_wifi_ssid[0] = '\0';
+    cached_wifi_pass[0] = '\0';
+    cached_last_fw_version[0] = '\0';
+    cached_device_name[0] = '\0';
+    memset(cached_game_high_score, 0, sizeof(cached_game_high_score));
+}
+
+void prefs_factory_reset(void)
+{
+    nvs_handle_t handle;
+
+    if (nvs_open("knobby", NVS_READWRITE, &handle) == ESP_OK) {
+        nvs_erase_all(handle);
+        nvs_commit(handle);
+        nvs_close(handle);
+    }
+    reset_cache_to_defaults();
+    /* Anything that was still pending is now gone on purpose: letting
+       the autosave fire after this would write the pre-reset values
+       straight back into the namespace we just erased. */
+    settings_dirty = false;
 }

@@ -90,6 +90,22 @@ void battery_icon_unregister(lv_obj_t *icon);
    the definition. NULL clears it. */
 void hw_set_idle_poll_hook(void (*fn)(void));
 
+/* This unit's permanent identity: six hex digits from the low half of
+   the factory MAC, e.g. "A1B2C3". Unlike the device name (see
+   prefs_device.h) nobody can edit it, and unlike anything in NVS it
+   survives a factory reset - which is what makes it the thing the
+   update channel targets: a tester who renames or wipes their device
+   keeps receiving the builds meant for it. Stable for the life of the
+   board, so it is computed once and cached. */
+#define DEVICE_ID_LEN 7 /* 6 hex digits + NUL */
+const char *hw_device_id(void);
+
+/* Reboot now. For the callers that have just made the running image's
+   view of the world wrong on purpose - so far only the factory reset,
+   which wipes the values every screen was built from. Does nothing in
+   the simulator, which has no reboot to perform. */
+void hw_reboot(void);
+
 #ifdef __cplusplus
 }
 #endif

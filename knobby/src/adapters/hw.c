@@ -9,6 +9,8 @@
 #include <stdio.h>
 #ifndef SIMULATOR
 #include "esp32-hal-cpu.h"
+#include "esp_mac.h"    /* esp_read_mac - the factory MAC behind hw_device_id() */
+#include "esp_system.h" /* esp_restart */
 #endif
 
 // ---------- private constants ----------
@@ -430,5 +432,39 @@ void knob_hw_init(void)
 #ifndef SIMULATOR
     cpu_boost_timer = lv_timer_create(cpu_boost_timer_cb, 100, NULL);
     lv_timer_pause(cpu_boost_timer);
+#endif
+}
+
+// ---------- identity ----------
+/* See hw.h. Only the low three bytes: the high three are Espressif's
+   OUI, identical on every one of these boards, so they would be six
+   characters of noise in a string somebody has to read off a screen
+   and type into a GitHub workflow input. */
+const char *hw_device_id(void)
+{
+    static char id[DEVICE_ID_LEN] = "";
+
+    if (id[0] != '\0') return id;
+#ifdef SIMULATOR
+    /* The simulator has no MAC. A fixed, obviously-fake id keeps the
+       Updates screen and its tests deterministic, and can never collide
+       with a real board's (Espressif MACs are not this). */
+    snprintf(id, sizeof(id), "51M000");
+#else
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(id, sizeof(id), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+#endif
+    return id;
+}
+
+void hw_reboot(void)
+{
+#ifdef SIMULATOR
+    /* Nothing to do: the sim builds its screens once per process and
+       exits when the window closes, so tests and screenshots treat the
+       call itself as the observable effect. */
+#else
+    esp_restart();
 #endif
 }

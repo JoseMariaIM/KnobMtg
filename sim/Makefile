@@ -52,6 +52,7 @@ KNOBBY_SRC_SRCS := \
 	$(KNOBBY)/src/presentation/screens/ui_1p.c $(KNOBBY)/src/presentation/screens/ui_cmd_damage.c $(KNOBBY)/src/presentation/screens/ui_mp.c \
 	$(KNOBBY)/src/presentation/screens/ui_player_menu.c $(KNOBBY)/src/presentation/screens/ui_battery.c $(KNOBBY)/src/presentation/screens/ui_partners.c \
 	$(KNOBBY)/src/presentation/screens/ui_table_sync.c $(KNOBBY)/src/presentation/screens/ui_language.c $(KNOBBY)/src/presentation/screens/ui_wifi.c \
+	$(KNOBBY)/src/presentation/screens/ui_device_name.c $(KNOBBY)/src/presentation/screens/ui_factory_reset.c \
 	$(KNOBBY)/src/presentation/screens/ota_notice.c $(KNOBBY)/src/presentation/screens/game_mode.c $(KNOBBY)/src/presentation/screens/attack.c \
 	$(KNOBBY)/src/presentation/screens/mp_attack_gesture.c $(KNOBBY)/src/presentation/screens/quad_screen.c $(KNOBBY)/src/presentation/screens/minigames_menu.c \
 	$(KNOBBY)/src/presentation/screens/mp_layout.c $(KNOBBY)/src/presentation/screens/mp_victory.c \

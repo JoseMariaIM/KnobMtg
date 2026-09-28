@@ -101,7 +101,7 @@ int main(void)
     knob_life_reset();
 
     int page = settings_item_page("language");
-    if (page >= 0) render_and_save(settings_pages[page], "screenshots/es_settings_language.png");
+    if (page >= 0) render_and_save(settings_page_screen(page), "screenshots/es_settings_language.png");
 
     open_language_picker_screen();
     render_and_save(screen_language_picker, "screenshots/es_language_picker.png");

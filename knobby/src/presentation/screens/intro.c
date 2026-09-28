@@ -3,6 +3,8 @@
 #include "../../adapters/assets_intro.h"
 #include "../../adapters/hw.h"
 #include "ota_notice.h"
+#include "ui_device_name.h"
+#include "../../adapters/prefs_device.h"
 #include "../../usecases/game.h" /* start_player_selection_animation */
 
 lv_obj_t *screen_intro = NULL;
@@ -37,9 +39,13 @@ static const lv_point_t genex_letter_pos[GENEX_LETTER_COUNT] = {
 #define COMICS_POP_ZOOM_START   160  /* out of LV_IMG_ZOOM_NONE=256, i.e. ~62% */
 #define INTRO_HOLD_MS           700  /* keep the finished logo on screen a beat */
 
-static void intro_finish_timer_cb(lv_timer_t *timer)
+/* Everything that has to happen once the logo is done with the screen.
+   Split out of the timer callback because the first boot puts one
+   question in front of it (see below): the naming screen calls this
+   itself once answered, so the life counter, the first-player roll and
+   the post-update toast all land after it instead of behind it. */
+static void intro_finish_boot(void)
 {
-    lv_timer_del(timer);
     back_to_main();
     /* Boot is the one time nobody has picked a starting player yet -
        every other call to back_to_main() is just returning to a game
@@ -51,6 +57,21 @@ static void intro_finish_timer_cb(lv_timer_t *timer)
        the first time this firmware has run, so the "just updated" toast
        (see hw.c) can't show mid-animation or repeat on every reset. */
     ota_notice_check_after_boot();
+}
+
+static void intro_finish_timer_cb(lv_timer_t *timer)
+{
+    lv_timer_del(timer);
+
+    /* The one moment worth asking rather than defaulting: a device with
+       no stored name has either never been set up or has just been
+       factory reset, and several of these end up in different people's
+       hands. Every later boot goes straight through. */
+    if (!prefs_has_device_name()) {
+        device_name_open_first_boot(intro_finish_boot);
+        return;
+    }
+    intro_finish_boot();
 }
 
 static void comics_pop_ready_cb(lv_anim_t *a)

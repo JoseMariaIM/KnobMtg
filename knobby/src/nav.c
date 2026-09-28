@@ -4,6 +4,7 @@
 #include "types.h"
 #include "presentation/screens/settings.h"
 #include "presentation/screens/minigames_menu.h"
+#include "presentation/screens/ui_device_name.h"
 #include "adapters/prefs_display.h"
 #include "adapters/prefs_table.h"
 #include "adapters/hw.h"
@@ -33,6 +34,14 @@ bool nav_handle_back(lv_obj_t *screen)
     int page;
     int i;
 
+    /* The first-boot naming question comes before this file's idea of
+       where things unwind to: the device name screen is also a settings
+       sub-screen, so the generic handling below would answer back by
+       dropping a brand-new device into a settings page it never came
+       from. Only true while that question is on screen; from Settings it
+       declines and falls through. */
+    if (screen == screen_device_name && device_name_handle_back()) return true;
+
     /* Minigame menu pages past the first are not settings screens in
        their own right. Back from any of them leaves the menu entirely
        rather than stepping back a page (the knob flips pages), which
@@ -53,6 +62,9 @@ bool nav_handle_back(lv_obj_t *screen)
         /* Back from any settings page exits to the quad menu - back
            means "leave settings", not "previous page". */
         lv_scr_load(screen_quad_menu);
+        /* Nothing in settings is on screen any more, so none of its
+           pages need to stay built - see settings_release_pages(). */
+        settings_release_pages();
         return true;
     default:
         return false;
